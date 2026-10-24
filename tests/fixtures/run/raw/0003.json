@@ -1,0 +1,43 @@
+{
+  "pass": "notes",
+  "request": {
+    "provider": "anthropic",
+    "sdk_version": "2.3.0",
+    "model": "claude-fixture-20261024",
+    "parameters": {
+      "max_tokens": 1024
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "prompt_digest": "sha256:ad2abb3f9709f213bff030ff18faf20d6eb09d10fd673c5b6799a122b5b60324",
+    "request_id": "req_msg_fixture0003"
+  },
+  "response": {
+    "id": "msg_fixture0003",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-fixture-20261024",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"note\": \"Draws the conclusion from the bias result.\"}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 40,
+      "output_tokens": 12
+    }
+  }
+}

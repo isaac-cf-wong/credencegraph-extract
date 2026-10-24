@@ -1,0 +1,3 @@
+Write one short note on this sentence of a paper.
+
+Sentence: The bias of the estimator vanishes for long segments~\cite{smith2020}.
