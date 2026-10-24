@@ -1,16 +1,9 @@
 name: Publish to TestPyPI
 
 on:
-    push:
-        branches:
-            - main
+    # Manual only: a push never publishes. Nothing calls this workflow, so it
+    # has no workflow_call trigger either.
     workflow_dispatch:
-        inputs:
-            tag_name:
-                description: 'Tag name for the publish (e.g., v1.2.3)'
-                required: false
-                type: string
-    workflow_call:
         inputs:
             tag_name:
                 description: 'Tag name for the publish (e.g., v1.2.3)'
