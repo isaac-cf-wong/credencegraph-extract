@@ -6,6 +6,8 @@ import hashlib
 import json
 import shutil
 import socket
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -168,3 +170,157 @@ def test_cli_replay_reports_a_difference(
 def test_cli_replay_reports_an_error(recorded_run: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["replay", str(recorded_run)]) == 2
     assert "missing-source" in capsys.readouterr().err
+
+
+@pytest.fixture
+def notes_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the command replay with the test pass, as the recorded run was made."""
+    monkeypatch.setattr(
+        "credencegraph_extract.cli.replay",
+        lambda run_dir, source: replay(run_dir, source=source, passes=[NotesPass()]),
+    )
+
+
+def replay_status(run_dir: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    """Run ``replay`` through the command; return its status and its stderr."""
+    status = cli.main(["replay", str(run_dir), "--source", str(SOURCE)])
+    return status, capsys.readouterr().err
+
+
+def edit_manifest(run_dir: Path, edit: object) -> None:
+    """Apply ``edit`` to the parsed manifest and write it back."""
+    path = run_dir / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    edit(manifest)  # type: ignore[operator]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_cli_replay_of_a_malformed_manifest_is_an_error(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (recorded_run / "manifest.json").write_text("{", encoding="utf-8")
+    status, err = replay_status(recorded_run, capsys)
+    assert status == 2
+    assert err.startswith("error [invalid-manifest]: ")
+    assert err.count("\n") == 1
+
+
+def test_cli_replay_of_a_missing_record_is_an_error(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (recorded_run / "raw" / "0002.json").unlink()
+    status, err = replay_status(recorded_run, capsys)
+    assert status == 2
+    assert err.startswith("error [incomplete-run]: cannot read raw/0002.json")
+    assert err.count("\n") == 1
+
+
+@pytest.mark.parametrize("name", ["graph.json", "rubric.toml"])
+def test_cli_replay_of_a_missing_file_is_an_error(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str], name: str
+) -> None:
+    (recorded_run / name).unlink()
+    status, err = replay_status(recorded_run, capsys)
+    assert status == 2
+    assert err.startswith(f"error [incomplete-run]: cannot read {name}")
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda m: m.pop("source"),
+        lambda m: m["source"].update(stored="yes"),
+        lambda m: m["source"].update(file="../paper.tex"),
+        lambda m: m.update(passes={}),
+        lambda m: m["passes"][0]["calls"][0].pop("raw_digest"),
+        lambda m: m["passes"][0]["calls"][0].update(raw="../manifest.json"),
+        lambda m: m["rubric"].update(digest=None),
+    ],
+    ids=[
+        "no-source",
+        "stored-not-bool",
+        "file-escapes",
+        "passes-not-list",
+        "no-raw-digest",
+        "raw-escapes",
+        "no-rubric-digest",
+    ],
+)
+def test_cli_replay_of_an_incomplete_manifest_is_an_error(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str], edit: object
+) -> None:
+    edit_manifest(recorded_run, edit)
+    status, err = replay_status(recorded_run, capsys)
+    assert status == 2
+    assert err.startswith("error [invalid-manifest]: ")
+
+
+def test_cli_replay_of_a_record_that_is_not_json_is_an_error(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    raw = recorded_run / "raw" / "0001.json"
+    raw.write_text("not json", encoding="utf-8")
+    edit_manifest(recorded_run, lambda m: m["passes"][0]["calls"][0].update(raw_digest=f"sha256:{sha256(b'not json')}"))
+    status, err = replay_status(recorded_run, capsys)
+    assert status == 2
+    assert err.startswith("error [invalid-record]: raw/0001.json is not JSON")
+
+
+@pytest.mark.parametrize(
+    "record",
+    [[], {"request": {}}, {"request": None}],
+    ids=["not-an-object", "no-metadata", "metadata-not-an-object"],
+)
+def test_cli_replay_of_a_record_without_metadata_is_an_error(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str], record: object
+) -> None:
+    data = json.dumps(record).encode("utf-8")
+    (recorded_run / "raw" / "0001.json").write_bytes(data)
+    edit_manifest(recorded_run, lambda m: m["passes"][0]["calls"][0].update(raw_digest=f"sha256:{sha256(data)}"))
+    status, err = replay_status(recorded_run, capsys)
+    assert status == 2
+    assert err.startswith("error [invalid-record]: ")
+
+
+def test_cli_replay_of_a_malformed_response_is_an_error(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = recorded_run / "raw" / "0001.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["response"]["content"] = "not blocks"
+    data = json.dumps(record).encode("utf-8")
+    path.write_bytes(data)
+    edit_manifest(recorded_run, lambda m: m["passes"][0]["calls"][0].update(raw_digest=f"sha256:{sha256(data)}"))
+    status, err = replay_status(recorded_run, capsys)
+    assert status == 2
+    assert err.startswith("error [invalid-record]: raw/0001.json: ")
+
+
+def test_cli_replay_of_an_unreadable_source_is_an_error(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    status = cli.main(["replay", str(recorded_run), "--source", str(recorded_run)])
+    assert status == 2
+    assert capsys.readouterr().err.startswith("error [missing-source]: ")
+
+
+def test_cli_replay_cannot_write_its_output(
+    recorded_run: Path, notes_cli: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output = recorded_run / "no-such-dir" / "graph.json"
+    status = cli.main(["replay", str(recorded_run), "--source", str(SOURCE), "--output", str(output)])
+    assert status == 2
+    assert capsys.readouterr().err.startswith("error [io-error]: ")
+
+
+def test_console_script_reports_a_malformed_manifest_without_a_traceback(recorded_run: Path) -> None:
+    (recorded_run / "manifest.json").write_text("{", encoding="utf-8")
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and arguments
+        [sys.executable, "-c", "from credencegraph_extract.cli import app; app()", "replay", str(recorded_run)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "Traceback" not in result.stderr
+    assert result.stderr.startswith("error [invalid-manifest]: ")

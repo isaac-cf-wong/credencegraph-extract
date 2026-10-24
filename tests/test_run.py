@@ -179,3 +179,14 @@ def test_run_refuses_an_unreadable_rubric(tmp_path: Path) -> None:
         run_extraction(SOURCE, tmp_path / "run", rubric, call=provider.call, passes=[])
     assert caught.value.code == "invalid-rubric"
     assert not (tmp_path / "run").exists()
+
+
+def test_cli_run_reports_an_unusable_response(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    refusal = {**BODIES[0], "stop_reason": "refusal"}
+    monkeypatch.setattr("credencegraph_extract.cli.run_extraction", partial(run_extraction, passes=[NotesPass()]))
+    monkeypatch.setattr(provider, "call", partial(provider.call, client=fake_client([refusal])))
+    status = cli.main(["run", str(SOURCE), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL])
+    assert status == 2
+    assert capsys.readouterr().err.startswith("error [provider-error]: ")

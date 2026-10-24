@@ -56,3 +56,19 @@ def test_output_refuses_text_that_is_not_json() -> None:
 def test_record_survives_a_json_round_trip() -> None:
     record = provider.call("p", SCHEMA, model=MODEL, max_tokens=8, client=fake_client([message(1, "{}")]))
     assert json.loads(json.dumps(record)) == record
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {},
+        {"response": []},
+        {"response": {"stop_reason": "end_turn", "content": "text"}},
+        {"response": {"stop_reason": "end_turn", "content": [{"type": "text"}]}},
+        {"response": {"stop_reason": "end_turn", "content": ["text"]}},
+    ],
+    ids=["no-response", "response-not-object", "content-not-list", "text-block-without-text", "block-not-object"],
+)
+def test_output_refuses_a_malformed_response(record: dict) -> None:
+    with pytest.raises(provider.ProviderError):
+        provider.output(record)

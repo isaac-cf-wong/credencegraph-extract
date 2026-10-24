@@ -68,7 +68,13 @@ re-runs ingestion and every pass, answering each model call from `raw/` instead 
 and checks that the rebuilt `graph.json` is byte-identical to the recorded one. It needs no network
 and no API key. `--source` is not needed when the run stored its source. Replay refuses a source,
 rubric or record whose digest differs from the manifest's, and a pass that asks a call that was not
-recorded. It exits 0 when the graph is byte-identical, 1 when it differs, and 2 on an error.
+recorded.
+
+Both commands exit 0 on success, and `replay` exits 1 when the rebuilt graph differs from the
+recorded one. Every error exits 2 with one `error [<code>]: <message>` line on stderr: a run
+directory that is malformed or incomplete (an unreadable or invalid `manifest.json`, a missing
+`graph.json`, `rubric.toml` or `raw/` record), a file that cannot be read or written, a source or
+record that does not match the manifest, and a provider error.
 
 ## Development
 

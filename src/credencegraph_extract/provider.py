@@ -22,7 +22,7 @@ PROVIDER = "anthropic"
 
 
 class ProviderError(Exception):
-    """A response carries no structured output: the model refused, ran out of tokens, or returned no JSON."""
+    """A response carries no structured output: it is malformed, the model refused or ran out of tokens, or it is not JSON."""
 
 
 def call(
@@ -76,14 +76,25 @@ def output(record: Mapping[str, Any]) -> Any:
         The JSON value the model returned.
 
     Raises:
-        ProviderError: If the response did not end normally or its text is not JSON.
+        ProviderError: If the response is malformed, did not end normally, or its text is not JSON.
     """
-    response = record["response"]
+    response = record.get("response")
+    if not isinstance(response, dict):
+        msg = "the record has no response object"
+        raise ProviderError(msg)
     stop = response.get("stop_reason")
     if stop != "end_turn":
         msg = f"response {response.get('id')!r} stopped with {stop!r}, not 'end_turn'"
         raise ProviderError(msg)
-    text = "".join(block["text"] for block in response.get("content", ()) if block.get("type") == "text")
+    blocks = response.get("content")
+    if not isinstance(blocks, list) or not all(isinstance(block, dict) for block in blocks):
+        msg = f"response {response.get('id')!r} has no list of content blocks"
+        raise ProviderError(msg)
+    texts = [block.get("text") for block in blocks if block.get("type") == "text"]
+    if not all(isinstance(text, str) for text in texts):
+        msg = f"response {response.get('id')!r} has a text block without text"
+        raise ProviderError(msg)
+    text = "".join(texts)
     try:
         return json.loads(text)
     except json.JSONDecodeError as error:

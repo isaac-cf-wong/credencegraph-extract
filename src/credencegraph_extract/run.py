@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import secrets
 import shutil
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -310,8 +311,37 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
     return manifest
 
 
+RAW_PATH = re.compile(r"raw/[0-9]{4,}\.json")
+
+
+def read_run_file(run_dir: Path, name: str) -> bytes:
+    """Read a file of a run directory.
+
+    Args:
+        run_dir: The run directory.
+        name: The file's path inside it.
+
+    Returns:
+        The file's bytes.
+
+    Raises:
+        RunError: If the file cannot be read.
+    """
+    try:
+        return (run_dir / name).read_bytes()
+    except OSError as error:
+        raise RunError("incomplete-run", f"cannot read {name} of {str(run_dir)!r}: {error.strerror or error}") from None
+
+
+def _field(value: Any, key: str, kind: type, where: str) -> Any:
+    """Return ``value[key]`` if ``value`` is an object whose ``key`` is a ``kind``; else refuse the manifest."""
+    if not isinstance(value, dict) or not isinstance(value.get(key), kind):
+        raise RunError("invalid-manifest", f"{MANIFEST}: {where}{key} must be a {kind.__name__}")
+    return value[key]
+
+
 def read_manifest(run_dir: Path) -> dict[str, Any]:
-    """Read and check a run's manifest.
+    """Read and check a run's manifest: its format, its version, and every field ``replay`` reads.
 
     Args:
         run_dir: The run directory.
@@ -320,18 +350,49 @@ def read_manifest(run_dir: Path) -> dict[str, Any]:
         The manifest.
 
     Raises:
-        RunError: If there is no manifest or it is not of this format and version.
+        RunError: If there is no manifest, it is not JSON, not of this format and version, or a
+            field ``replay`` reads is missing or of the wrong type.
     """
-    path = run_dir / MANIFEST
+    if not (run_dir / MANIFEST).is_file():
+        raise RunError("not-a-run", f"{str(run_dir)!r} has no {MANIFEST}")
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        raise RunError("not-a-run", f"{str(run_dir)!r} has no {MANIFEST}") from None
+        manifest = json.loads(read_run_file(run_dir, MANIFEST))
+    except ValueError as error:
+        raise RunError("invalid-manifest", f"{MANIFEST} of {str(run_dir)!r} is not JSON: {error}") from None
     if not isinstance(manifest, dict) or manifest.get("format") != FORMAT:
-        raise RunError("not-a-run", f"{str(path)!r} is not a {FORMAT} manifest")
+        raise RunError("not-a-run", f"{MANIFEST} of {str(run_dir)!r} is not a {FORMAT} manifest")
     if manifest.get("version") != VERSION:
-        raise RunError("unsupported-version", f"{str(path)!r} is version {manifest.get('version')!r}, not {VERSION}")
+        raise RunError("unsupported-version", f"{MANIFEST} is version {manifest.get('version')!r}, not {VERSION}")
+    _field(manifest, "run", str, "")
+    _field(manifest, "graph_digest", str, "")
+    source = _field(manifest, "source", dict, "")
+    for key in ("document", "file", "digest"):
+        _field(source, key, str, "source.")
+    _field(source, "stored", bool, "source.")
+    if Path(source["file"]).name != source["file"] or source["file"] in {"", ".", ".."}:
+        raise RunError("invalid-manifest", f"{MANIFEST}: source.file must be a plain file name")
+    _field(_field(manifest, "rubric", dict, ""), "digest", str, "rubric.")
+    for i, entry in enumerate(_field(manifest, "passes", list, "")):
+        _field(entry, "name", str, f"passes[{i}].")
+        for j, call in enumerate(_field(entry, "calls", list, f"passes[{i}].")):
+            where = f"passes[{i}].calls[{j}]."
+            _field(call, "raw_digest", str, where)
+            if not RAW_PATH.fullmatch(_field(call, "raw", str, where)):
+                raise RunError("invalid-manifest", f"{MANIFEST}: {where}raw must name a file raw/NNNN.json")
     return manifest
+
+
+def _recorded_output(record: Any, prompt: str, schema: Mapping[str, Any], name: str, where: str) -> Any:
+    """Return the output of a recorded call, after checking it answers ``prompt`` under ``schema``."""
+    request = record.get("request") if isinstance(record, dict) else None
+    if not isinstance(request, dict) or "prompt_digest" not in request or "output_schema" not in request:
+        raise RunError("invalid-record", f"{where} has no request metadata")
+    if bytes_digest(prompt.encode("utf-8")) != request["prompt_digest"] or dict(schema) != request["output_schema"]:
+        raise RunError("unrecorded-call", f"pass {name!r} asks a call that differs from {where}")
+    try:
+        return provider.output(record)
+    except provider.ProviderError as error:
+        raise RunError("invalid-record", f"{where}: {error}") from None
 
 
 def replay(run_dir: Path, *, source: Path | None = None, passes: Sequence[Pass] = PASSES) -> bytes:
@@ -350,8 +411,8 @@ def replay(run_dir: Path, *, source: Path | None = None, passes: Sequence[Pass] 
         The rebuilt ``graph.json`` bytes.
 
     Raises:
-        RunError: If the run, its rubric, its source or its records do not match, or a pass asks a
-            call that was not recorded.
+        RunError: If the run directory is malformed or incomplete; if its rubric, source or records
+            do not match the manifest; or if a pass asks a call that was not recorded.
     """
     manifest = read_manifest(run_dir)
     recorded = manifest["source"]
@@ -361,13 +422,17 @@ def replay(run_dir: Path, *, source: Path | None = None, passes: Sequence[Pass] 
         raise RunError("missing-source", "the run did not store its source: pass the source document")
     try:
         source_bytes = source.read_bytes()
-    except FileNotFoundError:
-        raise RunError("missing-source", f"{str(source)!r} does not exist") from None
+    except OSError as error:
+        raise RunError("missing-source", f"cannot read {str(source)!r}: {error.strerror or error}") from None
     if bytes_digest(source_bytes) != recorded["digest"]:
         raise RunError("source-mismatch", f"{str(source)!r} is not the document the run read")
-    rubric_bytes = (run_dir / RUBRIC).read_bytes()
+    rubric_bytes = read_run_file(run_dir, RUBRIC)
     if bytes_digest(rubric_bytes) != manifest["rubric"]["digest"]:
         raise RunError("record-mismatch", f"{RUBRIC} differs from the rubric the run used")
+    try:
+        rubric = loads_rubric(rubric_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, RubricError) as error:
+        raise RunError("invalid-rubric", f"cannot read {RUBRIC}: {error}") from None
     names = [entry["name"] for entry in manifest["passes"]]
     if names != [item.name for item in passes]:
         raise RunError("unknown-pass", f"the run's passes are {names}, not {[item.name for item in passes]}")
@@ -382,21 +447,17 @@ def replay(run_dir: Path, *, source: Path | None = None, passes: Sequence[Pass] 
             entry = next(calls, None)
             if entry is None:
                 raise RunError("unrecorded-call", f"pass {item.name!r} asks more calls than were recorded")
-            raw_bytes = (run_dir / entry["raw"]).read_bytes()
+            raw_bytes = read_run_file(run_dir, entry["raw"])
             if bytes_digest(raw_bytes) != entry["raw_digest"]:
                 raise RunError("record-mismatch", f"{entry['raw']} differs from the record the run wrote")
-            record = json.loads(raw_bytes)
-            request = record["request"]
-            if (
-                bytes_digest(prompt.encode("utf-8")) != request["prompt_digest"]
-                or dict(schema) != request["output_schema"]
-            ):
-                raise RunError("unrecorded-call", f"pass {item.name!r} asks a call that differs from {entry['raw']}")
-            return provider.output(record)
+            try:
+                record = json.loads(raw_bytes)
+            except ValueError as error:
+                raise RunError("invalid-record", f"{entry['raw']} is not JSON: {error}") from None
+            return _recorded_output(record, prompt, schema, item.name, entry["raw"])
 
         return ask
 
-    rubric = loads_rubric(rubric_bytes.decode("utf-8"))
     graph = build_graph(source, recorded["document"], rubric, manifest["run"], passes, asker)
     for name, calls in pending.items():
         if next(calls, None) is not None:
