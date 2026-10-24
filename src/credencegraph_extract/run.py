@@ -39,6 +39,7 @@ from credencegraph.rubric import Rubric, RubricError, loads_rubric
 
 from credencegraph_extract import provider
 from credencegraph_extract.digest import bytes_digest
+from credencegraph_extract.version import __version__
 
 FORMAT = "credencegraph-extract-run"
 VERSION = 1
@@ -51,11 +52,11 @@ PROMPTS = "prompts"
 RAW = "raw"
 SOURCE = "source"
 
+# Send a rendered prompt under an output schema and return the model's structured output.
 Ask = Callable[[str, Mapping[str, Any]], Any]
-"""Send a rendered prompt under an output schema and return the model's structured output."""
 
+# ``provider.call`` with the model and sampling parameters bound: prompt and schema to a record.
 Call = Callable[[str, Mapping[str, Any]], dict[str, Any]]
-"""``provider.call`` with the model and sampling parameters bound: prompt and schema to a record."""
 
 
 class Pass(Protocol):
@@ -191,7 +192,7 @@ def versions() -> dict[str, str]:
     return {
         "python": platform.python_version(),
         "credencegraph": version("credencegraph"),
-        "credencegraph-extract": version("credencegraph-extract"),
+        "credencegraph-extract": __version__,
         provider.PROVIDER: version(provider.PROVIDER),
     }
 
