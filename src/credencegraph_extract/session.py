@@ -24,6 +24,9 @@ The layout::
       rubric.toml     byte copy of the rubric
       cited/          byte copies of the cited works, made by start_run
       source/         a copy of the document, only with store_source
+      graph.json      the graph, only while the run is finished
+      rejections.json every refused record, only while the run is finished
+      report.json     the core's coverage report, only while the run is finished
 
 ``replay`` re-ingests the document and applies every logged call again, checking each call's result
 digest; the graph it ends with must be byte-identical to the run's. The log records no local path:
@@ -50,7 +53,7 @@ from credencegraph.core import Graph, dumps
 from credencegraph.core.serialization import graph_from_dict, graph_to_dict
 from credencegraph.ingest.chunks import chunks_to_graph
 from credencegraph.ingest.latex import LatexError, _Reader
-from credencegraph.rubric import Rubric, RubricError, loads_rubric
+from credencegraph.rubric import Rubric, RubricError, coverage, loads_rubric
 from credencegraph.rubric.model import DOCUMENT
 from credencegraph.rubric.validate import origin_of
 
@@ -71,6 +74,11 @@ RUBRIC = "rubric.toml"
 CITED = "cited"
 SOURCE = "source"
 LOCK = ".lock"
+GRAPH = "graph.json"
+REJECTIONS = "rejections.json"
+REPORT = "report.json"
+# The files a finished run has, derived from its state.
+OUTPUTS = (GRAPH, REJECTIONS, REPORT)
 
 START = "start_run"
 FINISH = "finish_run"
@@ -474,6 +482,7 @@ def write(  # noqa: PLR0913 - the call and who makes it
             os.fsync(log.fileno())
         temporary.replace(run_dir / STATE)
         _replace(run_dir / MANIFEST, _manifest(manifest, [*calls, json.loads(line)], after, log_digest))
+        _outputs(run_dir, rubric, after)
     return result
 
 
@@ -494,6 +503,22 @@ def _check_digests(call: Mapping[str, Any], state: State, result: Mapping[str, A
             what = "result" if name == "result_digest" else "graph"
             msg = f"call {call['seq']} ({call['tool']}) gives another {what} than its log line records"
             raise RunError("record-mismatch", msg)
+
+
+def _outputs(run_dir: Path, rubric: Rubric, state: State) -> None:
+    """Write a finished run's outputs from its state, or remove them from a run a later write unfinished.
+
+    They are derived from the state, never read back: ``graph.json`` (the graph as the core serialises
+    it), ``rejections.json`` (every refused record, with the call that sent it) and ``report.json`` (the
+    core's coverage report). An unfinished run has none, so a stale graph is never taken for its result.
+    """
+    if not state.finished:
+        for name in OUTPUTS:
+            (run_dir / name).unlink(missing_ok=True)
+        return
+    _replace(run_dir / GRAPH, _graph_text(state.graph))
+    _replace(run_dir / REJECTIONS, _json([dict(item) for item in state.rejections]))
+    _replace(run_dir / REPORT, _json({"coverage": coverage(state.graph, rubric)}))
 
 
 def _now() -> str:

@@ -26,7 +26,7 @@ from credencegraph_extract import cited, provider, session
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.pipeline import passes
 from credencegraph_extract.run import GRAPH, MANIFEST, RunError, read_manifest, read_run_file, replay, run_extraction
-from credencegraph_extract.verify import plain, rubric_reuse, verify_run
+from credencegraph_extract.verify import plain, rubric_reuse, run_manifest, verify_run
 
 DEFAULT_MAX_TOKENS = 16000
 
@@ -131,7 +131,7 @@ def _replay(args: argparse.Namespace) -> int:
 
 def _verify(args: argparse.Namespace) -> int:
     """Verify each run, and warn about rubric versions reused; 0 if every check agrees, 1 if one differs."""
-    manifests = [(str(run_dir), read_manifest(run_dir)) for run_dir in args.run_dirs]
+    manifests = [(str(run_dir), run_manifest(run_dir)) for run_dir in args.run_dirs]
     status = 0
     for run_dir in args.run_dirs:
         found = verify_run(run_dir)

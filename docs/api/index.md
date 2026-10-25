@@ -23,5 +23,7 @@ This section documents the public API of credencegraph-extract.
 - **[Cited works](cited)** – Reading the texts of cited works.
 - **[Agent-tool runs](session)** – The run directory an agent's tool calls
   build: the call log, the lock, crash recovery and replay.
+- **[Graph tools](tools)** – Classifying chunks, adding premises and finishing a
+  run, through the assembler.
 - **[Verify](verify)** – Running the deterministic checks of a run again, and
   reporting rubric versions reused with different values.

@@ -772,6 +772,42 @@ def _admit(
     return rejections
 
 
+def assess(graph: Graph, rubric: Rubric) -> Graph:
+    """Set the verdict of every node the checks assess, from the checks that observe it.
+
+    A target's verdict comes from the results of the check nodes its ``observes`` relations lead to,
+    never from a model: ``fails``, ``holds`` or ``undetermined`` as ``verdict`` gives it, else
+    ``not_assessed`` because no implemented check type may run on the node, or none was run.
+
+    Args:
+        graph: The graph.
+        rubric: The rubric.
+
+    Returns:
+        The graph with ``attributes.assessment`` set on every target.
+    """
+    by_target: dict[str, list[str]] = {}
+    for relation in graph.relations.values():
+        check = graph.nodes[relation.target].attributes.get("check") if relation.type == OBSERVES else None
+        if isinstance(check, Mapping):
+            by_target.setdefault(relation.source, []).append(check.get("result"))
+    assessed = set(targets(graph, rubric))
+    out = Graph()
+    for node in graph:
+        if node.id in assessed:
+            found = verdict(by_target.get(node.id, []))
+            if found is not None:
+                assessment: dict[str, Any] = {"verdict": found}
+            else:
+                reason = NOT_SELECTED if applicable(rubric, node.kind) else NO_CHECK
+                assessment = {"verdict": NOT_ASSESSED, "reason": reason}
+            node = replace(node, attributes={**node.attributes, "assessment": assessment})  # noqa: PLW2901
+        out.add_node(node)
+    for relation in graph.relations.values():
+        out.add_relation(relation)
+    return out
+
+
 def verdict(results: Sequence[str]) -> str | None:
     """Return the verdict the results of a node's checks give, or ``None`` when no check ran.
 
@@ -919,22 +955,12 @@ class CheckPass:
             )
             by_target.setdefault(result.target, []).append(result.result)
             report.append({"id": check_id, "type": result.type, "target": result.target, "result": result.result})
-        assessed = set(targets(graph, rubric))
         out = Graph()
-        for node in graph:
-            if node.id in assessed:
-                found = verdict(by_target.get(node.id, []))
-                if found is not None:
-                    assessment: dict[str, Any] = {"verdict": found}
-                else:
-                    reason = NOT_SELECTED if applicable(rubric, node.kind) else NO_CHECK
-                    assessment = {"verdict": NOT_ASSESSED, "reason": reason}
-                node = replace(node, attributes={**node.attributes, "assessment": assessment})  # noqa: PLW2901
-            out.add_node(node)
-        for node in nodes:
+        for node in (*graph, *nodes):
             out.add_node(node)
         for relation in (*graph.relations.values(), *relations):
             out.add_relation(relation)
+        out = assess(out, rubric)
         uncalibrated_report = [
             {"check": report[i]["id"], "type": report[i]["type"], "model": results[i].model} for i in uncalibrated
         ]

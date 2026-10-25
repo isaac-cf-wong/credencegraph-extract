@@ -1,0 +1,203 @@
+"""The graph tools: classify, add_premises and finish_run, on an agent-tool run."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import checks_fixture
+import pytest
+import session_ops
+from classify_fixture import FIRST, PAPER, PREMISES_FIRST, PREMISES_REPAIR, REPAIR, RUBRIC, RUN
+
+from credencegraph_extract.run import RunError
+from credencegraph_extract.session import get_state, recorded_graph, replay, start_run, write
+from credencegraph_extract.tools import add_premises, classify, finish_run
+from credencegraph_extract.verify import verify_run
+
+session_ops.register()
+
+MODEL = "test-model-1"
+
+
+def read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def calls(run_dir: Path) -> int:
+    return len((run_dir / "calls.jsonl").read_text(encoding="utf-8").splitlines())
+
+
+@pytest.fixture
+def run_dir(tmp_path: Path) -> Path:
+    target = tmp_path / "run"
+    start_run(PAPER, RUBRIC, target, harness="test-harness", model=MODEL)
+    return target
+
+
+@pytest.fixture
+def checks_run(tmp_path: Path) -> Path:
+    target = tmp_path / "checks-run"
+    start_run(checks_fixture.PAPER, checks_fixture.RUBRIC, target, harness="h", model=MODEL, cited=checks_fixture.CITED)
+    return target
+
+
+def content(graph: dict[str, Any]) -> tuple[list[Any], list[Any]]:
+    """A graph without its extraction stamps: what the records made, not which run made it."""
+    nodes = []
+    for node in graph["nodes"]:
+        attributes = {key: value for key, value in node["attributes"].items() if key != "extraction"}
+        nodes.append({**node, "attributes": attributes})
+    return nodes, sorted(graph["relations"], key=lambda relation: relation["id"])
+
+
+def test_the_tools_build_the_graph_the_passes_built_from_the_same_records(run_dir: Path, no_network: None) -> None:
+    first = classify(run_dir, FIRST, model=MODEL)
+    assert [(item["node"], item["code"]) for item in first["refused"]] == [
+        ("s-4", "invalid-argument"),
+        ("s-5", "invalid-argument"),
+    ]
+    assert all(item["fix"] for item in first["refused"])
+    assert classify(run_dir, REPAIR, model=MODEL)["refused"] == []
+    premises = add_premises(run_dir, PREMISES_FIRST, model=MODEL)
+    assert [item["node"] for item in premises["refused"]] == ["s-5"]
+    assert add_premises(run_dir, PREMISES_REPAIR, model=MODEL)["refused"] == []
+    assert content(json.loads(recorded_graph(run_dir))) == content(read_json(RUN / "graph.json"))
+
+
+def test_a_typed_node_typed_again_takes_the_new_types_base_form_and_links(run_dir: Path) -> None:
+    classify(run_dir, FIRST, model=MODEL)
+    classify(run_dir, REPAIR, model=MODEL)
+    before = {node["id"]: node for node in json.loads(recorded_graph(run_dir))["nodes"]}
+    assert (before["s-5"]["kind"], before["s-3"]["kind"]) == ("claim", "claim")
+    result = classify(run_dir, [{"node": "s-3", "type": "result", "form": {"quantity": "the method"}}], model=MODEL)
+    assert result["refused"] == []
+    graph = json.loads(recorded_graph(run_dir))
+    node = next(item for item in graph["nodes"] if item["id"] == "s-3")
+    assert node["kind"] == "result"
+    assert node["base"] == {"alpha": 8.0, "beta": 2.0}
+    assert node["attributes"]["form"] == {"quantity": "the method"}
+    assert not [relation for relation in graph["relations"] if relation["target"] == "s-3"]
+
+
+def test_a_failed_retyping_leaves_the_node_as_it_was(run_dir: Path) -> None:
+    classify(run_dir, [{"node": "s-1", "type": "method", "form": {"kind": "simulation"}}], model=MODEL)
+    before = next(node for node in json.loads(recorded_graph(run_dir))["nodes"] if node["id"] == "s-1")
+    result = classify(run_dir, [{"node": "s-1", "type": "result", "form": {"quantity": "absent"}}], model=MODEL)
+    assert [item["code"] for item in result["refused"]] == ["invalid-argument"]
+    after = next(node for node in json.loads(recorded_graph(run_dir))["nodes"] if node["id"] == "s-1")
+    assert after == before
+
+
+def test_a_split_chunk_cannot_be_split_again(run_dir: Path) -> None:
+    split = FIRST[2]
+    classify(run_dir, [split], model=MODEL)
+    result = classify(run_dir, [split], model=MODEL)
+    [refused] = result["refused"]
+    assert refused["code"] == "already-split"
+    assert refused["fix"] == ["'s-2' is already split: send records for its clauses s-2a, s-2b, ... instead"]
+    assert [node["id"] for node in get_state(run_dir)["nodes"] if node["id"].startswith("s-2")] == [
+        "s-2",
+        "s-2a",
+        "s-2b",
+    ]
+
+
+def test_a_node_a_check_targets_cannot_be_typed_again(checks_run: Path) -> None:
+    classify(checks_run, [{"node": "s-2", "type": "result", "form": {"quantity": "segments"}}], model=MODEL)
+    write(checks_run, "observe", {"target": "s-2", "result": "failed"}, model=MODEL)
+    result = classify(checks_run, [{"node": "s-2", "type": "context"}], model=MODEL)
+    [refused] = result["refused"]
+    assert (refused["node"], refused["code"]) == ("s-2", "checked-node")
+    assert refused["fix"] == ["leave 's-2' as it is; send records only for nodes no check targets"]
+    assert next(node for node in get_state(checks_run)["nodes"] if node["id"] == "s-2")["type"] == "result"
+    assert [item["code"] for item in get_state(checks_run)["rejections"]] == ["checked-node"]
+
+
+def test_finish_writes_the_outputs_and_a_later_write_removes_them(run_dir: Path) -> None:
+    classify(run_dir, FIRST, model=MODEL)
+    classify(run_dir, REPAIR, model=MODEL)
+    result = finish_run(run_dir, model=MODEL)
+    assert set(result) == {"findings", "ok"}
+    assert result["ok"] == (result["findings"] == [])
+    assert {name for name in ("graph.json", "rejections.json", "report.json") if (run_dir / name).exists()} == {
+        "graph.json",
+        "rejections.json",
+        "report.json",
+    }
+    assert (run_dir / "graph.json").read_bytes() == recorded_graph(run_dir)
+    manifest = read_json(run_dir / "manifest.json")
+    assert manifest["finished"] is True
+    assert manifest["graph_digest"].startswith("sha256:")
+    assert [item["code"] for item in read_json(run_dir / "rejections.json")] == ["invalid-argument"] * 2
+    classify(run_dir, [{"node": "r-1", "type": "reference"}], model=MODEL)
+    assert not (run_dir / "graph.json").exists()
+    assert read_json(run_dir / "manifest.json")["finished"] is False
+    with pytest.raises(RunError) as raised:
+        verify_run(run_dir)
+    assert raised.value.code == "unfinished-run"
+    finish_run(run_dir, model=MODEL)
+    assert (run_dir / "graph.json").exists()
+
+
+def test_finish_derives_each_verdict_from_the_checks_that_observe_it(checks_run: Path) -> None:
+    classify(
+        checks_run,
+        [
+            {"node": "s-2", "type": "result", "form": {"quantity": "segments"}},
+            {"node": "s-3", "type": "result", "form": {"quantity": "realisations"}},
+        ],
+        model=MODEL,
+    )
+    write(checks_run, "observe", {"target": "s-2", "result": "failed"}, model=MODEL)
+    finish_run(checks_run, model=MODEL)
+    verdicts = {
+        node["id"]: node["attributes"]["assessment"]
+        for node in read_json(checks_run / "graph.json")["nodes"]
+        if "assessment" in node["attributes"]
+    }
+    assert verdicts["s-2"] == {"verdict": "fails"}
+    assert verdicts["s-3"] == {"verdict": "not_assessed", "reason": "not selected"}
+
+
+def test_finish_reports_what_the_core_check_finds(run_dir: Path) -> None:
+    result = finish_run(run_dir, model=MODEL)
+    assert result["ok"] is False
+    assert {"untyped"} <= {finding["code"] for finding in result["findings"]}
+    assert all(finding["nodes"] and finding["message"] for finding in result["findings"])
+
+
+def test_a_finished_tool_run_verifies_and_replays(checks_run: Path, no_network: None) -> None:
+    classify(checks_run, [{"node": "s-2", "type": "result", "form": {"quantity": "segments"}}], model=MODEL)
+    finish_run(checks_run, model=MODEL)
+    found = verify_run(checks_run)
+    assert (found.rerun, found.differences) == ((), ())
+    assert replay(checks_run, source=checks_fixture.PAPER) == recorded_graph(checks_run)
+
+
+def test_premises_need_a_rubric_that_takes_them(checks_run: Path) -> None:
+    before = calls(checks_run)
+    with pytest.raises(RunError, match="no premises can be added") as raised:
+        add_premises(checks_run, [{"conclusion": "s-9", "premises": [{"statement": "x"}]}], model=MODEL)
+    assert raised.value.code == "invalid-argument"
+    assert calls(checks_run) == before
+
+
+def test_records_must_be_a_list(run_dir: Path) -> None:
+    with pytest.raises(RunError, match="records must be a list") as raised:
+        write(run_dir, "classify", {"records": {"node": "s-1"}}, model=MODEL)
+    assert raised.value.code == "invalid-argument"
+    assert calls(run_dir) == 1
+
+
+def test_every_call_is_logged_with_its_model_and_agent(run_dir: Path) -> None:
+    classify(run_dir, FIRST[:2], model="m-a", agent="typist", note="first pass")
+    finish_run(run_dir, model="m-b")
+    lines = [json.loads(line) for line in (run_dir / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [(line["tool"], line["model"], line["agent"]) for line in lines] == [
+        ("start_run", MODEL, None),
+        ("classify", "m-a", "typist"),
+        ("finish_run", "m-b", None),
+    ]
+    assert read_json(run_dir / "manifest.json")["models"] == ["m-a", "m-b", MODEL]
