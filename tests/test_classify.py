@@ -22,19 +22,24 @@ from credencegraph_extract.pipeline import PASSES
 from credencegraph_extract.run import RunError, replay, run_extraction
 
 
-def make_run(run_dir: Path, bodies: list[dict[str, Any]] = BODIES, rubric: Path = RUBRIC) -> Any:
+def make_run(run_dir: Path, bodies: list[dict[str, Any]] = BODIES, rubric: Path = RUBRIC, passes: Any = PASSES) -> Any:
     client = fake_client(bodies)
     call = partial(provider.call, model=MODEL, max_tokens=1024, client=client)
-    run_extraction(PAPER, run_dir, rubric, call=call, passes=PASSES, run_id=RUN_ID)
+    run_extraction(PAPER, run_dir, rubric, call=call, passes=passes, run_id=RUN_ID)
     return client
+
+
+# The tests that change the classify answers run the classify pass alone, so the premise pass's
+# recorded answers need not match the graph they lead to.
+CLASSIFY_ONLY = (ClassifyPass(),)
 
 
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_the_pipeline_runs_the_classify_pass() -> None:
-    assert [item.name for item in PASSES] == ["classify"]
+def test_the_pipeline_runs_the_classify_pass_first() -> None:
+    assert [item.name for item in PASSES] == ["classify", "premises"]
 
 
 def test_the_fixture_paper_passes_the_typed_check_with_rubric_credences(tmp_path: Path) -> None:
@@ -70,9 +75,14 @@ def test_the_run_reproduces_the_recorded_fixture(tmp_path: Path) -> None:
         "report.json",
         "raw/0001.json",
         "raw/0002.json",
+        "raw/0003.json",
+        "raw/0004.json",
         "prompts/0001.txt",
         "prompts/0002.txt",
+        "prompts/0003.txt",
+        "prompts/0004.txt",
         "prompts/classify.template.txt",
+        "prompts/premises.template.txt",
     ):
         assert (run_dir / name).read_bytes() == (RUN / name).read_bytes(), name
 
@@ -81,12 +91,12 @@ def test_rejections_of_the_first_round_are_kept_and_repaired(tmp_path: Path) -> 
     run_dir = tmp_path / "run"
     make_run(run_dir)
     rejections = read_json(run_dir / "rejections.json")
-    assert [(item["pass"], item["round"], item["node"], item["code"]) for item in rejections] == [
+    assert [(item["pass"], item["round"], item["node"], item["code"]) for item in rejections][:2] == [
         ("classify", "initial", "s-4", "invalid-argument"),
         ("classify", "initial", "s-5", "invalid-argument"),
     ]
     graph = read_json(run_dir / "graph.json")
-    kinds = {node["id"]: node["kind"] for node in graph["nodes"]}
+    kinds = {node["id"]: node["kind"] for node in graph["nodes"] if node["attributes"]["origin"] == "document"}
     assert kinds == {
         "s-1": "method",
         "s-2": "compound",
@@ -106,9 +116,9 @@ def test_rejections_of_the_first_round_are_kept_and_repaired(tmp_path: Path) -> 
 def test_the_repair_call_is_recorded_like_any_other(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     client = make_run(run_dir)
-    assert len(client.sent) == 2
+    assert len(client.sent) == 4
     manifest = read_json(run_dir / "manifest.json")
-    (entry,) = manifest["passes"]
+    entry = manifest["passes"][0]
     assert entry["name"] == "classify"
     assert [call["raw"] for call in entry["calls"]] == ["raw/0001.json", "raw/0002.json"]
     assert read_json(run_dir / "raw" / "0002.json")["response"] == BODIES[1]
@@ -119,7 +129,7 @@ def test_the_repair_call_is_recorded_like_any_other(tmp_path: Path) -> None:
 
 def test_no_repair_call_when_nothing_is_rejected(tmp_path: Path) -> None:
     records = [record for record in FIRST if record["node"] not in {"s-4", "s-5"}] + REPAIR
-    client = make_run(tmp_path / "run", [message(1, json.dumps({"records": records}))])
+    client = make_run(tmp_path / "run", [message(1, json.dumps({"records": records}))], passes=CLASSIFY_ONLY)
     assert len(client.sent) == 1
     assert read_json(tmp_path / "run" / "rejections.json") == []
 
@@ -129,7 +139,7 @@ def test_what_the_repair_does_not_fix_stays_rejected(tmp_path: Path) -> None:
     stray = {"node": "s-1", "type": "method", "form": {"kind": "procedure"}}
     bodies = [BODIES[0], message(2, json.dumps({"records": [unrepaired, REPAIR[1], stray]}))]
     run_dir = tmp_path / "run"
-    make_run(run_dir, bodies)
+    make_run(run_dir, bodies, passes=CLASSIFY_ONLY)
     rejections = read_json(run_dir / "rejections.json")
     assert [(item["round"], item["node"], item["code"]) for item in rejections] == [
         ("initial", "s-4", "invalid-argument"),
@@ -149,7 +159,7 @@ def test_the_report_lists_unmapped_hedges(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     make_run(run_dir)
     report = read_json(run_dir / "report.json")
-    assert report["passes"] == {"classify": {"hedge-unmapped": [{"node": "s-5", "phrase": "We expect"}]}}
+    assert report["passes"]["classify"] == {"hedge-unmapped": [{"node": "s-5", "phrase": "We expect"}]}
     graph = read_json(run_dir / "graph.json")
     stated = {node["id"]: node.get("stated") for node in graph["nodes"] if node.get("stated") is not None}
     assert stated == {"s-3": {"alpha": 6.0, "beta": 4.0}}

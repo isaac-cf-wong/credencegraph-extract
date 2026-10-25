@@ -1,0 +1,57 @@
+You are reading the conclusions of a document. For each conclusion below you are given its text and
+the texts of the premises it is currently known to rest on. Ask: what else must be true for this
+conclusion to follow from these premises?
+
+Return one record per conclusion, with "conclusion" set to its id and "premises" listing each further
+premise it needs:
+- {"stated_at": "<id>"} when the document itself states the premise: give the id of that chunk from
+  the list of chunks below. Do not repeat a premise the conclusion is already known to rest on.
+- {"statement": "<text>"} when the document does not state it: write the premise as one short,
+  self-contained sentence. Use the same sentence, word for word, for the same premise of several
+  conclusions.
+Give the premises that matter most first. A conclusion that needs nothing further gets an empty list.
+
+Do not give probabilities, confidence levels or any other judgement of whether a premise is true.
+
+Conclusions, each as id: text, then the premises it rests on:
+s-2b: the estimator is therefore consistent
+  rests on s-2a: The bias vanishes for long segments
+  rests on s-1: We simulate 400 noise realisations with a Welch estimator.
+  rests on a-1: The segments are long compared with the noise correlation time.
+  rests on a-2: The noise is stationary over the observation.
+s-3: This suggests that the method may extend to coloured noise.
+  rests on s-2a: The bias vanishes for long segments
+  rests on e-1: \begin{equation} b = \frac{c}{N} \end{equation}
+  rests on a-2: The noise is stationary over the observation.
+s-5: We expect the estimator to stay unbiased in practice.
+  rests on s-4: Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+
+Chunks of the document, in document order, as id: text
+s-1: We simulate 400 noise realisations with a Welch estimator.
+s-2a: The bias vanishes for long segments
+s-2b: the estimator is therefore consistent
+e-1: \begin{equation} b = \frac{c}{N} \end{equation}
+s-3: This suggests that the method may extend to coloured noise.
+s-4: Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+s-5: We expect the estimator to stay unbiased in practice.
+r-1: A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.
+
+Records from your previous answer that were not applied, with the error each one got. If this list
+is not empty, return corrected records for these conclusions only, and nothing else:
+[
+  {
+    "record": {
+      "conclusion": "s-5",
+      "premises": [
+        {
+          "statement": "The settings of Smith match ours."
+        },
+        {
+          "stated_at": "s-4"
+        }
+      ]
+    },
+    "code": "invalid-argument",
+    "message": "a relation with id 's-4-requires-s-5' already exists"
+  }
+]

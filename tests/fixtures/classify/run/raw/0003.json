@@ -1,0 +1,87 @@
+{
+  "pass": "premises",
+  "request": {
+    "provider": "anthropic",
+    "sdk_version": "2.3.0",
+    "model": "claude-fixture-20261024",
+    "parameters": {
+      "max_tokens": 1024
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "conclusion": {
+                "type": "string"
+              },
+              "premises": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "stated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "stated_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "statement": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "statement"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "conclusion",
+              "premises"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "prompt_digest": "sha256:ae1046adf2f20bbd21bda83642b0acef9e752f424dad4b056bad4097134f2318",
+    "request_id": "req_msg_fixture0003"
+  },
+  "response": {
+    "id": "msg_fixture0003",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-fixture-20261024",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"records\": [{\"conclusion\": \"s-5\", \"premises\": [{\"statement\": \"The settings of Smith match ours.\"}, {\"stated_at\": \"s-4\"}]}, {\"conclusion\": \"s-2b\", \"premises\": [{\"stated_at\": \"s-1\"}, {\"statement\": \"The segments are long compared with the noise correlation time.\"}, {\"statement\": \"The noise is stationary over the observation.\"}, {\"statement\": \"The segments are independent.\"}]}, {\"conclusion\": \"s-3\", \"premises\": [{\"statement\": \"The noise  is stationary\\nover the observation. \"}]}]}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 40,
+      "output_tokens": 12
+    }
+  }
+}

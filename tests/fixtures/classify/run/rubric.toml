@@ -63,6 +63,16 @@ rests_on = { types = [
   "literature_claim",
 ], min = 1, relation = "requires", strength = "beta:9,1" }
 
+[types.assumption]
+description = "A premise the document leaves unsaid, added by the analyst."
+origins = ["analyst"]
+
+[premises]
+base = "beta:2,2"
+strength = "beta:8,2"
+for = ["claim"]
+max_per_conclusion = 2
+
 [hedges]
 "suggests" = "beta:6,4"
 "may" = "beta:5,5"

@@ -256,6 +256,60 @@
           "pass": "ingest"
         }
       }
+    },
+    {
+      "id": "a-1",
+      "kind": "assumption",
+      "statement": "The segments are long compared with the noise correlation time.",
+      "sources": [],
+      "base": {
+        "alpha": 2.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "analyst",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "premises"
+        }
+      }
+    },
+    {
+      "id": "a-2",
+      "kind": "assumption",
+      "statement": "The noise is stationary over the observation.",
+      "sources": [],
+      "base": {
+        "alpha": 2.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "analyst",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "premises"
+        }
+      }
+    },
+    {
+      "id": "a-3",
+      "kind": "assumption",
+      "statement": "The settings of Smith match ours.",
+      "sources": [],
+      "base": {
+        "alpha": 2.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "analyst",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "premises"
+        }
+      }
     }
   ],
   "relations": [
@@ -324,6 +378,61 @@
       "strength": {
         "alpha": 9.0,
         "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "s-1-requires-s-2b",
+      "type": "requires",
+      "source": "s-1",
+      "target": "s-2b",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "a-1-requires-s-2b",
+      "type": "requires",
+      "source": "a-1",
+      "target": "s-2b",
+      "strength": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "a-2-requires-s-2b",
+      "type": "requires",
+      "source": "a-2",
+      "target": "s-2b",
+      "strength": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "a-2-requires-s-3",
+      "type": "requires",
+      "source": "a-2",
+      "target": "s-3",
+      "strength": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "a-3-requires-s-5",
+      "type": "requires",
+      "source": "a-3",
+      "target": "s-5",
+      "strength": {
+        "alpha": 8.0,
+        "beta": 2.0
       },
       "attributes": {}
     }
