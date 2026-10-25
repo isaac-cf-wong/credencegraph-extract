@@ -604,6 +604,19 @@ def test_the_command_sends_to_the_provider_and_endpoint_given(tmp_path: Path, mo
     assert {(item["provider"], item["base_url"]) for item in sent} == {("openai", "http://localhost:8000/v1")}
 
 
+@pytest.mark.parametrize("name", ["anthropic", "openai"])
+def test_the_command_reports_a_missing_api_key_in_one_line(
+    name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for unset in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY"):
+        monkeypatch.delenv(unset, raising=False)
+    args = ["run", str(PAPER), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL, "--provider", name]
+    assert main([*args, "--base-url", "http://127.0.0.1:9"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error [provider-error]: no API key: set ")
+    assert err.count("\n") == 1
+
+
 def test_fetch_arxiv_needs_a_cited_directory(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     args = ["run", str(PAPER), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL, "--fetch-arxiv"]
     assert main(args) == 2

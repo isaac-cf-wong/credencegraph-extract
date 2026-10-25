@@ -87,7 +87,11 @@ def fake_client(bodies: list[dict[str, Any]], *, request_ids: bool = True) -> An
         return SimpleNamespace(request_id=request_id, json=lambda: json.loads(json.dumps(body)))
 
     return SimpleNamespace(
-        messages=SimpleNamespace(with_raw_response=SimpleNamespace(create=create)), sent=sent, base_url=BASE_URL
+        messages=SimpleNamespace(with_raw_response=SimpleNamespace(create=create)),
+        sent=sent,
+        base_url=BASE_URL,
+        api_key="test-key",
+        auth_token=None,
     )
 
 

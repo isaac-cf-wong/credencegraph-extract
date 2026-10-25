@@ -202,3 +202,11 @@ def test_without_a_request_id_header_or_a_response_id_the_request_id_is_null() -
     client = fake_openai_client([body], request_ids=False)
     record = provider.call("p", SCHEMA, model=MODEL, max_tokens=8, provider="openai", client=client)
     assert record["request"]["request_id"] is None
+
+
+@pytest.mark.parametrize(("name", "variable"), [("anthropic", "ANTHROPIC_API_KEY"), ("openai", "OPENAI_API_KEY")])
+def test_a_missing_api_key_is_a_provider_error(name: str, variable: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    for unset in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY"):
+        monkeypatch.delenv(unset, raising=False)
+    with pytest.raises(provider.ProviderError, match=f"no API key: set {variable}"):
+        provider.call("p", SCHEMA, model=MODEL, max_tokens=8, provider=name, base_url="http://127.0.0.1:9")

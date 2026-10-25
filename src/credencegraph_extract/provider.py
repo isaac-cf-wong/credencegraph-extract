@@ -37,6 +37,8 @@ PROVIDERS = (ANTHROPIC, OPENAI)
 # The name an OpenAI response format gives its schema.
 SCHEMA_NAME = "output"
 
+_NO_CREDENTIALS = "no API key: set {variable}; a server that checks none still needs some value there"
+
 
 class ProviderError(Exception):
     """A response carries no structured output: it is malformed, the model refused or ran out of tokens, or it is not JSON."""
@@ -73,9 +75,14 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
 
     Raises:
         ValueError: If ``provider`` is not one of ``PROVIDERS``.
+        ProviderError: If no client is given and the environment has no credentials for the provider.
     """
     if provider == ANTHROPIC:
-        client = client or anthropic.Anthropic(base_url=base_url)
+        if client is None:
+            client = anthropic.Anthropic(base_url=base_url)
+            # The SDK builds a client without credentials and fails only when it sends, with a TypeError.
+            if client.api_key is None and client.auth_token is None:
+                raise ProviderError(_NO_CREDENTIALS.format(variable="ANTHROPIC_API_KEY"))
         sdk_version = anthropic.__version__
         raw = client.messages.with_raw_response.create(
             model=model,
@@ -85,7 +92,11 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
         )
         response = raw.json()
     elif provider == OPENAI:
-        client = client or openai.OpenAI(base_url=base_url)
+        if client is None:
+            try:
+                client = openai.OpenAI(base_url=base_url)
+            except openai.OpenAIError:
+                raise ProviderError(_NO_CREDENTIALS.format(variable="OPENAI_API_KEY")) from None
         sdk_version = openai.__version__
         raw = client.chat.completions.with_raw_response.create(
             model=model,
