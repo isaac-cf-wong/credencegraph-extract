@@ -1,0 +1,62 @@
+{
+  "type": "rederive-maths",
+  "target": "s-6",
+  "artifact": {
+    "kind": "equation",
+    "nodes": [
+      "e-1",
+      "e-2"
+    ],
+    "labels": [
+      "eq:model",
+      "eq:drift"
+    ]
+  },
+  "inputs": {
+    "lhs": "(T_0 + alpha * (t + tau)) - (T_0 + alpha * t)",
+    "rhs": "alpha * tau",
+    "symbols": [
+      {
+        "name": "T_0",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          250,
+          320
+        ]
+      },
+      {
+        "name": "alpha",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          -2,
+          2
+        ]
+      },
+      {
+        "name": "t",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          0,
+          30
+        ]
+      },
+      {
+        "name": "tau",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          0,
+          30
+        ]
+      }
+    ],
+    "assumption": "over an interval tau the reported temperature changes by the slope alpha times tau; because T is affine this change does not depend on t."
+  }
+}

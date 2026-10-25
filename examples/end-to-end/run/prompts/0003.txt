@@ -1,0 +1,62 @@
+You are planning checks of the statements of a document. Each target below is a statement whose
+truth is to be assessed, with the check types that may be run on it. Propose the checks that can be
+run on each target from the document itself, at most one of each type per target, and none where
+no check fits. Do not judge whether any statement is true: the checks decide.
+
+Check types:
+- recompute-numbers: the target reports a number that follows from other numbers the document
+  reports. Give "nodes", the ids of the chunks whose numerals you use (the target's own included),
+  "expression", an arithmetic expression of those numerals with + - * / ** and parentheses, and
+  "expected", the reported result. Write every number exactly as a plain decimal numeral that occurs
+  in the text of one of "nodes" (a percentage such as 12.5% may be written 0.125); write no other
+  number, not even 100 or 2.
+- rederive-maths: the target rests on a step of mathematics from one equation to another. Give
+  "nodes", the ids of the equation chunks the step goes between, "lhs" and "rhs", two expressions the
+  step claims are equal for all values of the symbols, "symbols", each symbol with its sympy
+  assumptions (real, positive, negative, nonnegative, nonpositive, nonzero, integer) and a finite
+  domain [low, high] to sample it from, and "assumption", the step's assumptions in words. Use only
+  the declared symbols, numerals, + - * / ** and the functions sqrt, exp, log, sin, cos, tan, asin,
+  acos, atan, sinh, cosh, tanh, Abs and the constants pi, E and I.
+- citation-support: the target states what a cited work found. Give "reference", the id of the
+  bibliography entry it cites.
+
+Targets, as id (type): text, then the check types that may be run on it:
+s-2 (result): Each thermometer therefore yields 43200 readings.
+  checks: recompute-numbers
+s-3 (result): Across the array this gives 1036800 readings.
+  checks: recompute-numbers
+s-4 (result): After removing 5\% of the readings as outliers, 984460 readings remain.
+  checks: recompute-numbers
+e-1 (derivation): \begin{equation} T(t) = T_0 + \alpha t \end{equation}
+  checks: rederive-maths
+s-6 (derivation): so that over an interval $\tau$ the reported temperature changes by
+  checks: rederive-maths
+e-2 (derivation): \begin{equation} T(t + \tau) - T(t) = \alpha \tau \end{equation}
+  checks: rederive-maths
+s-7a (result): The mean fitted drift rate is 0.02 K per day
+  checks: recompute-numbers
+s-7b (derivation): so the mean drift over the 30 days is 0.6 kelvin
+  checks: rederive-maths
+s-8 (literature_claim): Lee reports that drifts of this size are typical of uncalibrated thermistors~\cite{lee2019}.
+  checks: citation-support
+
+Chunks of the document, in document order, as id (type): text
+s-1 (method): We record an array of 24 thermometers once a minute, 1440 times a day, for 30 days.
+s-2 (result): Each thermometer therefore yields 43200 readings.
+s-3 (result): Across the array this gives 1036800 readings.
+s-4 (result): After removing 5\% of the readings as outliers, 984460 readings remain.
+s-5 (method): We model the temperature reported by a drifting thermometer as
+e-1 (derivation) [label eq:model]: \begin{equation} T(t) = T_0 + \alpha t \end{equation}
+s-6 (derivation): so that over an interval $\tau$ the reported temperature changes by
+e-2 (derivation) [label eq:drift]: \begin{equation} T(t + \tau) - T(t) = \alpha \tau \end{equation}
+s-7 (compound): The mean fitted drift rate is 0.02 K per day, so the mean drift over the 30 days is 0.6 kelvin.
+s-7a (result): The mean fitted drift rate is 0.02 K per day
+s-7b (derivation): so the mean drift over the 30 days is 0.6 kelvin
+s-8 (literature_claim): Lee reports that drifts of this size are typical of uncalibrated thermistors~\cite{lee2019}.
+s-9 (claim): These results suggest that the array needs recalibration every month.
+r-1 (reference) [key lee2019]: C. Lee, Thermistor ageing in field arrays, J. Instr. Field Methods 7 (2019) 12.
+
+Proposals from your previous answer that were refused, each with the error it got and what to change
+("fix"). If this list is not empty, return corrected proposals for these targets only, and nothing
+else:
+[]

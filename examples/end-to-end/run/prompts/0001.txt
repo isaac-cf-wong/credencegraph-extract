@@ -1,0 +1,75 @@
+You are classifying the chunks of a document against a rubric. Each chunk is a verbatim sentence,
+equation or other unit of the document, with an id. Return one record for every chunk you can type.
+
+A record types one chunk: "type" is one of the types below, "form" fills in that type's fields,
+"rests_on" lists the ids of the chunks the statement depends on, and "hedge" is the hedging phrase
+the chunk uses, such as "suggests" or "may", if it uses one.
+A chunk that makes several statements of different types is split instead: "split" lists clauses
+copied exactly from its text, each occurring exactly once in it, and "children" gives one typed
+record (without "node") per clause, in the same order. Its children are then named by the chunk's
+id followed by a, b, c, ..., and other records may rest on them.
+
+The answer is one JSON object with a list of records, each of one of these two shapes:
+{"records": [
+  {"node": "<chunk id>", "type": "<type>", "form": {...}, "rests_on": ["<chunk id>", ...], "hedge": "<phrase>"},
+  {"node": "<chunk id>", "split": ["<clause>", "<clause>"], "children": [{"type": "<type>", ...}, {"type": "<type>", ...}]}
+]}
+Leave out "form", "rests_on" and "hedge" where the type has no form fields, rests on nothing, or the
+chunk has no hedge.
+
+Rules:
+- "node" is always one of the chunk ids listed below, exactly as written. Never write a clause id such
+  as s-2a as "node": a clause id exists only once a split record for its chunk is applied.
+- Copy every text value exactly from the chunk: a verbatim field and a hedge must be substrings of
+  the chunk's text, a number or quantity must appear in it as a numeral, and an equation reference
+  must be referenced in it.
+- Give a record only the form fields its type lists below, and every field marked required.
+- A type that "rests on nothing" below never has "rests_on". A type that rests on others lists in
+  "rests_on" only chunks that have, or are typed in this answer as, one of the types it names.
+- Do not give probabilities, confidence levels or any other judgement of whether a statement is
+  true. The rubric sets those.
+
+Types:
+- reference: A bibliography entry.
+  form: no fields
+  rests on nothing
+- context: A sentence that states nothing to assess on its own.
+  form: no fields
+  rests on nothing
+- method: What was done: a procedure, simulation or dataset.
+  form: no fields
+  rests on nothing
+- result: What was found, as a number.
+  form: quantity (verbatim, required)
+  rests on nothing
+- derivation: A step of mathematics the document carries out.
+  form: no fields
+  rests on nothing
+- literature_claim: A finding the document takes from a cited work.
+  form: no fields
+  rests on nothing
+- claim: A conclusion the document asserts.
+  form: no fields
+  rests on at least 1 of: result, derivation, literature_claim
+
+Hedge phrases the rubric knows (report any other you find; it is listed for review, not dropped):
+"suggest", "suggests", "may"
+
+Chunks, in document order, as id (current type): text
+s-1 (unassigned): We record an array of 24 thermometers once a minute, 1440 times a day, for 30 days.
+s-2 (unassigned): Each thermometer therefore yields 43200 readings.
+s-3 (unassigned): Across the array this gives 1036800 readings.
+s-4 (unassigned): After removing 5\% of the readings as outliers, 984460 readings remain.
+s-5 (unassigned): We model the temperature reported by a drifting thermometer as
+e-1 (unassigned): \begin{equation} T(t) = T_0 + \alpha t \end{equation}
+s-6 (unassigned): so that over an interval $\tau$ the reported temperature changes by
+e-2 (unassigned): \begin{equation} T(t + \tau) - T(t) = \alpha \tau \end{equation}
+s-7 (unassigned): The mean fitted drift rate is 0.02 K per day, so the mean drift over the 30 days is 0.6 kelvin.
+s-8 (unassigned): Lee reports that drifts of this size are typical of uncalibrated thermistors~\cite{lee2019}.
+s-9 (unassigned): These results suggest that the array needs recalibration every month.
+r-1 (reference): C. Lee, Thermistor ageing in field arrays, J. Instr. Field Methods 7 (2019) 12.
+
+Records from your previous answer that were not applied, each with the error it got and what to
+change ("fix"). If this list is not empty, return corrected records for these chunks only, and
+nothing else:
+[]

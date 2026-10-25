@@ -1,0 +1,109 @@
+{
+  "pass": "premises",
+  "request": {
+    "provider": "openai",
+    "sdk_version": "3.37.0",
+    "base_url": "http://local-openai-compatible-server.invalid/v1/",
+    "model": "Ornith-1.5-35B-A3B-MLX-4bit",
+    "parameters": {
+      "max_tokens": 32768,
+      "options": {
+        "thinking_budget": 16384
+      }
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "conclusion": {
+                "type": "string"
+              },
+              "premises": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "stated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "stated_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "statement": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "statement"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "conclusion",
+              "premises"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "prompt_digest": "sha256:01c3302dfdb94d3172460e17ec1ee472f900852595e7eb58687933ecb909a56d",
+    "request_id": "chatcmpl-3d454922"
+  },
+  "response": {
+    "id": "chatcmpl-3d454922",
+    "object": "chat.completion",
+    "created": 1792959428,
+    "model": "Ornith-1.5-35B-A3B-MLX-4bit",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"records\": [{\"conclusion\": \"s-9\", \"premises\": [{\"statement\": \"The array needs recalibration once its drift reaches 0.6 K.\"}]}]}",
+          "reasoning_content": "Let me analyze conclusion s-9:\n\ns-9: \"These results suggest that the array needs recalibration every month.\"\n\nRests on:\n- s-7a: The mean fitted drift rate is 0.02 K per day\n- s-7b: so the mean drift over the 30 days is 0.6 kelvin\n- s-8: Lee reports that drifts of this size are typical of uncalibrated thermistors~\\cite{lee2019}.\n\nNow what else must be true for s-9 to follow from these premises?\n\nLet me think about the logic here.\n\ns-7a: drift rate is 0.02 K per day\ns-7b: mean drift over 30 days is 0.6 kelvin\ns-8: drifts of this size are typical of uncalibrated thermistors\n\nConclusion s-9: array needs recalibration every month.\n\nWhat's the link between \"drifts of this size are typical of uncalibrated thermistors\" and \"needs recalibration every month\"?\n\nLet me check the math first:\n- s-7a says 0.02 K per day\n- s-7b says over 30 days is 0.6 kelvin\n- Wait, 0.02 K/day × 30 days = 0.6 K. Yes, that's correct.\n\nSo s-7b follows from s-7a and the fact that the measurement is over 30 days (s-1 says \"for 30 days\").\n\nNow, the conclusion is \"the array needs recalibration every month.\"\n\nFor this to follow:\n1. We need to connect the drift to needing recalibration.\n2. \"every month\" - we need to understand what defines \"every month.\"\n\nThe argument is: drifts of this size (0.6 K) are typical of uncalibrated thermistors. And this means we should recalibrate every month.\n\nBut there's a gap. What does it mean for a drift to be \"typical of uncalibrated thermistors\"? And why does that mean recalibration every month?\n\nWe need a premise that connects \"drift of this size\" to a recalibration threshold. E.g., \"recalibration is needed when drift exceeds some threshold like 0.6 K.\" Or perhaps that the drift of 0.6 K over 30 days represents the recalibration interval.\n\nActually, let me think about \"every month.\" The measurement is over 30 days (one month). The drift over 30 days is 0.6 K. \n\nHmm, so \"recalibration every month\" - the idea is that the drift accumulates to 0.6 K over a month, and this is the threshold for recalibration.\n\nWait, but what makes 0.6 K the recalibration threshold? We'd need something like \"the array requires recalibration when drift reaches 0.6 K\" or \"0.6 K is the acceptable drift limit.\"\n\nActually, let me reconsider. The conclusion says \"needs recalibration every month.\" The drift over 30 days (one month) is 0.6 K. \n\nFor \"every month\" to be derived, we need to know that the recalibration interval equals the drift accumulation period such that drift reaches an acceptable limit at 30 days.\n\nActually, maybe the key missing premise is about what threshold triggers recalibration. If 0.6 K is the recalibration threshold, and the drift over 30 days is exactly 0.6 K, then recalibration is needed every 30 days (every month).\n\nSo the missing premise would be something like: \"Recalibration is required when the drift reaches 0.6 K.\" or \"The acceptable drift limit for the array is 0.6 K.\"\n\nLet me also consider: s-8 says drifts \"of this size\" are \"typical of uncalibrated thermistors.\" This tells us that if we see a drift of this size, the thermometer is uncalibrated. So the array's thermistors need calibration. That connects drift to needing calibration. But \"every month\" specifically?\n\nActually, the \"every month\" part is the crux. Let me think.\n\nThe drift accumulates linearly (from the model T(t) = T_0 + αt). So the drift after 30 days is 0.6 K. If 0.6 K is the threshold at which recalibration is needed, then recalibration is needed after 30 days = every month.\n\nSo the crucial missing premise is about the recalibration threshold being 0.6 K (or the drift limit being 0.6 K).\n\nHmm, but this isn't stated in the document. So we write it as a self-contained sentence.\n\nWait, but let me reconsider whether this is even necessary. Let me re-examine.\n\nActually, \"every month\" comes from the 30-day measurement period. The array is measured for 30 days. During those 30 days, the drift reaches 0.6 K. \n\nHmm, so why \"every month\"? Perhaps because the recalibration is needed once the drift reaches the threshold. If the threshold is 0.6 K and the drift reaches 0.6 K in 30 days, then recalibrate every 30 days = every month.\n\nSo yes, we need the recalibration threshold to be 0.6 K (or the acceptable drift limit of the array).\n\nLet me write this: \"The array needs recalibration once its drift reaches 0.6 K.\"\n\nOr more precisely: \"0.6 K is the drift at which the array requires recalibration.\"\n\nActually, let me reconsider the whole thing. Maybe there are multiple gaps.\n\nGap 1: The connection between \"drift of this size is typical of uncalibrated thermistors\" and \"needs recalibration.\" This is provided by s-8 essentially (if drift is typical of uncalibrated thermistors, then they need calibration). But actually, this alone doesn't say \"every month.\"\n\nGap 2: Why \"every month\"? The measurement is over 30 days, drift is 0.6 K. For recalibration to be \"every month,\" we need the recalibration threshold to be 0.6 K.\n\nActually wait. Let me reconsider. Maybe the reasoning is different.\n\nPerhaps the argument is: the drift over 30 days (one month) is 0.6 K, which is at the threshold where recalibration is needed. Therefore, recalibrating every month (every 30 days) keeps the drift at the threshold.\n\nSo the missing premise: \"The array needs recalibration when its drift reaches 0.6 K.\"\n\nLet me also double check the 30-day derivation. s-1 says the array is recorded \"for 30 days.\" s-7a says drift rate is 0.02 K/day. So over 30 days, drift = 0.02 × 30 = 0.6 K. That's s-7b. So s-7b follows from s-7a and s-1 (30 days). \n\nBut actually, do we need to state that the measurement period is 30 days? Well, the conclusion rests on s-7a and s-7b, and s-7b already incorporates the 30-day calculation. So I don't think we need s-1 for s-9 directly, unless the \"every month\" needs the 30-day period. But s-7b already gives us 0.6 K over 30 days, so we know it's 30 days from s-7b itself.\n\nSo the main missing premise is the recalibration threshold of 0.6 K.\n\nLet me also think: does s-8 fully connect? s-8 says \"Lee reports that drifts of this size are typical of uncalibrated thermistors.\" So a drift of 0.6 K is typical of uncalibrated thermistors. This means the thermistors are uncalibrated (or that's the signature). So they need calibration. But it doesn't directly say \"every month.\"\n\nSo the key missing premise connects 0.6 K drift to the recalibration interval.\n\nGiven the drift rate is 0.02 K/day, and it reaches 0.6 K in 30 days, the recalibration threshold must be around 0.6 K for \"every month\" to follow.\n\nSo: {\"statement\": \"The array needs recalibration once its drift reaches 0.6 K.\"}\n\nHmm, but wait. Let me reconsider whether there's an even more fundamental link. Actually, let me reconsider if s-8 provides enough. \n\nActually, the phrase \"these results suggest that the array needs recalibration every month\" — the \"these results\" refers to the drift measurements.\n\nThe logic chain:\n1. Drift rate = 0.02 K/day (s-7a)\n2. Over 30 days = 0.6 K (s-7b)\n3. Drifts of this size are typical of uncalibrated thermistors (s-8)\n4. Therefore array needs recalibration every month.\n\nFor step 4 to follow, we need:\n- The array needs recalibration because drift indicates uncalibration (from s-8 essentially, though s-8 is about Lee reporting).\n- The recalibration is needed \"every month\" because the drift reaches the threshold in 30 days.\n\nSo the missing premise is the recalibration threshold. Without knowing the threshold is 0.6 K, we can't conclude \"every month\" (30 days).\n\nActually, hold on. Let me reconsider. Maybe \"every month\" isn't about a threshold. Maybe the reasoning is:\n\nThe drift is 0.02 K/day. Over a month (30 days), it's 0.6 K. This 0.6 K is significant (Lee says such drifts are typical of uncalibrated thermistors). Therefore, to keep the array within calibration, recalibrate every month.\n\nBut this still requires knowing the threshold. If the acceptable threshold were 6 K, then you'd recalibrate every 300 days, not every month. If the threshold were 0.6 K, recalibrate every 30 days (month). So the threshold being 0.6 K is essential for \"every month.\"\n\nSo I'll go with the recalibration threshold premise.\n\nLet me phrase it well: \"Recalibration is required when the array's drift reaches 0.6 K.\"\n\nOr: \"The acceptable drift limit of the array is 0.6 K.\"\n\nGiven the conclusion says \"needs recalibration every month\" and the drift over a month (30 days) is 0.6 K, the premise that makes \"every month\" follow is that 0.6 K is the recalibration threshold.\n\nSo my answer for s-9:\n\n{\"conclusion\": \"s-9\", \"premises\": [{\"statement\": \"Recalibration of the array is required once its drift reaches 0.6 K.\"}]}\n\nWait, I should double-check whether s-8 is being fully utilized or if there's additional gap. Let me re-read s-8: \"Lee reports that drifts of this size are typical of uncalibrated thermistors.\"\n\nThis connects drift size to uncalibrated thermistors. So if we measure this drift, the thermistors are uncalibrated, hence need recalibration. This supports \"needs recalibration.\" But \"every month\" needs the threshold.\n\nActually, I realize there might be another subtlety. Let me reconsider what \"of this size\" refers to. \"Drifts of this size\" = 0.6 K (the mean drift over 30 days). So s-8 tells us that 0.6 K drifts are typical of uncalibrated thermistors.\n\nNow, \"these results suggest that the array needs recalibration every month.\"\n\nI think the missing premise is about the threshold. Let me finalize.\n\nActually, let me reconsider whether there might be two premises needed:\n1. A drift of 0.6 K requires recalibration (threshold = 0.6 K). \n2. Something about \"every month\" = the 30-day drift reaching the threshold.\n\nBut (2) is essentially derived from (1) and the drift rate over 30 days. Since s-7b gives 0.6 K over 30 days, and if threshold is 0.6 K, then recalibration is every 30 days = month. So just one premise.\n\nHmm, but actually, is the threshold exactly 0.6 K? The conclusion says \"every month.\" The drift reaches 0.6 K in 30 days. For \"every month\" to hold, the threshold must be exactly 0.6 K (or the drift reaching 0.6 K = 1 month = recalibrate). \n\nBut actually, one could also argue: maybe the recalibration threshold is 0.6 K, and drift reaches it in 30 days, so recalibrate every 30 days = every month. This works if threshold = 0.6 K.\n\nAlternatively, maybe the premise is about the recalibration being needed whenever drift reaches the \"typical of uncalibrated\" level, which is 0.6 K, and this takes 30 days. So threshold = 0.6 K.\n\nEither way, the premise is that 0.6 K is the recalibration threshold.\n\nLet me finalize the answer.\n\nActually, I want to reconsider whether I even need s-8 as an additional premise, or if it's already given. The conclusion \"rests on\" s-7a, s-7b, s-8. So those are given. I should not repeat them.\n\nSo the additional premise is the recalibration threshold = 0.6 K.\n\nFinal answer:\n{\"conclusion\": \"s-9\", \"premises\": [{\"statement\": \"Recalibration is required once the array's drift reaches 0.6 K.\"}]}\n\nThis is self-contained and uses the number 0.6 K consistent with s-7b.\n\nLet me reconsider the wording once more. The conclusion: \"These results suggest that the array needs recalibration every month.\"\n\nPremise needed: The array requires recalibration when drift reaches 0.6 K.\n\nActually, since the drift accumulates at 0.02 K/day and reaches 0.6 K after 30 days, and if 0.6 K is the threshold, then recalibration is needed every 30 days = every month. \n\nSo the premise is: \"The array needs recalibration when its drift reaches 0.6 K.\"\n\nThis is the most direct. Let me go with this.\n\nI should present it as a single record."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 716,
+      "completion_tokens": 3265,
+      "total_tokens": 3981,
+      "input_tokens": 716,
+      "output_tokens": 3265,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 3223
+      },
+      "time_to_first_token": 1.17,
+      "total_time": 51.99,
+      "prompt_eval_duration": 1.17,
+      "generation_duration": 50.83,
+      "prompt_tokens_per_second": 613.96,
+      "generation_tokens_per_second": 64.24
+    }
+  }
+}

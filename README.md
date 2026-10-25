@@ -349,6 +349,15 @@ a run directory that is malformed or incomplete (an unreadable or invalid
 that cannot be read or written, a source or record that does not match the
 manifest, and a provider error.
 
+## Example
+
+`examples/end-to-end/` is a live run on an invented paper, committed with its
+run directory: the classify, premise and check passes, the model's corrections,
+the checks that ran (one catching a wrong number the paper reports), and the
+offline replay, `verify` and conditioning on the observations. The
+[documentation](https://isaac-cf-wong.github.io/credencegraph-extract/example/)
+walks through it.
+
 ## Development
 
 ```shell

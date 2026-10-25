@@ -1,0 +1,24 @@
+You are reading the conclusions of a document. For each conclusion below you are given its text and
+the texts of the premises it is currently known to rest on. Ask: what else must be true for this
+conclusion to follow from these premises?
+
+Return one record per conclusion, with "conclusion" set to its id and "premises" listing each further
+premise it needs:
+- {"stated_at": "<id>"} when the document itself states the premise: give the id of that chunk from
+  the list of chunks below. Do not repeat a premise the conclusion is already known to rest on.
+- {"statement": "<text>"} when the document does not state it: write the premise as one short,
+  self-contained sentence. Use the same sentence, word for word, for the same premise of several
+  conclusions.
+Give the premises that matter most first. A conclusion that needs nothing further gets an empty list.
+
+Do not give probabilities, confidence levels or any other judgement of whether a premise is true.
+
+Conclusions, each as id: text, then the premises it rests on:
+$conclusions
+
+Chunks of the document, in document order, as id: text
+$chunks
+
+Records from your previous answer that were not applied, with the error each one got. If this list
+is not empty, return corrected records for these conclusions only, and nothing else:
+$rejected

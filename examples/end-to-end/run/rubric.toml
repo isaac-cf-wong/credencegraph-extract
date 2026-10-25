@@ -1,0 +1,96 @@
+# The rubric of the end-to-end example. Its values are illustrative, not calibrated.
+
+[rubric]
+format = 2
+name = "end-to-end-example"
+version = "1"
+
+[calibration]
+status = "example"
+scoring = "log"
+against = "nothing: the values are illustrative"
+date = 2026-10-25
+
+[initial]
+reference = "reference"
+
+[types.reference]
+description = "A bibliography entry."
+
+[types.context]
+description = "A sentence that states nothing to assess on its own."
+base = "beta:9,1"
+
+[types.method]
+description = "What was done: a procedure, simulation or dataset."
+base = "beta:9,1"
+
+[types.result]
+description = "What was found, as a number."
+assess = true
+base = "beta:8,2"
+form.quantity = { type = "verbatim", required = true }
+
+[types.derivation]
+description = "A step of mathematics the document carries out."
+assess = true
+base = "beta:9,1"
+
+[types.literature_claim]
+description = "A finding the document takes from a cited work."
+assess = true
+base = "beta:8,2"
+
+[types.claim]
+description = "A conclusion the document asserts."
+assess = true
+base = "beta:5,5"
+rests_on = { types = [
+  "result",
+  "derivation",
+  "literature_claim",
+], min = 1, relation = "requires", strength = "beta:9,1" }
+
+[types.assumption]
+description = "A premise the document leaves unsaid, added by the analyst."
+origins = ["analyst"]
+
+[checks.recompute-numbers]
+description = "Re-evaluate an arithmetic relation between numbers the text reports."
+targets = ["result"]
+sensitivity = "beta:19,1"
+false_pass = "beta:1,9"
+models = []
+
+[checks.rederive-maths]
+description = "Prove a step of mathematics with sympy."
+targets = ["derivation"]
+sensitivity = "beta:19,1"
+false_pass = "beta:1,19"
+models = []
+
+[checks.rederive-maths-numeric]
+description = "Compare the two sides of a step at sampled points, when sympy cannot decide."
+targets = ["derivation"]
+sensitivity = "beta:9,1"
+false_pass = "beta:1,4"
+models = []
+
+[checks.citation-support]
+description = "Judge whether the cited work supports the citing sentence."
+targets = ["literature_claim"]
+sensitivity = "beta:8,2"
+false_pass = "beta:2,8"
+# An invented model id: no model was fitted, so the example runs with --allow-uncalibrated.
+models = ["example-judge-20261001"]
+
+[premises]
+base = "beta:2,2"
+strength = "beta:8,2"
+for = ["claim"]
+max_per_conclusion = 2
+
+[hedges]
+"suggest" = "beta:6,4"
+"suggests" = "beta:6,4"
+"may" = "beta:5,5"

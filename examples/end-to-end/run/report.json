@@ -1,0 +1,104 @@
+{
+  "coverage": {
+    "rubric": {
+      "name": "end-to-end-example",
+      "version": "1"
+    },
+    "nodes": 21,
+    "by_origin": {
+      "document": 14,
+      "analyst": 1,
+      "evidence": 6
+    },
+    "by_type": {
+      "method": {
+        "count": 2,
+        "share": 0.14285714285714285
+      },
+      "result": {
+        "count": 4,
+        "share": 0.2857142857142857
+      },
+      "derivation": {
+        "count": 4,
+        "share": 0.2857142857142857
+      },
+      "compound": {
+        "count": 1,
+        "share": 0.07142857142857142
+      },
+      "literature_claim": {
+        "count": 1,
+        "share": 0.07142857142857142
+      },
+      "claim": {
+        "count": 1,
+        "share": 0.07142857142857142
+      },
+      "reference": {
+        "count": 1,
+        "share": 0.07142857142857142
+      }
+    },
+    "untyped": [],
+    "unexamined": [],
+    "not_assessed": {
+      "count": 4,
+      "reasons": {
+        "s-7a": "not selected",
+        "s-7b": "not selected",
+        "s-8": "not selected",
+        "s-9": "no v1 check applies"
+      }
+    }
+  },
+  "passes": {
+    "classify": {
+      "hedge-unmapped": []
+    },
+    "premises": {
+      "overflow": []
+    },
+    "checks": {
+      "checks": [
+        {
+          "id": "c-001",
+          "type": "recompute-numbers",
+          "target": "s-2",
+          "result": "passed"
+        },
+        {
+          "id": "c-002",
+          "type": "recompute-numbers",
+          "target": "s-3",
+          "result": "passed"
+        },
+        {
+          "id": "c-003",
+          "type": "recompute-numbers",
+          "target": "s-4",
+          "result": "failed"
+        },
+        {
+          "id": "c-004",
+          "type": "rederive-maths",
+          "target": "e-1",
+          "result": "passed"
+        },
+        {
+          "id": "c-005",
+          "type": "rederive-maths",
+          "target": "s-6",
+          "result": "passed"
+        },
+        {
+          "id": "c-006",
+          "type": "rederive-maths",
+          "target": "e-2",
+          "result": "passed"
+        }
+      ],
+      "uncalibrated": []
+    }
+  }
+}

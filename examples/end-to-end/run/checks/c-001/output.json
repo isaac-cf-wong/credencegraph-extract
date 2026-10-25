@@ -1,0 +1,8 @@
+{
+  "result": "passed",
+  "detail": "1440 * 30 = 43200 (exact, Fraction); within 43200 ± 0.5",
+  "value": "43200",
+  "reported": "43200",
+  "rounding": "0.5",
+  "difference": "0"
+}

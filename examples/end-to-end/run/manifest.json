@@ -1,0 +1,110 @@
+{
+  "format": "credencegraph-extract-run",
+  "version": 1,
+  "run": "20261025T201204Z-07bb4385",
+  "created_at": "2026-10-25T20:12:04Z",
+  "source": {
+    "document": "paper.tex",
+    "file": "paper.tex",
+    "digest": "sha256:2a82477d11286ede15d5b6e0b2fcac139408d01f5e245a110258073e8061811c",
+    "stored": false
+  },
+  "versions": {
+    "python": "3.15.0",
+    "credencegraph": "0.4.0",
+    "credencegraph-extract": "0.1.dev12+gf6ca9f851",
+    "anthropic": "2.3.0",
+    "openai": "3.37.0",
+    "sympy": "1.14.0"
+  },
+  "rubric": {
+    "name": "end-to-end-example",
+    "version": "1",
+    "digest": "sha256:dd9e8a23a8c30fcf5725df5a9b71bb0aac363437b88e524ff13c3c488b51f527"
+  },
+  "passes": [
+    {
+      "name": "classify",
+      "template_digest": "sha256:4b81243827d69f19b0054d47530d6230da67f983b3ffb451054b238e0fc018e5",
+      "calls": [
+        {
+          "prompt": "prompts/0001.txt",
+          "prompt_digest": "sha256:23911fce928ad7083338fe3692f6114abbaf4fceba2db25d7c52a5b59ce89602",
+          "raw": "raw/0001.json",
+          "raw_digest": "sha256:c60cf5eae7916906b01beac11e5fdeec89000f61831a0c7a5ac58b22c21c7e27",
+          "provider": "openai",
+          "base_url": "http://local-openai-compatible-server.invalid/v1/",
+          "model": "Ornith-1.5-35B-A3B-MLX-4bit",
+          "parameters": {
+            "max_tokens": 32768,
+            "options": {
+              "thinking_budget": 16384
+            }
+          },
+          "sdk_version": "3.37.0"
+        }
+      ]
+    },
+    {
+      "name": "premises",
+      "template_digest": "sha256:4872cd1bad5a2c31bfa6987e134b45f35ea4ecd4392c935405bae2ddce17623f",
+      "calls": [
+        {
+          "prompt": "prompts/0002.txt",
+          "prompt_digest": "sha256:01c3302dfdb94d3172460e17ec1ee472f900852595e7eb58687933ecb909a56d",
+          "raw": "raw/0002.json",
+          "raw_digest": "sha256:6ed5da6d7721cb22914239895accf7549666c338f1df056c4b9e2e1da8a958a3",
+          "provider": "openai",
+          "base_url": "http://local-openai-compatible-server.invalid/v1/",
+          "model": "Ornith-1.5-35B-A3B-MLX-4bit",
+          "parameters": {
+            "max_tokens": 32768,
+            "options": {
+              "thinking_budget": 16384
+            }
+          },
+          "sdk_version": "3.37.0"
+        }
+      ]
+    },
+    {
+      "name": "checks",
+      "template_digest": "sha256:5c18ea9eae3ac3e051fa57dc3049e9c9ae4a87842b437ff1785c98961ece1597",
+      "calls": [
+        {
+          "prompt": "prompts/0003.txt",
+          "prompt_digest": "sha256:fc6e569290d890bdc249d7f705a66dfc025e46a8ebe5cb4ca62e09c33769eff8",
+          "raw": "raw/0003.json",
+          "raw_digest": "sha256:9a6a6b504b7dcc04861a9a19f8177c5a1818119b6aeaa6040b7356027fe77cc8",
+          "provider": "openai",
+          "base_url": "http://local-openai-compatible-server.invalid/v1/",
+          "model": "Ornith-1.5-35B-A3B-MLX-4bit",
+          "parameters": {
+            "max_tokens": 32768,
+            "options": {
+              "thinking_budget": 16384
+            }
+          },
+          "sdk_version": "3.37.0"
+        },
+        {
+          "prompt": "prompts/0004.txt",
+          "prompt_digest": "sha256:87f3583d0eba8dc8899c1663180bd202d7032f9bdde7af6fdfaf5181e01c20c4",
+          "raw": "raw/0004.json",
+          "raw_digest": "sha256:132307a1244d844b3e1fefb8d40ac9f3012d3b76b854f417275211c30670dfb4",
+          "provider": "openai",
+          "base_url": "http://local-openai-compatible-server.invalid/v1/",
+          "model": "Ornith-1.5-35B-A3B-MLX-4bit",
+          "parameters": {
+            "max_tokens": 32768,
+            "options": {
+              "thinking_budget": 16384
+            }
+          },
+          "sdk_version": "3.37.0"
+        }
+      ]
+    }
+  ],
+  "graph_digest": "sha256:6a32faa9d4bb36b3d3af3036f9db21f698c6538b0d52eac97a156a900af8a7d4"
+}

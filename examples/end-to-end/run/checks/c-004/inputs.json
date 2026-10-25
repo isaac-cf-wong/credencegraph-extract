@@ -1,0 +1,62 @@
+{
+  "type": "rederive-maths",
+  "target": "e-1",
+  "artifact": {
+    "kind": "equation",
+    "nodes": [
+      "e-1",
+      "e-2"
+    ],
+    "labels": [
+      "eq:model",
+      "eq:drift"
+    ]
+  },
+  "inputs": {
+    "lhs": "(T_0 + alpha * (t + tau)) - (T_0 + alpha * t)",
+    "rhs": "alpha * tau",
+    "symbols": [
+      {
+        "name": "T_0",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          250,
+          320
+        ]
+      },
+      {
+        "name": "alpha",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          -2,
+          2
+        ]
+      },
+      {
+        "name": "t",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          0,
+          30
+        ]
+      },
+      {
+        "name": "tau",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          0,
+          30
+        ]
+      }
+    ],
+    "assumption": "T is an affine function of time, T(x)=T_0+alpha x; the drift over an interval tau is the temperature at t+tau minus the temperature at t, so the reported change equals the slope times tau."
+  }
+}

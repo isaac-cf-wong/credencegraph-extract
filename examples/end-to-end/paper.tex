@@ -1,0 +1,22 @@
+% An invented paper for the end-to-end example: the study, its numbers and its reference do not exist.
+\documentclass{article}
+\begin{document}
+We record an array of 24 thermometers once a minute, 1440 times a day, for 30 days.
+Each thermometer therefore yields 43200 readings.
+Across the array this gives 1036800 readings.
+After removing 5\% of the readings as outliers, 984460 readings remain.
+We model the temperature reported by a drifting thermometer as
+\begin{equation}
+  T(t) = T_0 + \alpha t \label{eq:model}
+\end{equation}
+so that over an interval $\tau$ the reported temperature changes by
+\begin{equation}
+  T(t + \tau) - T(t) = \alpha \tau \label{eq:drift}
+\end{equation}
+The mean fitted drift rate is 0.02 K per day, so the mean drift over the 30 days is 0.6 kelvin.
+Lee reports that drifts of this size are typical of uncalibrated thermistors~\cite{lee2019}.
+These results suggest that the array needs recalibration every month.
+\begin{thebibliography}{1}
+\bibitem{lee2019} C. Lee, Thermistor ageing in field arrays, J. Instr. Field Methods 7 (2019) 12.
+\end{thebibliography}
+\end{document}

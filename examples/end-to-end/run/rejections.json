@@ -1,0 +1,327 @@
+[
+  {
+    "pass": "checks",
+    "round": "initial",
+    "node": "s-2",
+    "code": "unfaithful-numeral",
+    "message": "no numeral of ['s-1'] equals 43200",
+    "record": {
+      "target": "s-2",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-1"
+      ],
+      "expression": "1440 * 30",
+      "expected": "43200"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "initial",
+    "node": "s-3",
+    "code": "unfaithful-numeral",
+    "message": "no numeral of ['s-1', 's-2'] equals 1036800",
+    "record": {
+      "target": "s-3",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-1",
+        "s-2"
+      ],
+      "expression": "24 * 43200",
+      "expected": "1036800"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "initial",
+    "node": "e-1",
+    "code": "invalid-record",
+    "message": "a step of mathematics goes between equations, not ['s-5', 'e-1']",
+    "record": {
+      "target": "e-1",
+      "type": "rederive-maths",
+      "nodes": [
+        "s-5",
+        "e-1"
+      ],
+      "lhs": "T(t)",
+      "rhs": "T_0 + alpha * t",
+      "symbols": [
+        {
+          "name": "T",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            250,
+            320
+          ]
+        },
+        {
+          "name": "T_0",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            250,
+            320
+          ]
+        },
+        {
+          "name": "alpha",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            -2,
+            2
+          ]
+        },
+        {
+          "name": "t",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            0,
+            30
+          ]
+        }
+      ],
+      "assumption": "the reported temperature is an affine (linear) function of time with intercept T_0 and slope alpha"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "initial",
+    "node": "s-6",
+    "code": "invalid-record",
+    "message": "a step of mathematics goes between equations, not ['e-1', 's-6', 'e-2']",
+    "record": {
+      "target": "s-6",
+      "type": "rederive-maths",
+      "nodes": [
+        "e-1",
+        "s-6",
+        "e-2"
+      ],
+      "lhs": "T(t + tau) - T(t)",
+      "rhs": "alpha * tau",
+      "symbols": [
+        {
+          "name": "T",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            250,
+            320
+          ]
+        },
+        {
+          "name": "T_0",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            250,
+            320
+          ]
+        },
+        {
+          "name": "alpha",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            -2,
+            2
+          ]
+        },
+        {
+          "name": "t",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            0,
+            30
+          ]
+        },
+        {
+          "name": "tau",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            0,
+            30
+          ]
+        }
+      ],
+      "assumption": "over an interval tau, the reported temperature changes by the drift rate times tau"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "initial",
+    "node": "e-2",
+    "code": "invalid-record",
+    "message": "'T(t + tau)' is not an allowed expression: use declared symbols, numerals and ['Abs', 'acos', 'asin', 'atan', 'cos', 'cosh', 'exp', 'log', 'sin', 'sinh', 'sqrt', 'tan', 'tanh']",
+    "record": {
+      "target": "e-2",
+      "type": "rederive-maths",
+      "nodes": [
+        "e-2"
+      ],
+      "lhs": "alpha * tau",
+      "rhs": "T(t + tau) - T(t)",
+      "symbols": [
+        {
+          "name": "T",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            250,
+            320
+          ]
+        },
+        {
+          "name": "T_0",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            250,
+            320
+          ]
+        },
+        {
+          "name": "alpha",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            -2,
+            2
+          ]
+        },
+        {
+          "name": "t",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            0,
+            30
+          ]
+        },
+        {
+          "name": "tau",
+          "assumptions": [
+            "real"
+          ],
+          "domain": [
+            0,
+            30
+          ]
+        }
+      ],
+      "assumption": "the drift across an interval tau equals the drift rate times tau"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "initial",
+    "node": "s-7a",
+    "code": "unfaithful-numeral",
+    "message": "no numeral of ['s-1', 's-7b'] equals 0.02",
+    "record": {
+      "target": "s-7a",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-1",
+        "s-7b"
+      ],
+      "expression": "0.6 / 30",
+      "expected": "0.02"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "initial",
+    "node": "s-7b",
+    "code": "invalid-record",
+    "message": "a step of mathematics goes between equations, not ['s-7a', 's-7b']",
+    "record": {
+      "target": "s-7b",
+      "type": "rederive-maths",
+      "nodes": [
+        "s-7a",
+        "s-7b"
+      ],
+      "lhs": "0.02 * 30",
+      "rhs": "0.6",
+      "symbols": [],
+      "assumption": "the mean drift over 30 days is the drift rate 0.02 K/day times 30 days"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "initial",
+    "node": "s-8",
+    "code": "invalid-record",
+    "message": "'lee2019' is not a bibliography entry of the document",
+    "record": {
+      "target": "s-8",
+      "type": "citation-support",
+      "reference": "lee2019"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "repair",
+    "node": "s-7a",
+    "code": "unfaithful-numeral",
+    "message": "no numeral of ['s-7b'] equals 0.02",
+    "record": {
+      "target": "s-7a",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-7b"
+      ],
+      "expression": "0.6 / 30",
+      "expected": "0.02"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "repair",
+    "node": "s-7b",
+    "code": "not-a-target",
+    "message": "the rubric does not run recompute-numbers on a 'derivation'",
+    "record": {
+      "target": "s-7b",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-7a"
+      ],
+      "expression": "0.02 * 30",
+      "expected": "0.6"
+    }
+  },
+  {
+    "pass": "checks",
+    "round": "repair",
+    "node": "s-8",
+    "code": "invalid-record",
+    "message": "'lee2019' is not a bibliography entry of the document",
+    "record": {
+      "target": "s-8",
+      "type": "citation-support",
+      "reference": "lee2019"
+    }
+  }
+]

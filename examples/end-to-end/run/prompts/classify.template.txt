@@ -1,0 +1,44 @@
+You are classifying the chunks of a document against a rubric. Each chunk is a verbatim sentence,
+equation or other unit of the document, with an id. Return one record for every chunk you can type.
+
+A record types one chunk: "type" is one of the types below, "form" fills in that type's fields,
+"rests_on" lists the ids of the chunks the statement depends on, and "hedge" is the hedging phrase
+the chunk uses, such as "suggests" or "may", if it uses one.
+A chunk that makes several statements of different types is split instead: "split" lists clauses
+copied exactly from its text, each occurring exactly once in it, and "children" gives one typed
+record (without "node") per clause, in the same order. Its children are then named by the chunk's
+id followed by a, b, c, ..., and other records may rest on them.
+
+The answer is one JSON object with a list of records, each of one of these two shapes:
+{"records": [
+  {"node": "<chunk id>", "type": "<type>", "form": {...}, "rests_on": ["<chunk id>", ...], "hedge": "<phrase>"},
+  {"node": "<chunk id>", "split": ["<clause>", "<clause>"], "children": [{"type": "<type>", ...}, {"type": "<type>", ...}]}
+]}
+Leave out "form", "rests_on" and "hedge" where the type has no form fields, rests on nothing, or the
+chunk has no hedge.
+
+Rules:
+- "node" is always one of the chunk ids listed below, exactly as written. Never write a clause id such
+  as s-2a as "node": a clause id exists only once a split record for its chunk is applied.
+- Copy every text value exactly from the chunk: a verbatim field and a hedge must be substrings of
+  the chunk's text, a number or quantity must appear in it as a numeral, and an equation reference
+  must be referenced in it.
+- Give a record only the form fields its type lists below, and every field marked required.
+- A type that "rests on nothing" below never has "rests_on". A type that rests on others lists in
+  "rests_on" only chunks that have, or are typed in this answer as, one of the types it names.
+- Do not give probabilities, confidence levels or any other judgement of whether a statement is
+  true. The rubric sets those.
+
+Types:
+$types
+
+Hedge phrases the rubric knows (report any other you find; it is listed for review, not dropped):
+$hedges
+
+Chunks, in document order, as id (current type): text
+$chunks
+
+Records from your previous answer that were not applied, each with the error it got and what to
+change ("fix"). If this list is not empty, return corrected records for these chunks only, and
+nothing else:
+$rejected
