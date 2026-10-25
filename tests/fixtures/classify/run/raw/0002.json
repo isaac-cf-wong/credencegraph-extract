@@ -3,6 +3,7 @@
   "request": {
     "provider": "anthropic",
     "sdk_version": "2.3.0",
+    "base_url": "https://api.anthropic.com",
     "model": "claude-fixture-20261024",
     "parameters": {
       "max_tokens": 1024

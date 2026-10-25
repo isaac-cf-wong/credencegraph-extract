@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import anthropic
+import openai
 
 from credencegraph_extract import cited, provider
 from credencegraph_extract.digest import bytes_digest
@@ -40,7 +41,17 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("run_dir", type=Path, help="The run directory to create; it must not exist or be empty.")
     run.add_argument("--rubric", type=Path, required=True, help="The TOML rubric.")
     run.add_argument("--document", help="The document id of every anchor; the source's file name by default.")
-    run.add_argument("--model", help="The exact dated model id the passes call.")
+    run.add_argument("--model", help="The exact model id the passes call, dated where the provider dates its ids.")
+    run.add_argument(
+        "--provider",
+        choices=provider.PROVIDERS,
+        default=provider.ANTHROPIC,
+        help="The API the endpoint speaks: anthropic (Messages) or openai (Chat Completions); anthropic by default.",
+    )
+    run.add_argument(
+        "--base-url",
+        help="The endpoint of a server that speaks the provider's API; the provider SDK's default by default.",
+    )
     run.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS, help="The output token limit per call.")
     run.add_argument(
         "--store-source",
@@ -86,7 +97,17 @@ def _replay(args: argparse.Namespace) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     """Run the pipeline into a new run directory."""
-    call = partial(provider.call, model=args.model, max_tokens=args.max_tokens) if args.model else _no_model
+    call = (
+        partial(
+            provider.call,
+            model=args.model,
+            max_tokens=args.max_tokens,
+            provider=args.provider,
+            base_url=args.base_url,
+        )
+        if args.model
+        else _no_model
+    )
     if args.fetch_arxiv and not args.cited:
         raise RunError("invalid-argument", "--fetch-arxiv needs --cited, the directory to download into")
     resolve = cited.directory(args.cited, fetch_arxiv=args.fetch_arxiv) if args.cited else cited.no_sources
@@ -124,7 +145,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         code, message = error.code, str(error)
     except provider.ProviderError as error:
         code, message = "provider-error", str(error)
-    except anthropic.APIError as error:
+    except (anthropic.APIError, openai.APIError) as error:
         code, message = "provider-error", f"{type(error).__name__}: {error}"
     print(f"error [{code}]: {message}", file=sys.stderr)
     return 2

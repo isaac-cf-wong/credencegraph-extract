@@ -1,7 +1,8 @@
 """A pass for the tests: it asks the model for a note on each sentence and stores it on the node.
 
 It stands in for the real passes so the run machinery can be tested end to end on recorded calls.
-``fake_client`` answers ``provider.call`` offline with the response bodies the fixture run recorded.
+``fake_client`` answers ``provider.call`` offline with the response bodies the fixture run recorded;
+``fake_openai_client`` does the same for the OpenAI provider, with Chat Completions bodies.
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ from credencegraph.rubric import Rubric
 from credencegraph_extract.run import Ask, Outcome
 
 MODEL = "claude-fixture-20261024"
+# The endpoint the fake clients name: the Anthropic SDK's default.
+BASE_URL = "https://api.anthropic.com"
 SCHEMA = {
     "type": "object",
     "properties": {"note": {"type": "string"}},
@@ -81,7 +84,9 @@ def fake_client(bodies: list[dict[str, Any]]) -> Any:
         body = next(queue)
         return SimpleNamespace(request_id=f"req_{body['id']}", json=lambda: json.loads(json.dumps(body)))
 
-    return SimpleNamespace(messages=SimpleNamespace(with_raw_response=SimpleNamespace(create=create)), sent=sent)
+    return SimpleNamespace(
+        messages=SimpleNamespace(with_raw_response=SimpleNamespace(create=create)), sent=sent, base_url=BASE_URL
+    )
 
 
 NOTES = [
@@ -90,3 +95,42 @@ NOTES = [
     "Draws the conclusion from the bias result.",
 ]
 BODIES = [message(i, json.dumps({"note": note})) for i, note in enumerate(NOTES, start=1)]
+
+
+# The endpoint the fake OpenAI client names: the OpenAI SDK's default.
+OPENAI_BASE_URL = "https://api.openai.com/v1/"
+
+
+def completion(index: int, text: str | None, finish_reason: str = "stop", refusal: str | None = None) -> dict[str, Any]:
+    """Return an OpenAI Chat Completions response body whose message text is ``text``."""
+    return {
+        "id": f"chatcmpl-fixture{index:04d}",
+        "object": "chat.completion",
+        "created": 1761400000,
+        "model": MODEL,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text, "refusal": refusal},
+                "finish_reason": finish_reason,
+            }
+        ],
+        "usage": {"prompt_tokens": 40, "completion_tokens": 12, "total_tokens": 52},
+    }
+
+
+def fake_openai_client(bodies: list[dict[str, Any]]) -> Any:
+    """Return a stand-in for ``openai.OpenAI`` that answers each call with the next body.
+
+    Its ``sent`` list keeps the keyword arguments of every request.
+    """
+    sent: list[dict[str, Any]] = []
+    queue = iter(bodies)
+
+    def create(**kwargs: Any) -> Any:
+        sent.append(kwargs)
+        body = next(queue)
+        return SimpleNamespace(request_id=f"req_{body['id']}", text=json.dumps(body))
+
+    completions = SimpleNamespace(with_raw_response=SimpleNamespace(create=create))
+    return SimpleNamespace(chat=SimpleNamespace(completions=completions), sent=sent, base_url=OPENAI_BASE_URL)

@@ -582,11 +582,26 @@ def test_the_command_runs_the_checks_from_the_cited_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     client = fake_client(BODIES)
-    monkeypatch.setattr(provider.anthropic, "Anthropic", lambda: client)
+    monkeypatch.setattr(provider.anthropic, "Anthropic", lambda base_url: client)
     run_dir = tmp_path / "run"
     args = ["run", str(PAPER), str(run_dir), "--rubric", str(RUBRIC), "--model", MODEL, "--cited", str(CITED)]
     assert main(args) == 0
     assert [item["result"] for item in checks_report(run_dir)["checks"]] == [result for *_, result in RESULTS]
+
+
+def test_the_command_sends_to_the_provider_and_endpoint_given(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[dict[str, Any]] = []
+    client = fake_client(BODIES)
+
+    def call(prompt: str, schema: Any, **kwargs: Any) -> Any:
+        sent.append(kwargs)
+        return send(prompt, schema, model=kwargs["model"], max_tokens=kwargs["max_tokens"], client=client)
+
+    send = provider.call
+    monkeypatch.setattr(provider, "call", call)
+    args = ["run", str(PAPER), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL, "--cited", str(CITED)]
+    assert main([*args, "--provider", "openai", "--base-url", "http://localhost:8000/v1"]) == 0
+    assert {(item["provider"], item["base_url"]) for item in sent} == {("openai", "http://localhost:8000/v1")}
 
 
 def test_fetch_arxiv_needs_a_cited_directory(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

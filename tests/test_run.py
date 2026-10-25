@@ -68,7 +68,14 @@ def test_manifest_records_the_run(tmp_path: Path) -> None:
         "digest": bytes_digest(SOURCE.read_bytes()),
         "stored": False,
     }
-    assert set(manifest["versions"]) == {"python", "credencegraph", "credencegraph-extract", "anthropic", "sympy"}
+    assert set(manifest["versions"]) == {
+        "python",
+        "credencegraph",
+        "credencegraph-extract",
+        "anthropic",
+        "openai",
+        "sympy",
+    }
     assert manifest["rubric"] == {"name": "test-rubric", "version": "1", "digest": bytes_digest(RUBRIC.read_bytes())}
     assert manifest["graph_digest"] == bytes_digest((run_dir / "graph.json").read_bytes())
     [entry] = manifest["passes"]

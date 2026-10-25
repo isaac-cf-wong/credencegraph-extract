@@ -2,7 +2,7 @@
   "format": "credencegraph-extract-run",
   "version": 1,
   "run": "20261025T120000Z-checks",
-  "created_at": "2026-10-25T12:32:38Z",
+  "created_at": "2026-10-25T18:38:25Z",
   "source": {
     "document": "paper.tex",
     "file": "paper.tex",
@@ -14,6 +14,7 @@
     "credencegraph": "0.4.0",
     "credencegraph-extract": "0.1.dev7+g70142a561.d20261025",
     "anthropic": "2.3.0",
+    "openai": "3.37.0",
     "sympy": "1.14.0"
   },
   "rubric": {
@@ -30,8 +31,9 @@
           "prompt": "prompts/0001.txt",
           "prompt_digest": "sha256:92377c6bd8702e721524d6c7e75e379e1b50a028fc6a9dac9da5fd09ff68b229",
           "raw": "raw/0001.json",
-          "raw_digest": "sha256:045dd6dff5b7a34c5eabc5e969d0b928987193ebe24418b343e2b7b35b1d2e23",
+          "raw_digest": "sha256:7fcebacf3c96d3480cd397fd4a80e166b79fd8c1979756ff52227e06cc653c28",
           "provider": "anthropic",
+          "base_url": "https://api.anthropic.com",
           "model": "claude-fixture-20261024",
           "parameters": {
             "max_tokens": 1024
@@ -53,8 +55,9 @@
           "prompt": "prompts/0002.txt",
           "prompt_digest": "sha256:fa0a40fe70a7f789e8be6ce18a36f18db3beaeaf073a32445bcaa782ed1269f2",
           "raw": "raw/0002.json",
-          "raw_digest": "sha256:fe1046fb974de9e0685a3bba0d91d732c92e7f3c359747f5bb1cfe8b830e5b47",
+          "raw_digest": "sha256:871b05a5923195aa186e2de0f860df50e40de34d6ccf6fcdc7aceda7d1413a48",
           "provider": "anthropic",
+          "base_url": "https://api.anthropic.com",
           "model": "claude-fixture-20261024",
           "parameters": {
             "max_tokens": 1024
@@ -65,8 +68,9 @@
           "prompt": "prompts/0003.txt",
           "prompt_digest": "sha256:91b5dc0dec5d0d9a9adacf4ce5d120640a03827991da074a505b822426b25c73",
           "raw": "raw/0003.json",
-          "raw_digest": "sha256:0a95da8d609913b5cf00e84d0db7ace5915381810fc3ad5f789af8f2b35b8de9",
+          "raw_digest": "sha256:558cf5d95e6d535b7025ba210169724c11da081e0f89d7a3354a486af8f4139a",
           "provider": "anthropic",
+          "base_url": "https://api.anthropic.com",
           "model": "claude-fixture-20261024",
           "parameters": {
             "max_tokens": 1024

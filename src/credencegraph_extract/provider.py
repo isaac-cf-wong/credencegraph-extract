@@ -1,11 +1,21 @@
-"""The one module that calls a model provider: Anthropic.
+"""The one module that calls a model provider: an Anthropic-compatible or an OpenAI-compatible endpoint.
 
 ``call`` sends a rendered prompt under a JSON output schema and returns a *record*: the raw response
 body, verbatim, with the metadata of the request that produced it. ``output`` reads the structured
-output back out of a record. A replay reads recorded records with the same ``output``, so a recorded
-response is interpreted exactly as it was when it arrived.
+output back out of a record, as the provider the record names would. A replay reads recorded
+records with the same ``output``, so a recorded response is interpreted exactly as it was when it
+arrived.
 
-No provider interface is defined: a second provider is a second module with the same two functions.
+Two wire formats are spoken, each through its provider's own SDK:
+
+- ``anthropic``: the Messages API, with the schema as ``output_config``.
+- ``openai``: the Chat Completions API, with the schema as a ``json_schema`` response format. It is
+  the format most OpenAI-compatible servers implement.
+
+Either may be pointed at another server that speaks it with ``base_url``; otherwise the SDK's own
+environment variables choose the endpoint and the credentials (``ANTHROPIC_API_KEY`` and
+``ANTHROPIC_BASE_URL``, or ``OPENAI_API_KEY`` and ``OPENAI_BASE_URL``). Every record names the
+endpoint the call went to.
 """
 
 from __future__ import annotations
@@ -15,73 +25,101 @@ from collections.abc import Mapping
 from typing import Any
 
 import anthropic
+import openai
 
 from credencegraph_extract.digest import bytes_digest
 
-PROVIDER = "anthropic"
+ANTHROPIC = "anthropic"
+OPENAI = "openai"
+# The providers, each named as its SDK's distribution.
+PROVIDERS = (ANTHROPIC, OPENAI)
+
+# The name an OpenAI response format gives its schema.
+SCHEMA_NAME = "output"
 
 
 class ProviderError(Exception):
     """A response carries no structured output: it is malformed, the model refused or ran out of tokens, or it is not JSON."""
 
 
-def call(
+def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
     prompt: str,
     schema: Mapping[str, Any],
     *,
     model: str,
     max_tokens: int,
-    client: anthropic.Anthropic | None = None,
+    provider: str = ANTHROPIC,
+    base_url: str | None = None,
+    client: Any = None,
 ) -> dict[str, Any]:
     """Send one prompt and return the record of the call.
 
     Args:
         prompt: The rendered prompt, sent as the single user message.
         schema: The JSON Schema the response must follow.
-        model: The exact dated model id.
-        max_tokens: The output token limit.
-        client: The client to send with; one reading the environment's credentials by default.
+        model: The exact model id, dated where the provider dates its ids.
+        max_tokens: The output token limit; sent to an OpenAI-compatible endpoint as
+            ``max_completion_tokens``.
+        provider: ``anthropic`` or ``openai``: the wire format, and the SDK that speaks it.
+        base_url: The endpoint of a server that speaks it; the SDK's default by default.
+        client: The client to send with; one of the provider's SDK, built from ``base_url`` and the
+            environment's credentials, by default.
 
     Returns:
-        ``{"request": ..., "response": ...}``: the request metadata (provider, SDK version, model,
-        sampling parameters, output schema, prompt digest, request id) and the response body as the
-        provider sent it.
+        ``{"request": ..., "response": ...}``: the request metadata (provider, SDK version, endpoint,
+        model, sampling parameters, output schema, prompt digest, request id) and the response body
+        as the provider sent it.
+
+    Raises:
+        ValueError: If ``provider`` is not one of ``PROVIDERS``.
     """
-    client = client or anthropic.Anthropic()
-    raw = client.messages.with_raw_response.create(
-        model=model,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
-        output_config={"format": {"type": "json_schema", "schema": dict(schema)}},
-    )
+    if provider == ANTHROPIC:
+        client = client or anthropic.Anthropic(base_url=base_url)
+        sdk_version = anthropic.__version__
+        raw = client.messages.with_raw_response.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            output_config={"format": {"type": "json_schema", "schema": dict(schema)}},
+        )
+        response = raw.json()
+    elif provider == OPENAI:
+        client = client or openai.OpenAI(base_url=base_url)
+        sdk_version = openai.__version__
+        raw = client.chat.completions.with_raw_response.create(
+            model=model,
+            max_completion_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_schema", "json_schema": {"name": SCHEMA_NAME, "schema": dict(schema)}},
+        )
+        response = json.loads(raw.text)
+    else:
+        msg = f"unknown provider {provider!r}: not one of {list(PROVIDERS)}"
+        raise ValueError(msg)
     request = {
-        "provider": PROVIDER,
-        "sdk_version": anthropic.__version__,
+        "provider": provider,
+        "sdk_version": sdk_version,
+        "base_url": str(client.base_url),
         "model": model,
         "parameters": {"max_tokens": max_tokens},
         "output_schema": dict(schema),
         "prompt_digest": bytes_digest(prompt.encode("utf-8")),
         "request_id": raw.request_id,
     }
-    return {"request": request, "response": raw.json()}
+    return {"request": request, "response": response}
 
 
-def output(record: Mapping[str, Any]) -> Any:
-    """Return the structured output of a recorded call.
+def _json(text: str, response: Mapping[str, Any]) -> Any:
+    """Parse the text of a response as JSON."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as error:
+        msg = f"response {response.get('id')!r} is not JSON: {error}"
+        raise ProviderError(msg) from None
 
-    Args:
-        record: A record returned by ``call``.
 
-    Returns:
-        The JSON value the model returned.
-
-    Raises:
-        ProviderError: If the response is malformed, did not end normally, or its text is not JSON.
-    """
-    response = record.get("response")
-    if not isinstance(response, dict):
-        msg = "the record has no response object"
-        raise ProviderError(msg)
+def _anthropic_output(response: Mapping[str, Any]) -> Any:
+    """The structured output of an Anthropic Messages response."""
     stop = response.get("stop_reason")
     if stop != "end_turn":
         msg = f"response {response.get('id')!r} stopped with {stop!r}, not 'end_turn'"
@@ -94,9 +132,56 @@ def output(record: Mapping[str, Any]) -> Any:
     if not all(isinstance(text, str) for text in texts):
         msg = f"response {response.get('id')!r} has a text block without text"
         raise ProviderError(msg)
-    text = "".join(texts)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as error:
-        msg = f"response {response.get('id')!r} is not JSON: {error}"
-        raise ProviderError(msg) from None
+    return _json("".join(texts), response)
+
+
+def _openai_output(response: Mapping[str, Any]) -> Any:
+    """The structured output of an OpenAI Chat Completions response."""
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        msg = f"response {response.get('id')!r} has no choice"
+        raise ProviderError(msg)
+    choice = choices[0]
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        msg = f"response {response.get('id')!r} has no message"
+        raise ProviderError(msg)
+    if message.get("refusal"):
+        msg = f"response {response.get('id')!r} is a refusal: {message['refusal']}"
+        raise ProviderError(msg)
+    stop = choice.get("finish_reason")
+    if stop != "stop":
+        msg = f"response {response.get('id')!r} stopped with {stop!r}, not 'stop'"
+        raise ProviderError(msg)
+    content = message.get("content")
+    if not isinstance(content, str):
+        msg = f"response {response.get('id')!r} has a message without text"
+        raise ProviderError(msg)
+    return _json(content, response)
+
+
+def output(record: Mapping[str, Any]) -> Any:
+    """Return the structured output of a recorded call, read as its provider's wire format.
+
+    Args:
+        record: A record returned by ``call``.
+
+    Returns:
+        The JSON value the model returned.
+
+    Raises:
+        ProviderError: If the record names an unknown provider, or the response is malformed, was
+            refused, did not end normally, or its text is not JSON.
+    """
+    response = record.get("response")
+    if not isinstance(response, dict):
+        msg = "the record has no response object"
+        raise ProviderError(msg)
+    request = record.get("request")
+    provider = request.get("provider") if isinstance(request, dict) else None
+    if provider == ANTHROPIC:
+        return _anthropic_output(response)
+    if provider == OPENAI:
+        return _openai_output(response)
+    msg = f"the record names an unknown provider {provider!r}"
+    raise ProviderError(msg)

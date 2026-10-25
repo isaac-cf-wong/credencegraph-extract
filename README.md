@@ -31,7 +31,8 @@ pip install credencegraph-extract
 ```
 
 It depends on `credencegraph[ingest]` (one 0.x minor series), `anthropic` and
-`sympy` (the maths checks), and needs Python 3.13 or later.
+`openai` (the provider SDKs) and `sympy` (the maths checks), and needs Python
+3.13 or later.
 
 ## Runs
 
@@ -42,7 +43,27 @@ that produced it:
 credencegraph-extract run paper.tex runs/paper --rubric rubric.toml --model <exact dated model id>
 ```
 
-writes a **run directory**:
+calls Anthropic's Messages API, with the key in `ANTHROPIC_API_KEY`. Any
+endpoint that speaks the Messages API or OpenAI's Chat Completions API can be
+used instead:
+
+```shell
+# OpenAI, key in OPENAI_API_KEY
+credencegraph-extract run paper.tex runs/paper --rubric rubric.toml --provider openai --model <model id>
+# a server that speaks either API, such as a local vLLM or Ollama
+credencegraph-extract run paper.tex runs/paper --rubric rubric.toml --provider openai \
+    --base-url http://localhost:8000/v1 --model <model id>
+```
+
+`--provider` names the API (`anthropic`, the default, or `openai`) and
+`--base-url` the server; without it the provider SDK's default is used, or its
+`ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` environment variable. Each call asks
+for a JSON answer under the pass's schema: as `output_config` with `anthropic`,
+as a `json_schema` response format with `openai`. A server that ignores the
+schema still has every answer checked by the pass that reads it. The output
+token limit is sent to an OpenAI-compatible endpoint as `max_completion_tokens`.
+
+The run writes a **run directory**:
 
 ```text
 runs/paper/
@@ -59,11 +80,11 @@ runs/paper/
 
 `manifest.json` records the run id and time; the source document's id, its
 SHA-256 digest and whether a copy is stored; the versions of Python,
-`credencegraph`, this package, the provider SDK and `sympy`; the rubric's name,
-version and digest; for each pass, the digest of its template and, for every
-call, the provider, the exact model id, the sampling parameters, the SDK version
-and the digests of the rendered prompt and the raw record; and the digest of
-`graph.json`.
+`credencegraph`, this package, both provider SDKs and `sympy`; the rubric's
+name, version and digest; for each pass, the digest of its template and, for
+every call, the provider, the endpoint, the exact model id, the sampling
+parameters, the SDK version and the digests of the rendered prompt and the raw
+record; and the digest of `graph.json`.
 
 Every node a run creates or changes carries
 `attributes.extraction = {"run": "<run id>", "pass": "<pass>"}`, so a graph that

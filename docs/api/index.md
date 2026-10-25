@@ -8,7 +8,8 @@ This section documents the public API of credencegraph-extract.
 
 ## Main Sections
 
-- **[Provider](provider)** – The one module that calls a model provider.
+- **[Provider](provider)** – The one module that calls a model provider, over
+  the Anthropic or the OpenAI API.
 - **[Runs](run)** – Extraction runs, the run directory and replay.
 - **[Classify pass](classify)** – Typing, splitting and linking the chunks of a
   document.

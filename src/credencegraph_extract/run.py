@@ -276,7 +276,7 @@ def _write_json(path: Path, value: Any) -> bytes:
 
 
 def versions() -> dict[str, str]:
-    """Return the versions a run depends on: Python, the core, this package, the provider SDK and sympy.
+    """Return the versions a run depends on: Python, the core, this package, the provider SDKs and sympy.
 
     Returns:
         The versions by name.
@@ -285,7 +285,7 @@ def versions() -> dict[str, str]:
         "python": platform.python_version(),
         "credencegraph": version("credencegraph"),
         "credencegraph-extract": __version__,
-        provider.PROVIDER: version(provider.PROVIDER),
+        **{sdk: version(sdk) for sdk in provider.PROVIDERS},
         "sympy": version("sympy"),
     }
 
@@ -376,7 +376,7 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
                     "prompt_digest": bytes_digest(prompt_bytes),
                     "raw": raw_path,
                     "raw_digest": bytes_digest(raw_bytes),
-                    **{key: request[key] for key in ("provider", "model", "parameters", "sdk_version")},
+                    **{key: request[key] for key in ("provider", "base_url", "model", "parameters", "sdk_version")},
                 }
             )
             return provider.output(record), request

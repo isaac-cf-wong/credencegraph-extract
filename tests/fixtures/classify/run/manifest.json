@@ -2,7 +2,7 @@
   "format": "credencegraph-extract-run",
   "version": 1,
   "run": "20261025T120000Z-classify",
-  "created_at": "2026-10-25T12:30:42Z",
+  "created_at": "2026-10-25T18:38:25Z",
   "source": {
     "document": "paper.tex",
     "file": "paper.tex",
@@ -14,6 +14,7 @@
     "credencegraph": "0.4.0",
     "credencegraph-extract": "0.1.dev7+g70142a561.d20261025",
     "anthropic": "2.3.0",
+    "openai": "3.37.0",
     "sympy": "1.14.0"
   },
   "rubric": {
@@ -30,8 +31,9 @@
           "prompt": "prompts/0001.txt",
           "prompt_digest": "sha256:06cc61800906791fc9f4dfb4a27807c91b9c976bd57c6817fc96370f6213445d",
           "raw": "raw/0001.json",
-          "raw_digest": "sha256:5aa655ea9c148c9e18667fa8524bcbfe94da25171a7c3d431d4b8e0a11739a47",
+          "raw_digest": "sha256:b57cf33cee03ab3b083b929b269543356b09b0b76082412a0a4fd5ecc7143fa6",
           "provider": "anthropic",
+          "base_url": "https://api.anthropic.com",
           "model": "claude-fixture-20261024",
           "parameters": {
             "max_tokens": 1024
@@ -42,8 +44,9 @@
           "prompt": "prompts/0002.txt",
           "prompt_digest": "sha256:7a3e63c1d0e31ea80a09718e01b08f2f5c1f874fcbde109f64e13e6334ce5a7a",
           "raw": "raw/0002.json",
-          "raw_digest": "sha256:ebc1279511e6e3d9bf95c68601aa9f8793bdad0aa0980652c374fdd90778db3b",
+          "raw_digest": "sha256:7b7b01bc7ff25137303e89a3d6c4829c8fd4fd31fda60f36facc413356619021",
           "provider": "anthropic",
+          "base_url": "https://api.anthropic.com",
           "model": "claude-fixture-20261024",
           "parameters": {
             "max_tokens": 1024
@@ -60,8 +63,9 @@
           "prompt": "prompts/0003.txt",
           "prompt_digest": "sha256:ae1046adf2f20bbd21bda83642b0acef9e752f424dad4b056bad4097134f2318",
           "raw": "raw/0003.json",
-          "raw_digest": "sha256:e8b8536d8a183d06e22924bea6900d9ae4b4597460e79fd38d32b4bdcec5a5f1",
+          "raw_digest": "sha256:000805b308c18b144f535e6e85a096febe9033b3ab6aa2e94b65970c1ceed715",
           "provider": "anthropic",
+          "base_url": "https://api.anthropic.com",
           "model": "claude-fixture-20261024",
           "parameters": {
             "max_tokens": 1024
@@ -72,8 +76,9 @@
           "prompt": "prompts/0004.txt",
           "prompt_digest": "sha256:17c6ce02acfbd152d7a80d814b27c77632994f1327c635fca2620f9f126c407d",
           "raw": "raw/0004.json",
-          "raw_digest": "sha256:5b6bc3c4ef3e5102ad85ce0c820c38c0ae5898e22799384081827a4ea208f314",
+          "raw_digest": "sha256:7a2965ffc300d764e84b729b58a2bf62df367944d33ea21302aba7ab8b90e616",
           "provider": "anthropic",
+          "base_url": "https://api.anthropic.com",
           "model": "claude-fixture-20261024",
           "parameters": {
             "max_tokens": 1024

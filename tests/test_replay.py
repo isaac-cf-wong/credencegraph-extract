@@ -8,14 +8,16 @@ import shutil
 import socket
 import subprocess
 import sys
+from functools import partial
 from pathlib import Path
 
 import pytest
 from conftest import FIXTURES
-from notes_pass import NotesPass
+from notes_pass import MODEL, NOTES, NotesPass, completion, fake_openai_client
 
-from credencegraph_extract import cli
-from credencegraph_extract.run import RunError, replay
+from credencegraph_extract import cli, provider
+from credencegraph_extract.digest import bytes_digest
+from credencegraph_extract.run import RunError, replay, run_extraction
 
 SOURCE = FIXTURES / "paper.tex"
 
@@ -37,6 +39,37 @@ def test_replay_is_byte_identical_offline(recorded_run: Path, no_network: None) 
     assert sha256(rebuilt) == sha256(recorded)
     manifest = json.loads((recorded_run / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["graph_digest"] == f"sha256:{sha256(rebuilt)}"
+
+
+def test_a_run_through_an_openai_compatible_endpoint_replays_byte_identically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bodies = [completion(i, json.dumps({"note": note})) for i, note in enumerate(NOTES, start=1)]
+    client = fake_openai_client(bodies)
+    monkeypatch.setattr(provider.openai, "OpenAI", lambda base_url: client)
+    run_dir = tmp_path / "run"
+    call = partial(provider.call, model=MODEL, max_tokens=1024, provider="openai", base_url="http://localhost:8000/v1")
+    manifest = run_extraction(SOURCE, run_dir, FIXTURES / "rubric.toml", call=call, passes=[NotesPass()])
+    assert {call["provider"] for call in manifest["passes"][0]["calls"]} == {"openai"}
+    rebuilt = replay(run_dir, source=SOURCE, passes=[NotesPass()])
+    assert rebuilt == (run_dir / "graph.json").read_bytes()
+    notes = [node["attributes"]["note"] for node in json.loads(rebuilt)["nodes"] if "note" in node["attributes"]]
+    assert notes == NOTES
+
+
+def test_a_record_made_before_endpoints_were_recorded_replays(recorded_run: Path, no_network: None) -> None:
+    # Records written before the second provider name no base_url; replay does not need it.
+    path = recorded_run / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    for call in manifest["passes"][0]["calls"]:
+        record = json.loads((recorded_run / call["raw"]).read_text(encoding="utf-8"))
+        del record["request"]["base_url"]
+        data = (json.dumps(record, indent=2) + "\n").encode("utf-8")
+        (recorded_run / call["raw"]).write_bytes(data)
+        call["raw_digest"] = bytes_digest(data)
+        del call["base_url"]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert replay(recorded_run, source=SOURCE, passes=[NotesPass()]) == (recorded_run / "graph.json").read_bytes()
 
 
 def test_replay_uses_the_recorded_answers(recorded_run: Path, no_network: None) -> None:
