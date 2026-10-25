@@ -1,0 +1,2 @@
+# The recorded run and its source are compared byte for byte: never convert their line endings.
+tests/fixtures/** -text

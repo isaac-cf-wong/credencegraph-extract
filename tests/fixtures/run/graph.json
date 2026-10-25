@@ -1,0 +1,136 @@
+{
+  "format": "credencegraph",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "s-1",
+      "kind": "unassigned",
+      "statement": "We estimate the noise floor from 250 segments of data.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=3-3",
+          "quote": "We estimate the noise floor from 250 segments of data.",
+          "digest": "sha256:d72d79668e087c204fdf7a04f6df304076bae7dd59edb3cd3cd5cad4c1d83271"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261024T120000Z-fixture0",
+          "pass": "notes"
+        },
+        "note": "States the sample size used for the noise floor."
+      }
+    },
+    {
+      "id": "s-2",
+      "kind": "unassigned",
+      "statement": "The bias of the estimator vanishes for long segments~\\cite{smith2020}.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=4-4",
+          "quote": "The bias of the estimator vanishes for long segments~\\cite{smith2020}.",
+          "digest": "sha256:ec83606ba80bc7dce840b4ceb94f8a08177974ded3ed0286f42368fd471c5c7a"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261024T120000Z-fixture0",
+          "pass": "notes"
+        },
+        "note": "Cites prior work for the vanishing bias."
+      }
+    },
+    {
+      "id": "e-1",
+      "kind": "unassigned",
+      "statement": "\\begin{equation} b = \\frac{c}{N} \\end{equation}",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=5-7",
+          "quote": "\\begin{equation} b = \\frac{c}{N} \\end{equation}",
+          "digest": "sha256:0b6fc0a92683584381b436fb1eacea4542be7da2a62b13e3b70bcab5b6452bf8"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "equation",
+        "label": "eq:bias",
+        "extraction": {
+          "run": "20261024T120000Z-fixture0",
+          "pass": "ingest"
+        }
+      }
+    },
+    {
+      "id": "s-3",
+      "kind": "unassigned",
+      "statement": "The estimator is therefore consistent.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=8-8",
+          "quote": "The estimator is therefore consistent.",
+          "digest": "sha256:e077b142aa8e1bba610362ab140b439985de6b40cbd40b346f8074fe467c5113"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261024T120000Z-fixture0",
+          "pass": "notes"
+        },
+        "note": "Draws the conclusion from the bias result."
+      }
+    },
+    {
+      "id": "r-1",
+      "kind": "reference",
+      "statement": "A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=10-10",
+          "quote": "A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.",
+          "digest": "sha256:2a61d91f961858e74b921ebb12d662254024e2d405047be7bd8ac760dc76fd8d"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "reference",
+        "key": "smith2020",
+        "extraction": {
+          "run": "20261024T120000Z-fixture0",
+          "pass": "ingest"
+        }
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "s-2-cites-r-1",
+      "type": "cites",
+      "source": "s-2",
+      "target": "r-1",
+      "strength": null,
+      "attributes": {}
+    }
+  ]
+}
