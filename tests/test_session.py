@@ -423,7 +423,9 @@ def test_a_damaged_run_is_refused_with_its_code(run_dir: Path, damage: Any, code
     assert raised.value.code == code
 
 
-@pytest.mark.parametrize("document", ["/home/someone/paper.tex", "papers/paper.tex", "C:\\papers\\paper.tex", " "])
+@pytest.mark.parametrize(
+    "document", ["/home/someone/paper.tex", "papers/paper.tex", "C:\\papers\\paper.tex", "C:paper.tex", "d:x", " "]
+)
 def test_a_document_id_that_is_a_path_is_refused(tmp_path: Path, document: str) -> None:
     with pytest.raises(RunError, match="must be an id for the document, not a path") as raised:
         start(tmp_path / "run", document=document)
@@ -431,24 +433,30 @@ def test_a_document_id_that_is_a_path_is_refused(tmp_path: Path, document: str) 
     assert not (tmp_path / "run").exists()
 
 
-def test_a_document_that_changes_while_start_run_reads_it_is_refused(
+def test_the_graph_is_ingested_from_the_bytes_whose_digest_is_recorded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # The file is changed while start_run ingests it and restored before it returns: the graph must come
+    # from the bytes start_run read and digested, not from the file as it was during the parse.
     paper = tmp_path / "paper.tex"
     shutil.copyfile(PAPER, paper)
+    original = paper.read_text(encoding="utf-8")
     ingest = session._ingest
 
-    def ingest_then_change(source: Path, document: str, rubric: Any) -> Any:
-        graph = ingest(source, document, rubric)
-        with source.open("a", encoding="utf-8") as handle:
-            handle.write("% changed\n")
-        return graph
+    def change_during_ingest(source: Path, data: bytes, document: str, rubric: Any) -> Any:
+        source.write_text(original.replace("90000 segments", "80000 segments"), encoding="utf-8")
+        try:
+            return ingest(source, data, document, rubric)
+        finally:
+            source.write_text(original, encoding="utf-8")
 
-    monkeypatch.setattr(session, "_ingest", ingest_then_change)
-    with pytest.raises(RunError, match="changed while start_run was reading it") as raised:
-        start_run(paper, RUBRIC, tmp_path / "run", harness="h", model=MODEL, store_source=True)
-    assert raised.value.code == "source-changed"
-    assert not (tmp_path / "run").exists()
+    monkeypatch.setattr(session, "_ingest", change_during_ingest)
+    start_run(paper, RUBRIC, tmp_path / "run", harness="h", model=MODEL, store_source=True)
+    monkeypatch.undo()
+    ingested = (tmp_path / "run" / "ingested.json").read_text(encoding="utf-8")
+    assert "90000 segments" in ingested
+    assert "80000 segments" not in ingested
+    assert replay(tmp_path / "run") == recorded_graph(tmp_path / "run")
 
 
 def test_a_stored_document_is_the_bytes_whose_digest_is_recorded(tmp_path: Path) -> None:
@@ -496,3 +504,21 @@ def test_the_lock_file_is_never_empty(run_dir: Path) -> None:
     with lock(run_dir):
         pass
     assert (run_dir / ".lock").stat().st_size >= 1
+
+
+def test_a_document_id_with_a_colon_that_is_not_a_drive_is_kept(tmp_path: Path) -> None:
+    start(tmp_path / "run", document="arXiv:2101.01234")
+    assert read_json(tmp_path / "run" / "manifest.json")["source"]["document"] == "arXiv:2101.01234"
+
+
+def test_a_failure_while_moving_the_run_into_place_leaves_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(self: Path, target: Any) -> Path:
+        raise OSError("simulated failure")
+
+    monkeypatch.setattr(Path, "rename", refuse)
+    with pytest.raises(OSError, match="simulated failure"):
+        start(tmp_path / "run")
+    monkeypatch.undo()
+    assert list(tmp_path.iterdir()) == []

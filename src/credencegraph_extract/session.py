@@ -43,13 +43,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from importlib.metadata import version
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from credencegraph.core import Graph, dumps
 from credencegraph.core.serialization import graph_from_dict, graph_to_dict
 from credencegraph.ingest.chunks import chunks_to_graph
-from credencegraph.ingest.latex import LatexError, read_latex
+from credencegraph.ingest.latex import LatexError, _Reader
 from credencegraph.rubric import Rubric, RubricError, loads_rubric
 from credencegraph.rubric.model import DOCUMENT
 from credencegraph.rubric.validate import origin_of
@@ -538,13 +538,24 @@ def _cited_copies(cited: Path) -> dict[str, bytes]:
     return copies
 
 
-def _ingest(source: Path, document: str, rubric: Rubric) -> Graph:
-    """Read a LaTeX document into the core's chunk graph."""
+def _ingest(source: Path, data: bytes, document: str, rubric: Rubric) -> Graph:
+    """Read a LaTeX document into the core's chunk graph, parsing ``data`` as its main file.
+
+    The main file is parsed from the bytes already read and digested, never read again, so the graph,
+    the recorded digest and any stored copy are of the same bytes. Files it inputs are read from the
+    main file's directory as usual. The core's reader keeps each file's text once; it is given the main
+    file's text through that cache, which is not public API (a public ``text`` argument is requested of
+    the core).
+    """
     try:
-        chunks = read_latex(source)
+        reader = _Reader(source)
+        reader.texts[reader.main] = data.decode("utf-8")
+        reader.collect_definitions(reader.main)
+        reader.install_definitions()
+        reader.read_file(reader.main, body_only=True)
     except (OSError, UnicodeDecodeError, LatexError) as error:
         raise RunError("invalid-source", f"cannot read {source.name!r}: {error}") from None
-    return chunks_to_graph(chunks, document, rubric.initial)[0]
+    return chunks_to_graph(reader.chunks, document, rubric.initial)[0]
 
 
 def _start_result(graph: Graph, rubric: Rubric, run_id: str) -> dict[str, Any]:
@@ -698,19 +709,13 @@ def start_run(  # noqa: PLR0913 - each argument is a separate choice of the call
     if run.exists() and any(run.iterdir()):
         raise RunError("run-exists", f"{run.name!r} exists and is not empty")
     read = _read_start(source, rubric, cited)
-    if document is not None and (not document.strip() or any(sep in document for sep in ("/", "\\"))):
+    if document is not None and (
+        not document.strip() or any(sep in document for sep in ("/", "\\")) or PureWindowsPath(document).drive
+    ):
         raise RunError("invalid-argument", f"document {document!r} must be an id for the document, not a path")
     document = document or source.name
     run_id = new_run_id()
-    graph = stamp(_ingest(source, document, read.rubric), Graph(), {"run": run_id, "tool": START})
-    # The digest and the stored copy are of the bytes read before ingesting; refuse a document that
-    # changed meanwhile, so a run never records a digest of other bytes than it ingested.
-    try:
-        unchanged = source.read_bytes() == read.source_bytes
-    except OSError:
-        unchanged = False
-    if not unchanged:
-        raise RunError("source-changed", f"{source.name!r} changed while start_run was reading it")
+    graph = stamp(_ingest(source, read.source_bytes, document, read.rubric), Graph(), {"run": run_id, "tool": START})
     args = {
         "document": document,
         "source": {"file": source.name, "digest": bytes_digest(read.source_bytes), "stored": store_source},
@@ -725,12 +730,12 @@ def start_run(  # noqa: PLR0913 - each argument is a separate choice of the call
     building.mkdir(parents=True)
     try:
         _populate(building, read, graph, result, args, identity, run_id, store_source, source.name, document)
+        if run.exists():
+            run.rmdir()
+        building.rename(run)
     except BaseException:
         shutil.rmtree(building, ignore_errors=True)
         raise
-    if run.exists():
-        run.rmdir()
-    building.rename(run)
     return result
 
 
@@ -807,7 +812,8 @@ def replay(run_dir: Path, *, source: Path | None = None, sources: Path | None = 
     for name, digest in start["cited"].items():
         if bytes_digest(_read(run_dir, f"{CITED}/{name}")) != digest:
             raise RunError("record-mismatch", f"the cited copy {name!r} differs from the one start_run made")
-    graph = stamp(_ingest(source, start["document"], rubric), Graph(), {"run": manifest["run"], "tool": START})
+    graph = _ingest(source, source_bytes, start["document"], rubric)
+    graph = stamp(graph, Graph(), {"run": manifest["run"], "tool": START})
     state = State(graph)
     _check_digests(calls[0], state, _start_result(graph, rubric, manifest["run"]))
     for call in calls[1:]:
