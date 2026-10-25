@@ -621,20 +621,19 @@ def test_the_command_sends_and_records_the_request_options(tmp_path: Path, monke
     ("options", "message"),
     [
         ('{"messages": []}', "error [invalid-argument]: request options may not set ['messages']"),
-        ("[1]", "--request-options: not a JSON object"),
-        ("{", "--request-options: not JSON"),
+        ('{"max_tokens": 99}', "error [invalid-argument]: request options may not set ['max_tokens']"),
+        ("[1]", "error [invalid-argument]: --request-options is not a JSON object"),
+        ("{", "error [invalid-argument]: --request-options is not JSON: "),
     ],
 )
-def test_the_command_refuses_bad_request_options_before_it_runs(
+def test_the_command_refuses_bad_request_options_in_one_line_before_it_runs(
     options: str, message: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    args = ["run", str(PAPER), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL]
-    try:
-        status = main([*args, "--request-options", options])
-    except SystemExit as exit_:
-        status = exit_.code
-    assert status == 2
-    assert message in capsys.readouterr().err
+    args = ["run", str(PAPER), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL, "--provider", "openai"]
+    assert main([*args, "--request-options", options]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith(message)
+    assert err.count("\n") == 1
     assert not (tmp_path / "run").exists()
 
 

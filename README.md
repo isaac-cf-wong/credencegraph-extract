@@ -62,6 +62,11 @@ for a JSON answer under the pass's schema: as `output_config` with `anthropic`,
 as a `json_schema` response format with `openai`. A server that ignores the
 schema still has every answer checked by the pass that reads it. The output
 token limit is sent to an OpenAI-compatible endpoint as `max_completion_tokens`.
+The endpoint each call went to is recorded in `raw/` and `manifest.json`, so a
+run made against a server on a private network records that server's address:
+replace it before committing or sharing such a run (replay does not read it, but
+the records' digests in the manifest must be recomputed).
+
 `--request-options` adds fields of the server's own to every request body, as a
 JSON object: `'{"thinking_budget": 4000}'` caps the reasoning of a thinking
 model on a server that supports it, and `'{"enable_thinking": false}'` turns it

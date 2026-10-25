@@ -37,10 +37,12 @@ PROVIDERS = (ANTHROPIC, OPENAI)
 # The name an OpenAI response format gives its schema.
 SCHEMA_NAME = "output"
 
-# The body fields each call sets itself, which request options may not override.
+# The body fields each call sets itself, which request options may not override, with the other spelling
+# of a field the call sets: OpenAI's deprecated max_tokens would sit beside max_completion_tokens in the
+# body, and a server that reads it would apply a limit the record does not show.
 _SET_BY_CALL = {
     ANTHROPIC: frozenset({"model", "max_tokens", "messages", "output_config"}),
-    OPENAI: frozenset({"model", "max_completion_tokens", "messages", "response_format"}),
+    OPENAI: frozenset({"model", "max_completion_tokens", "max_tokens", "messages", "response_format"}),
 }
 
 _NO_CREDENTIALS = "no API key: set {variable}; a server that checks none still needs some value there"

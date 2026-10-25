@@ -236,7 +236,14 @@ def test_without_request_options_neither_body_nor_record_changes() -> None:
 
 @pytest.mark.parametrize(
     ("name", "field"),
-    [("anthropic", "output_config"), ("anthropic", "model"), ("openai", "response_format"), ("openai", "messages")],
+    [
+        ("anthropic", "output_config"),
+        ("anthropic", "model"),
+        ("openai", "response_format"),
+        ("openai", "messages"),
+        # The deprecated spelling of the limit the call sets as max_completion_tokens.
+        ("openai", "max_tokens"),
+    ],
 )
 def test_request_options_may_not_set_a_field_the_call_sets(name: str, field: str) -> None:
     with pytest.raises(ValueError, match=f"request options may not set \\['{field}'\\]"):

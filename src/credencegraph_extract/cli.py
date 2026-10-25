@@ -33,16 +33,16 @@ def _no_model(prompt: str, schema: Mapping[str, Any]) -> dict[str, Any]:
     raise RunError("missing-model", "a pass needs the model: pass --model with the exact dated model id")
 
 
-def _options(text: str) -> dict[str, Any]:
-    """Read ``--request-options``: a JSON object."""
+def _options(text: str | None) -> dict[str, Any]:
+    """Read ``--request-options``, a JSON object, or refuse it as an invalid argument."""
+    if text is None:
+        return {}
     try:
         value = json.loads(text)
     except ValueError as error:
-        msg = f"not JSON: {error}"
-        raise argparse.ArgumentTypeError(msg) from None
+        raise RunError("invalid-argument", f"--request-options is not JSON: {error}") from None
     if not isinstance(value, dict):
-        msg = "not a JSON object"
-        raise argparse.ArgumentTypeError(msg)
+        raise RunError("invalid-argument", "--request-options is not a JSON object")
     return value
 
 
@@ -68,7 +68,6 @@ def _parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--request-options",
-        type=_options,
         help="Further fields of every request body, as a JSON object, such as '{\"thinking_budget\": 4000}'.",
     )
     run.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS, help="The output token limit per call.")
@@ -116,6 +115,11 @@ def _replay(args: argparse.Namespace) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     """Run the pipeline into a new run directory."""
+    options = _options(args.request_options)
+    try:
+        provider.check_options(args.provider, options)
+    except ValueError as error:
+        raise RunError("invalid-argument", str(error)) from None
     call = (
         partial(
             provider.call,
@@ -123,15 +127,11 @@ def _run(args: argparse.Namespace) -> int:
             max_tokens=args.max_tokens,
             provider=args.provider,
             base_url=args.base_url,
-            options=args.request_options,
+            options=options,
         )
         if args.model
         else _no_model
     )
-    try:
-        provider.check_options(args.provider, args.request_options or {})
-    except ValueError as error:
-        raise RunError("invalid-argument", str(error)) from None
     if args.fetch_arxiv and not args.cited:
         raise RunError("invalid-argument", "--fetch-arxiv needs --cited, the directory to download into")
     resolve = cited.directory(args.cited, fetch_arxiv=args.fetch_arxiv) if args.cited else cited.no_sources
