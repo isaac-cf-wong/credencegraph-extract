@@ -1,0 +1,212 @@
+{
+  "pass": "classify",
+  "request": {
+    "provider": "anthropic",
+    "sdk_version": "2.3.0",
+    "model": "claude-fixture-20261024",
+    "parameters": {
+      "max_tokens": 1024
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "reference",
+                      "method",
+                      "result",
+                      "derivation",
+                      "literature_claim",
+                      "claim"
+                    ]
+                  },
+                  "form": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "simulation",
+                          "dataset",
+                          "procedure"
+                        ]
+                      },
+                      "quantity": {
+                        "type": "string"
+                      },
+                      "trend": {
+                        "type": "string",
+                        "enum": [
+                          "vanishes",
+                          "increases",
+                          "decreases",
+                          "bounded"
+                        ]
+                      },
+                      "equation": {
+                        "type": "string"
+                      },
+                      "statement": {
+                        "type": "string"
+                      },
+                      "shape": {
+                        "type": "string",
+                        "enum": [
+                          "universal",
+                          "existential",
+                          "bound"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "rests_on": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "hedge": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "split": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "children": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "reference",
+                            "method",
+                            "result",
+                            "derivation",
+                            "literature_claim",
+                            "claim"
+                          ]
+                        },
+                        "form": {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "simulation",
+                                "dataset",
+                                "procedure"
+                              ]
+                            },
+                            "quantity": {
+                              "type": "string"
+                            },
+                            "trend": {
+                              "type": "string",
+                              "enum": [
+                                "vanishes",
+                                "increases",
+                                "decreases",
+                                "bounded"
+                              ]
+                            },
+                            "equation": {
+                              "type": "string"
+                            },
+                            "statement": {
+                              "type": "string"
+                            },
+                            "shape": {
+                              "type": "string",
+                              "enum": [
+                                "universal",
+                                "existential",
+                                "bound"
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "rests_on": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "hedge": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "node",
+                  "split",
+                  "children"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "prompt_digest": "sha256:06cc61800906791fc9f4dfb4a27807c91b9c976bd57c6817fc96370f6213445d",
+    "request_id": "req_msg_fixture0001"
+  },
+  "response": {
+    "id": "msg_fixture0001",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-fixture-20261024",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"records\": [{\"node\": \"s-5\", \"type\": \"claim\", \"form\": {\"shape\": \"bound\", \"statement\": \"the estimator to stay unbiased\"}, \"rests_on\": [\"s-4\"], \"hedge\": \"We expect\"}, {\"node\": \"s-1\", \"type\": \"method\", \"form\": {\"kind\": \"simulation\"}}, {\"node\": \"s-2\", \"split\": [\"The bias vanishes for long segments\", \"the estimator is therefore consistent\"], \"children\": [{\"type\": \"result\", \"form\": {\"quantity\": \"The bias\", \"trend\": \"vanishes\"}}, {\"type\": \"claim\", \"form\": {\"shape\": \"universal\", \"statement\": \"the estimator is therefore consistent\"}, \"rests_on\": [\"s-2a\"]}]}, {\"node\": \"s-3\", \"type\": \"claim\", \"form\": {\"shape\": \"existential\", \"statement\": \"the method may extend to coloured noise\"}, \"rests_on\": [\"s-2a\", \"e-1\"], \"hedge\": \"suggests\"}, {\"node\": \"s-4\", \"type\": \"literature_claim\", \"form\": {\"statement\": \"a bias below one percent\"}}, {\"node\": \"e-1\", \"type\": \"derivation\"}]}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 40,
+      "output_tokens": 12
+    }
+  }
+}

@@ -1,0 +1,35 @@
+[
+  {
+    "pass": "classify",
+    "round": "initial",
+    "node": "s-4",
+    "code": "invalid-argument",
+    "message": "node 's-4': 'statement': 'a bias below one percent' is not a substring of the text",
+    "record": {
+      "node": "s-4",
+      "type": "literature_claim",
+      "form": {
+        "statement": "a bias below one percent"
+      }
+    }
+  },
+  {
+    "pass": "classify",
+    "round": "initial",
+    "node": "s-5",
+    "code": "invalid-argument",
+    "message": "node 's-4' has type 'unassigned'; type 'claim' rests on ['result', 'method', 'derivation', 'literature_claim']",
+    "record": {
+      "node": "s-5",
+      "type": "claim",
+      "form": {
+        "shape": "bound",
+        "statement": "the estimator to stay unbiased"
+      },
+      "rests_on": [
+        "s-4"
+      ],
+      "hedge": "We expect"
+    }
+  }
+]

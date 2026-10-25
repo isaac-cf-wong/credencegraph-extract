@@ -1,0 +1,331 @@
+{
+  "format": "credencegraph",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "s-1",
+      "kind": "method",
+      "statement": "We simulate 400 noise realisations with a Welch estimator.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=3-3",
+          "quote": "We simulate 400 noise realisations with a Welch estimator.",
+          "digest": "sha256:c78257a9993a06284c727e9ae8fec21c8ca650f25a82e7eee6473dc75adb0674"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "classify"
+        },
+        "form": {
+          "kind": "simulation"
+        }
+      }
+    },
+    {
+      "id": "s-2",
+      "kind": "compound",
+      "statement": "The bias vanishes for long segments, and the estimator is therefore consistent.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=4-4",
+          "quote": "The bias vanishes for long segments, and the estimator is therefore consistent.",
+          "digest": "sha256:2ed6924d00acc49ee9e8788654ac69d8223a1a85f4fe2d944ea6efe59281f607"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "classify"
+        }
+      }
+    },
+    {
+      "id": "s-2a",
+      "kind": "result",
+      "statement": "The bias vanishes for long segments",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=4-4;chars=0-35",
+          "quote": "The bias vanishes for long segments",
+          "digest": "sha256:6b3893524f1fbda82536b9aeba68f5b80c56daaea6e94f325051f26cb03cd23a"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "form": {
+          "quantity": "The bias",
+          "trend": "vanishes"
+        },
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "classify"
+        }
+      }
+    },
+    {
+      "id": "s-2b",
+      "kind": "claim",
+      "statement": "the estimator is therefore consistent",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=4-4;chars=41-78",
+          "quote": "the estimator is therefore consistent",
+          "digest": "sha256:40286f3c8c52f88ef625370cdc5291d53ec134170ed8ac0ed9d20acb321b7b17"
+        }
+      ],
+      "base": {
+        "alpha": 5.0,
+        "beta": 5.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "form": {
+          "shape": "universal",
+          "statement": "the estimator is therefore consistent"
+        },
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "classify"
+        }
+      }
+    },
+    {
+      "id": "e-1",
+      "kind": "derivation",
+      "statement": "\\begin{equation} b = \\frac{c}{N} \\end{equation}",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=5-7",
+          "quote": "\\begin{equation} b = \\frac{c}{N} \\end{equation}",
+          "digest": "sha256:0b6fc0a92683584381b436fb1eacea4542be7da2a62b13e3b70bcab5b6452bf8"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "equation",
+        "label": "eq:bias",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "classify"
+        }
+      }
+    },
+    {
+      "id": "s-3",
+      "kind": "claim",
+      "statement": "This suggests that the method may extend to coloured noise.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=8-8",
+          "quote": "This suggests that the method may extend to coloured noise.",
+          "digest": "sha256:a83eb6cb4978245cd27eaa1d3af381404bb8680490d68f62dbcf62b51e2ced20"
+        }
+      ],
+      "base": {
+        "alpha": 5.0,
+        "beta": 5.0
+      },
+      "stated": {
+        "alpha": 6.0,
+        "beta": 4.0
+      },
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "classify"
+        },
+        "form": {
+          "shape": "existential",
+          "statement": "the method may extend to coloured noise"
+        }
+      }
+    },
+    {
+      "id": "s-4",
+      "kind": "literature_claim",
+      "statement": "Smith reports a bias below 1\\% in comparable settings~\\cite{smith2020}.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=9-9",
+          "quote": "Smith reports a bias below 1\\% in comparable settings~\\cite{smith2020}.",
+          "digest": "sha256:23f4911fbf2bafd93144cd1d4c8467fb23ba149728b45270feaf4133af7ab82b"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "classify"
+        },
+        "form": {
+          "statement": "a bias below 1\\% in comparable settings"
+        }
+      }
+    },
+    {
+      "id": "s-5",
+      "kind": "claim",
+      "statement": "We expect the estimator to stay unbiased in practice.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=10-10",
+          "quote": "We expect the estimator to stay unbiased in practice.",
+          "digest": "sha256:26cb352f8df5f9f99af8f404052260515576faf78c87d4c12980dcbc3b2f114c"
+        }
+      ],
+      "base": {
+        "alpha": 5.0,
+        "beta": 5.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "classify"
+        },
+        "form": {
+          "shape": "bound",
+          "statement": "the estimator to stay unbiased"
+        }
+      }
+    },
+    {
+      "id": "r-1",
+      "kind": "reference",
+      "statement": "A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=12-12",
+          "quote": "A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.",
+          "digest": "sha256:2a61d91f961858e74b921ebb12d662254024e2d405047be7bd8ac760dc76fd8d"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "reference",
+        "key": "smith2020",
+        "extraction": {
+          "run": "20261025T120000Z-classify",
+          "pass": "ingest"
+        }
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "s-4-cites-r-1",
+      "type": "cites",
+      "source": "s-4",
+      "target": "r-1",
+      "strength": null,
+      "attributes": {}
+    },
+    {
+      "id": "s-2a-part-of-s-2",
+      "type": "part-of",
+      "source": "s-2a",
+      "target": "s-2",
+      "strength": null,
+      "attributes": {}
+    },
+    {
+      "id": "s-2b-part-of-s-2",
+      "type": "part-of",
+      "source": "s-2b",
+      "target": "s-2",
+      "strength": null,
+      "attributes": {}
+    },
+    {
+      "id": "s-2a-requires-s-2b",
+      "type": "requires",
+      "source": "s-2a",
+      "target": "s-2b",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "s-2a-requires-s-3",
+      "type": "requires",
+      "source": "s-2a",
+      "target": "s-3",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "e-1-requires-s-3",
+      "type": "requires",
+      "source": "e-1",
+      "target": "s-3",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "s-4-requires-s-5",
+      "type": "requires",
+      "source": "s-4",
+      "target": "s-5",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    }
+  ]
+}

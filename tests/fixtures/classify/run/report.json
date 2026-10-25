@@ -1,0 +1,60 @@
+{
+  "coverage": {
+    "rubric": {
+      "name": "classify-test",
+      "version": "1"
+    },
+    "nodes": 9,
+    "by_origin": {
+      "document": 9,
+      "analyst": 0,
+      "evidence": 0
+    },
+    "by_type": {
+      "method": {
+        "count": 1,
+        "share": 0.1111111111111111
+      },
+      "compound": {
+        "count": 1,
+        "share": 0.1111111111111111
+      },
+      "result": {
+        "count": 1,
+        "share": 0.1111111111111111
+      },
+      "claim": {
+        "count": 3,
+        "share": 0.3333333333333333
+      },
+      "derivation": {
+        "count": 1,
+        "share": 0.1111111111111111
+      },
+      "literature_claim": {
+        "count": 1,
+        "share": 0.1111111111111111
+      },
+      "reference": {
+        "count": 1,
+        "share": 0.1111111111111111
+      }
+    },
+    "untyped": [],
+    "unexamined": [],
+    "not_assessed": {
+      "count": 0,
+      "reasons": {}
+    }
+  },
+  "passes": {
+    "classify": {
+      "hedge-unmapped": [
+        {
+          "node": "s-5",
+          "phrase": "We expect"
+        }
+      ]
+    }
+  }
+}
