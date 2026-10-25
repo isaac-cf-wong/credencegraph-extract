@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +13,7 @@ import pytest
 import session_ops
 from classify_fixture import FIRST, PAPER, PREMISES_FIRST, PREMISES_REPAIR, REPAIR, RUBRIC, RUN
 
+from credencegraph_extract import session
 from credencegraph_extract.run import RunError
 from credencegraph_extract.session import get_state, recorded_graph, replay, start_run, write
 from credencegraph_extract.tools import add_premises, classify, finish_run
@@ -201,3 +204,95 @@ def test_every_call_is_logged_with_its_model_and_agent(run_dir: Path) -> None:
         ("finish_run", "m-b", None),
     ]
     assert read_json(run_dir / "manifest.json")["models"] == ["m-a", "m-b", MODEL]
+
+
+def test_a_fresh_process_replays_a_tool_run_from_the_command_line(run_dir: Path) -> None:
+    classify(run_dir, FIRST, model=MODEL)
+    finish_run(run_dir, model=MODEL)
+    done = subprocess.run(  # noqa: S603 - this interpreter, the package's own command
+        [sys.executable, "-m", "credencegraph_extract", "replay", str(run_dir), "--source", str(PAPER)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert "byte-identical" in done.stdout
+
+
+def test_a_crash_before_the_outputs_are_written_is_repaired_on_the_next_read(
+    run_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    classify(run_dir, FIRST, model=MODEL)
+    outputs = session._outputs
+
+    def crash_once_finished(run: Path, rubric: Any, state: Any) -> None:
+        if state.finished:  # the outputs of the committed finish, not the reconcile before it
+            raise OSError("simulated crash")
+        outputs(run, rubric, state)
+
+    monkeypatch.setattr(session, "_outputs", crash_once_finished)
+    with pytest.raises(OSError, match="simulated crash"):
+        finish_run(run_dir, model=MODEL)
+    monkeypatch.undo()
+    assert read_json(run_dir / "manifest.json")["finished"] is True
+    assert not (run_dir / "graph.json").exists()
+    verify_run(run_dir)
+    assert (run_dir / "graph.json").read_bytes() == recorded_graph(run_dir)
+
+
+def test_a_crash_before_stale_outputs_are_removed_is_repaired_on_the_next_read(
+    run_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    finish_run(run_dir, model=MODEL)
+    assert (run_dir / "graph.json").exists()
+    outputs = session._outputs
+
+    def crash_once_unfinished(run: Path, rubric: Any, state: Any) -> None:
+        if not state.finished:  # the cleanup after the committed write, not the reconcile before it
+            raise OSError("simulated crash")
+        outputs(run, rubric, state)
+
+    monkeypatch.setattr(session, "_outputs", crash_once_unfinished)
+    with pytest.raises(OSError, match="simulated crash"):
+        classify(run_dir, FIRST[:1], model=MODEL)
+    monkeypatch.undo()
+    assert (run_dir / "graph.json").exists()
+    assert get_state(run_dir)["finished"] is False
+    assert not (run_dir / "graph.json").exists()
+
+
+def test_a_crash_before_the_manifest_is_updated_is_repaired(run_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    original = session._replace
+
+    def crash_on_manifest(path: Path, data: bytes) -> None:
+        if path.name == "manifest.json":
+            raise OSError("simulated crash")
+        original(path, data)
+
+    monkeypatch.setattr(session, "_replace", crash_on_manifest)
+    with pytest.raises(OSError, match="simulated crash"):
+        finish_run(run_dir, model=MODEL)
+    monkeypatch.undo()
+    assert read_json(run_dir / "manifest.json")["finished"] is False
+    assert get_state(run_dir)["finished"] is True
+    assert read_json(run_dir / "manifest.json")["finished"] is True
+    assert (run_dir / "graph.json").exists()
+
+
+def test_every_refused_record_says_what_to_change(run_dir: Path) -> None:
+    duplicate = [FIRST[1], FIRST[1]]
+    [refused] = classify(run_dir, duplicate, model=MODEL)["refused"]
+    assert refused["code"] == "duplicate-record"
+    assert refused["fix"] == ["send one record per node in a call: an earlier record in this call already names 's-1'"]
+    classify(run_dir, FIRST, model=MODEL)
+    classify(run_dir, REPAIR, model=MODEL)
+    premises = add_premises(run_dir, PREMISES_FIRST, model=MODEL)["refused"]
+    assert premises
+    assert all(item["fix"] for item in premises)
+    malformed = add_premises(run_dir, [{"conclusion": "s-5", "premises": "one"}], model=MODEL)["refused"]
+    assert malformed[0]["fix"][0].endswith(
+        "; a premise record is {\"conclusion\": <id of a node of a type in ['claim']>, "
+        '"premises": [{"stated_at": <chunk id>} or {"statement": <the premise in words>}, ...]}'
+    )
+    rejections = read_json(run_dir / "state.json")["rejections"]
+    assert all(item.get("fix") for item in rejections)

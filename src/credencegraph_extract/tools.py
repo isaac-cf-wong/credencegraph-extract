@@ -24,11 +24,19 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from credencegraph.cli.common import UNKNOWN_NODE
 from credencegraph.core import Graph
 from credencegraph.core.relation import OBSERVES
 from credencegraph.rubric import check_graph
 
-from credencegraph_extract.assemble import assemble, assemble_premises, fixes, premises_rubric_problem
+from credencegraph_extract.assemble import (
+    DUPLICATE_RECORD,
+    INVALID_RECORD,
+    assemble,
+    assemble_premises,
+    fixes,
+    premises_rubric_problem,
+)
 from credencegraph_extract.checks import assess
 from credencegraph_extract.run import RunError
 from credencegraph_extract.session import FINISH, Context, State, operation, write
@@ -58,6 +66,28 @@ def _kept(context: Context, tool: str, rejections: Sequence[Mapping[str, Any]]) 
     return tuple({"call": context.call, "tool": tool, **rejection} for rejection in rejections)
 
 
+def _fallback(rejection: Mapping[str, Any]) -> list[str]:
+    """What to change in a refused record when no closer diagnosis applies: from its code, else its message."""
+    node = rejection.get("node")
+    if rejection.get("code") == DUPLICATE_RECORD:
+        return [f"send one record per node in a call: an earlier record in this call already names {node!r}"]
+    if rejection.get("code") == UNKNOWN_NODE:
+        return ["name only nodes the run has: the chunk ids start_run listed, or ids earlier calls created"]
+    return [f"change the record so that this no longer holds: {rejection.get('message')}"]
+
+
+def _premise_fix(context: Context, rejection: Mapping[str, Any]) -> list[str]:
+    """What to change in a refused premise record."""
+    if rejection.get("code") == INVALID_RECORD:
+        conclusions = list(context.rubric.premises.for_types) if context.rubric.premises is not None else []
+        shape = (
+            f'{{"conclusion": <id of a node of a type in {conclusions}>, '
+            '"premises": [{"stated_at": <chunk id>} or {"statement": <the premise in words>}, ...]}'
+        )
+        return [f"{rejection.get('message')}; a premise record is {shape}"]
+    return _fallback(rejection)
+
+
 def checked(graph: Graph) -> set[str]:
     """Return the nodes a check targets: the sources of ``observes`` relations.
 
@@ -84,12 +114,11 @@ def _classify(context: Context, state: State, args: Mapping[str, Any]) -> tuple[
         else:
             kept.append(record)
     assembly = assemble(state.graph, context.rubric, kept)
+    for rejection in refused:
+        rejection["fix"] = [f"leave {rejection['node']!r} as it is; send records only for nodes no check targets"]
     for rejection in assembly.rejections:
         found = fixes(assembly.graph, context.rubric, rejection["record"])
-        refused.append({**rejection, "fix": found} if found else rejection)
-    for rejection in refused:
-        if rejection["code"] == CHECKED:
-            rejection["fix"] = [f"leave {rejection['node']!r} as it is; send records only for nodes no check targets"]
+        refused.append({**rejection, "fix": found or _fallback(rejection)})
     after = State(assembly.graph, (*state.rejections, *_kept(context, CLASSIFY, refused)), state.finished)
     result = {
         "applied": _changed(state.graph, assembly.graph),
@@ -106,12 +135,11 @@ def _add_premises(context: Context, state: State, args: Mapping[str, Any]) -> tu
     if problem is not None:
         raise RunError("invalid-argument", f"no premises can be added: {problem}")
     assembly = assemble_premises(state.graph, context.rubric, _records(args))
-    after = State(
-        assembly.graph, (*state.rejections, *_kept(context, ADD_PREMISES, assembly.rejections)), state.finished
-    )
+    refused = [{**rejection, "fix": _premise_fix(context, rejection)} for rejection in assembly.rejections]
+    after = State(assembly.graph, (*state.rejections, *_kept(context, ADD_PREMISES, refused)), state.finished)
     result = {
         "applied": _changed(state.graph, assembly.graph),
-        "refused": assembly.rejections,
+        "refused": refused,
         "overflow": assembly.overflow,
     }
     return after, result

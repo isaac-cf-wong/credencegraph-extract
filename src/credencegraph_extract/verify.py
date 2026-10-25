@@ -104,7 +104,8 @@ def _file_differences(check_id: str, recorded: Mapping[str, Any], files: Mapping
 def run_manifest(run_dir: Path) -> dict[str, Any]:
     """Read the manifest of a run of either format: a model-calling run (1) or an agent-tool run (2).
 
-    An agent-tool run has a graph only while it is finished, so an unfinished one is refused.
+    An agent-tool run is first reconciled with its call log, which rewrites any derived file a crash left
+    behind; it has a graph only while it is finished, so an unfinished one is refused.
 
     Args:
         run_dir: The run directory.
@@ -121,6 +122,7 @@ def run_manifest(run_dir: Path) -> dict[str, Any]:
         version = None
     if version != session.VERSION:
         return read_manifest(run_dir)
+    session.reconcile(run_dir)
     manifest = session.read_manifest(run_dir)
     if not manifest.get("finished"):
         raise RunError("unfinished-run", "the run is not finished: call finish_run before verifying it")

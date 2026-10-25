@@ -358,9 +358,20 @@ def _state_file(state: State, calls: int, log_digest: str) -> bytes:
     )
 
 
+def _operations() -> dict[str, Operation]:
+    """The registered operations, the tools' included.
+
+    The tools register their operations when their module is imported; a process that only writes,
+    replays or rebuilds through this module may not have imported it.
+    """
+    from credencegraph_extract import tools  # noqa: F401, PLC0415 - registers the operations; tools imports this module
+
+    return OPERATIONS
+
+
 def _apply(context: Context, state: State, call: Mapping[str, Any]) -> tuple[State, dict[str, Any]]:
     """Apply one logged call's operation."""
-    fn = OPERATIONS.get(call["tool"])
+    fn = _operations().get(call["tool"])
     if fn is None:
         raise RunError("unknown-tool", f"call {call['seq']} is of the unknown tool {call['tool']!r}")
     after, result = fn(context, state, call.get("args") or {})
@@ -462,13 +473,13 @@ def write(  # noqa: PLR0913 - the call and who makes it
             call as a whole.
     """
     identity = _identity(model, agent, note)
-    if tool not in OPERATIONS:
+    if tool not in _operations():
         raise RunError("unknown-tool", f"{tool!r} is not a tool that changes a run")
     with lock(run_dir):
         manifest = read_manifest(run_dir)
         rubric = _rubric(run_dir, manifest)
         calls = read_calls(run_dir)
-        state = current_state(run_dir)
+        state = _reconcile(run_dir, manifest, rubric, calls)
         seq = len(calls) + 1
         call = {"seq": seq, "tool": tool, "args": dict(args), **identity}
         after, result = _apply(Context(run_dir, manifest["run"], rubric, seq), state, call)
@@ -492,8 +503,14 @@ def _graph_text(graph: Graph) -> bytes:
 
 
 def _digests(state: State, result: Mapping[str, Any]) -> dict[str, str]:
-    """What a log line records of a call's effect: the digests of its result and of the graph it left."""
-    return {"result_digest": bytes_digest(_json(result)), "graph_digest": bytes_digest(_graph_text(state.graph))}
+    """What a log line records of a call's effect: the digests of its result and of the graph it left.
+
+    The result is digested in a canonical encoding, with sorted keys: a result can echo the records it
+    was sent, and a live call has them in the order the agent wrote their keys while a replay reads them
+    back from the log, which sorts them.
+    """
+    canonical = json.dumps(result, ensure_ascii=False, allow_nan=False, sort_keys=True).encode("utf-8")
+    return {"result_digest": bytes_digest(canonical), "graph_digest": bytes_digest(_graph_text(state.graph))}
 
 
 def _check_digests(call: Mapping[str, Any], state: State, result: Mapping[str, Any]) -> None:
@@ -503,6 +520,38 @@ def _check_digests(call: Mapping[str, Any], state: State, result: Mapping[str, A
             what = "result" if name == "result_digest" else "graph"
             msg = f"call {call['seq']} ({call['tool']}) gives another {what} than its log line records"
             raise RunError("record-mismatch", msg)
+
+
+def _reconcile(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls: list[dict[str, Any]]) -> State:
+    """Bring every file derived from the log back in line with it, and return the state; the caller holds the lock.
+
+    A process that dies after a call's log line is appended can leave ``state.json``, ``manifest.json``
+    or the outputs behind the log: the state rebuilt, the manifest saying the run is unfinished while
+    its last call finished it, or a finished run without its ``graph.json``. Each is rewritten from
+    the state the log leads to.
+    """
+    state = current_state(run_dir)
+    log_digest = bytes_digest(_read(run_dir, CALLS))
+    if json.loads(_read(run_dir, STATE)).get("log_digest") != log_digest:
+        _replace(run_dir / STATE, _state_file(state, len(calls), log_digest))
+    if manifest.get("log_digest") != log_digest or manifest.get("finished") != state.finished:
+        _replace(run_dir / MANIFEST, _manifest(manifest, calls, state, log_digest))
+    _outputs(run_dir, rubric, state)
+    return state
+
+
+def reconcile(run_dir: Path) -> None:
+    """Bring a run's state, manifest and outputs back in line with its call log, under the lock.
+
+    Args:
+        run_dir: The run directory.
+
+    Raises:
+        RunError: If the run directory is malformed or incomplete.
+    """
+    with lock(run_dir):
+        manifest = read_manifest(run_dir)
+        _reconcile(run_dir, manifest, _rubric(run_dir, manifest), read_calls(run_dir))
 
 
 def _outputs(run_dir: Path, rubric: Rubric, state: State) -> None:
@@ -778,8 +827,10 @@ def get_state(run_dir: Path) -> dict[str, Any]:
         RunError: If the run directory is malformed or incomplete.
     """
     with lock(run_dir):
-        state = current_state(run_dir)
-        calls = len(read_calls(run_dir))
+        manifest = read_manifest(run_dir)
+        all_calls = read_calls(run_dir)
+        state = _reconcile(run_dir, manifest, _rubric(run_dir, manifest), all_calls)
+        calls = len(all_calls)
     nodes = []
     for node in state.graph:
         item: dict[str, Any] = {"id": node.id, "type": node.kind, "text": node.statement}
