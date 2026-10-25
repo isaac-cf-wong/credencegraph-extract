@@ -24,12 +24,29 @@
                   "type": {
                     "type": "string",
                     "enum": [
-                      "reference",
-                      "method",
-                      "result",
-                      "derivation",
-                      "literature_claim",
-                      "claim"
+                      "reference"
+                    ]
+                  },
+                  "hedge": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "method"
                     ]
                   },
                   "form": {
@@ -42,7 +59,39 @@
                           "dataset",
                           "procedure"
                         ]
-                      },
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "kind"
+                    ]
+                  },
+                  "hedge": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type",
+                  "form"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "result"
+                    ]
+                  },
+                  "form": {
+                    "type": "object",
+                    "properties": {
                       "quantity": {
                         "type": "string"
                       },
@@ -54,13 +103,105 @@
                           "decreases",
                           "bounded"
                         ]
-                      },
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "quantity"
+                    ]
+                  },
+                  "hedge": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type",
+                  "form"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "derivation"
+                    ]
+                  },
+                  "form": {
+                    "type": "object",
+                    "properties": {
                       "equation": {
                         "type": "string"
-                      },
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "hedge": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "literature_claim"
+                    ]
+                  },
+                  "form": {
+                    "type": "object",
+                    "properties": {
                       "statement": {
                         "type": "string"
-                      },
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "statement"
+                    ]
+                  },
+                  "hedge": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type",
+                  "form"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "claim"
+                    ]
+                  },
+                  "form": {
+                    "type": "object",
+                    "properties": {
                       "shape": {
                         "type": "string",
                         "enum": [
@@ -68,9 +209,16 @@
                           "existential",
                           "bound"
                         ]
+                      },
+                      "statement": {
+                        "type": "string"
                       }
                     },
-                    "additionalProperties": false
+                    "additionalProperties": false,
+                    "required": [
+                      "shape",
+                      "statement"
+                    ]
                   },
                   "rests_on": {
                     "type": "array",
@@ -84,7 +232,8 @@
                 },
                 "required": [
                   "node",
-                  "type"
+                  "type",
+                  "form"
                 ],
                 "additionalProperties": false
               },
@@ -103,73 +252,206 @@
                   "children": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string",
-                          "enum": [
-                            "reference",
-                            "method",
-                            "result",
-                            "derivation",
-                            "literature_claim",
-                            "claim"
-                          ]
-                        },
-                        "form": {
+                      "anyOf": [
+                        {
                           "type": "object",
                           "properties": {
-                            "kind": {
+                            "type": {
                               "type": "string",
                               "enum": [
-                                "simulation",
-                                "dataset",
-                                "procedure"
+                                "reference"
                               ]
                             },
-                            "quantity": {
+                            "hedge": {
                               "type": "string"
-                            },
-                            "trend": {
-                              "type": "string",
-                              "enum": [
-                                "vanishes",
-                                "increases",
-                                "decreases",
-                                "bounded"
-                              ]
-                            },
-                            "equation": {
-                              "type": "string"
-                            },
-                            "statement": {
-                              "type": "string"
-                            },
-                            "shape": {
-                              "type": "string",
-                              "enum": [
-                                "universal",
-                                "existential",
-                                "bound"
-                              ]
                             }
                           },
+                          "required": [
+                            "type"
+                          ],
                           "additionalProperties": false
                         },
-                        "rests_on": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "method"
+                              ]
+                            },
+                            "form": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "simulation",
+                                    "dataset",
+                                    "procedure"
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "kind"
+                              ]
+                            },
+                            "hedge": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "form"
+                          ],
+                          "additionalProperties": false
                         },
-                        "hedge": {
-                          "type": "string"
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "result"
+                              ]
+                            },
+                            "form": {
+                              "type": "object",
+                              "properties": {
+                                "quantity": {
+                                  "type": "string"
+                                },
+                                "trend": {
+                                  "type": "string",
+                                  "enum": [
+                                    "vanishes",
+                                    "increases",
+                                    "decreases",
+                                    "bounded"
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "quantity"
+                              ]
+                            },
+                            "hedge": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "form"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "derivation"
+                              ]
+                            },
+                            "form": {
+                              "type": "object",
+                              "properties": {
+                                "equation": {
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            "hedge": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "literature_claim"
+                              ]
+                            },
+                            "form": {
+                              "type": "object",
+                              "properties": {
+                                "statement": {
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "statement"
+                              ]
+                            },
+                            "hedge": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "form"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "claim"
+                              ]
+                            },
+                            "form": {
+                              "type": "object",
+                              "properties": {
+                                "shape": {
+                                  "type": "string",
+                                  "enum": [
+                                    "universal",
+                                    "existential",
+                                    "bound"
+                                  ]
+                                },
+                                "statement": {
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "shape",
+                                "statement"
+                              ]
+                            },
+                            "rests_on": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "hedge": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "form"
+                          ],
+                          "additionalProperties": false
                         }
-                      },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
+                      ]
                     }
                   }
                 },

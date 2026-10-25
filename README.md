@@ -150,7 +150,10 @@ with one typed child each:
 
 A record has no field for a credence: the output schema, built from the rubric,
 has none, and the assembler rejects a record that carries a field the format
-does not have.
+does not have. The schema has one branch per type, so a server that enforces it
+keeps each record to what its type allows: a `form` with only that type's
+fields, its required ones required, and `rests_on` only on a type with an edge
+rule. A run replays only with the schema it was recorded with.
 
 The **assembler** applies the records in document order through credencegraph's
 `split` and `annotate`, each record whole or not at all. Every `base` and
