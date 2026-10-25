@@ -70,6 +70,8 @@ CITATION = "citation-support"
 # The check types the model may propose; the numeric check is run only as the fallback of the symbolic one.
 PROPOSED = (RECOMPUTE, REDERIVE, CITATION)
 IMPLEMENTED = (*PROPOSED, NUMERIC)
+# The check types decided by code alone, which ``rerun`` runs again; a citation check needs a model.
+DETERMINISTIC = (RECOMPUTE, REDERIVE, NUMERIC)
 
 # The reasons of a ``not_assessed`` verdict.
 NO_CHECK = "no v1 check applies"
@@ -569,6 +571,82 @@ def _files(result: Result, record: Mapping[str, Any]) -> dict[str, bytes]:
     }
 
 
+def _record(check_id: str, result: Result, tool: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """The check record of a result, and the files of its directory, whose digest the record's ``log`` holds."""
+    record: dict[str, Any] = {
+        "type": result.type,
+        "target": result.target,
+        "artifact": dict(result.artifact),
+        "inputs": dict(result.inputs),
+        "result": result.result,
+        "detail": result.detail,
+        "tool": dict(tool),
+        "model": dict(result.model) if result.model is not None else None,
+    }
+    files = _files(result, record)
+    record["log"] = {"path": f"{CHECKS}/{check_id}/", "digest": directory_digest(files)}
+    return record, files
+
+
+def plain(value: Any) -> Any:
+    """Return a value as JSON gives it back: a graph's read-only mappings and its tuples become dicts and lists.
+
+    Args:
+        value: A value made of JSON types, mappings and sequences.
+
+    Returns:
+        The value in JSON types only.
+    """
+    return json.loads(json.dumps(value, default=lambda item: dict(item) if isinstance(item, Mapping) else list(item)))
+
+
+def rerun(graph: Graph, rubric: Rubric, check: Node) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """Run a recorded deterministic check again, from the inputs its record holds.
+
+    The recorded inputs are checked as the run checked the proposal, numeral faithfulness included,
+    and evaluated by the current code; ``rederive-maths-numeric`` draws its points again from the
+    encoding's seed. A record that can no longer be run gives the result ``error``, with the reason as
+    its detail.
+
+    Args:
+        graph: The graph the check node is in.
+        rubric: The rubric of the run.
+        check: A check node of a type in ``DETERMINISTIC``.
+
+    Returns:
+        The check record the re-run gives, with the recorded ``tool``, and the files of its directory
+        by name. When the code and the record agree, the record equals ``check.attributes["check"]``.
+
+    Raises:
+        ValueError: If the node is not a check of a type in ``DETERMINISTIC``.
+    """
+    recorded = plain(check.attributes.get("check"))
+    if not isinstance(recorded, dict) or recorded.get("type") not in DETERMINISTIC:
+        msg = f"{check.id!r} is not a check of a type in {list(DETERMINISTIC)}"
+        raise ValueError(msg)
+    check_type, target = recorded["type"], recorded.get("target")
+    artifact, inputs = recorded.get("artifact"), recorded.get("inputs")
+    if not isinstance(artifact, dict) or not isinstance(inputs, dict):
+        artifact, inputs = {}, {}
+    # The proposal the record was run from: the symbolic encoding for both maths checks.
+    proposed = RECOMPUTE if check_type == RECOMPUTE else REDERIVE
+    proposal = {key: inputs.get(key) for key in _ALLOWED[proposed]}
+    proposal.update(target=target, type=proposed, nodes=artifact.get("nodes"))
+    try:
+        plan = _plan(graph, rubric, proposal)
+    except _ProposalError as refused:
+        detail = f"the recorded inputs cannot be run: {refused}"
+        result = Result(check_type, str(target), artifact, inputs, ERROR, detail, {"result": ERROR})
+    else:
+        if check_type == RECOMPUTE:
+            result = _recompute(graph, plan)
+        elif check_type == REDERIVE:
+            result = _rederive(plan)
+        else:
+            result = _numeric(plan, artifact)
+    return _record(check.id, result, recorded.get("tool") or {})
+
+
 def directory_digest(files: Mapping[str, bytes]) -> str:
     """Return the digest of a check's directory: of one line ``<name> <digest>`` per file, sorted by name.
 
@@ -710,18 +788,7 @@ class CheckPass:
                 "python": versions.get("python"),
                 **{library: versions.get(library) for library in result.libraries},
             }
-            record: dict[str, Any] = {
-                "type": result.type,
-                "target": result.target,
-                "artifact": dict(result.artifact),
-                "inputs": dict(result.inputs),
-                "result": result.result,
-                "detail": result.detail,
-                "tool": tool,
-                "model": dict(result.model) if result.model is not None else None,
-            }
-            check_files = _files(result, record)
-            record["log"] = {"path": f"{CHECKS}/{check_id}/", "digest": directory_digest(check_files)}
+            record, check_files = _record(check_id, result, tool)
             files.update({f"{CHECKS}/{check_id}/{name}": data for name, data in check_files.items()})
             attributes: dict[str, Any] = {"origin": EVIDENCE, "check": record}
             if result.result != ERROR:
