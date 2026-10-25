@@ -311,7 +311,7 @@ def test_reconciling_refuses_a_log_edited_by_hand(run_dir: Path) -> None:
     manifest_before = (run_dir / "manifest.json").read_bytes()
     log = run_dir / "calls.jsonl"
     log.write_text(log.read_text(encoding="utf-8").replace('"type": "method"', '"type": "context"'), encoding="utf-8")
-    with pytest.raises(RunError, match=r"call 2 \(classify\) gives another") as raised:
+    with pytest.raises(RunError, match=r"call 2 \(classify\) was changed after it was logged") as raised:
         session.reconcile(run_dir)
     assert raised.value.code == "record-mismatch"
     assert (run_dir / "manifest.json").read_bytes() == manifest_before
@@ -329,3 +329,37 @@ def test_a_missing_or_unreadable_state_file_is_rebuilt(run_dir: Path, damage: st
     assert read_json(run_dir / "state.json")["calls"] == 2
     assert recorded_graph(run_dir) == expected
     classify(run_dir, [{"node": "s-3", "type": "claim"}], model=MODEL)
+
+
+def test_reconciling_refuses_an_edited_start_run_line(run_dir: Path) -> None:
+    classify(run_dir, [{"node": "s-1", "type": "method", "form": {"kind": "simulation"}}], model=MODEL)
+    manifest_before = (run_dir / "manifest.json").read_bytes()
+    log = run_dir / "calls.jsonl"
+    log.write_text(log.read_text(encoding="utf-8").replace('"test-harness"', '"edited"', 1), encoding="utf-8")
+    with pytest.raises(RunError, match=r"call 1 \(start_run\) was changed after it was logged"):
+        session.reconcile(run_dir)
+    assert (run_dir / "manifest.json").read_bytes() == manifest_before
+
+
+def test_reconciling_refuses_a_forged_start_run_digest(run_dir: Path) -> None:
+    classify(run_dir, [{"node": "s-1", "type": "method", "form": {"kind": "simulation"}}], model=MODEL)
+    log = run_dir / "calls.jsonl"
+    lines = log.read_text(encoding="utf-8").splitlines()
+    first = json.loads(lines[0])
+    first["result_digest"] = "sha256:" + "ff" * 32
+    log.write_text("\n".join([json.dumps(first, sort_keys=True), *lines[1:]]) + "\n", encoding="utf-8")
+    (run_dir / "state.json").unlink()
+    with pytest.raises(RunError, match=r"call 1 \(start_run\) gives another result"):
+        session.reconcile(run_dir)
+
+
+def test_a_state_file_whose_content_was_changed_is_rebuilt(run_dir: Path) -> None:
+    classify(run_dir, [{"node": "s-1", "type": "method", "form": {"kind": "simulation"}}], model=MODEL)
+    expected = recorded_graph(run_dir)
+    path = run_dir / "state.json"
+    state = read_json(path)
+    state["graph"]["nodes"][0]["statement"] = "tampered"
+    path.write_text(json.dumps(state), encoding="utf-8")
+    assert all(node["text"] != "tampered" for node in get_state(run_dir)["nodes"])
+    assert "tampered" not in path.read_text(encoding="utf-8")
+    assert recorded_graph(run_dir) == expected
