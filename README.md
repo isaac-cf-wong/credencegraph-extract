@@ -62,6 +62,9 @@ for a JSON answer under the pass's schema: as `output_config` with `anthropic`,
 as a `json_schema` response format with `openai`. A server that ignores the
 schema still has every answer checked by the pass that reads it. The output
 token limit is sent to an OpenAI-compatible endpoint as `max_completion_tokens`.
+A call's request id is the one the provider's request-id header gives; a server
+that sends no such header gets the `id` its response body gives itself recorded
+instead.
 
 The run writes a **run directory**:
 

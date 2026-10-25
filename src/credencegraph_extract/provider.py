@@ -68,7 +68,8 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
     Returns:
         ``{"request": ..., "response": ...}``: the request metadata (provider, SDK version, endpoint,
         model, sampling parameters, output schema, prompt digest, request id) and the response body
-        as the provider sent it.
+        as the provider sent it. The request id is the one the provider's request-id header gives;
+        from a server that sends none, it is the ``id`` the response body gives itself.
 
     Raises:
         ValueError: If ``provider`` is not one of ``PROVIDERS``.
@@ -104,7 +105,8 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
         "parameters": {"max_tokens": max_tokens},
         "output_schema": dict(schema),
         "prompt_digest": bytes_digest(prompt.encode("utf-8")),
-        "request_id": raw.request_id,
+        # A server that sends no request-id header still names its response; that name stands in.
+        "request_id": raw.request_id or (response.get("id") if isinstance(response, dict) else None),
     }
     return {"request": request, "response": response}
 

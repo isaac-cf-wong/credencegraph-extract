@@ -71,10 +71,11 @@ def message(index: int, text: str, stop_reason: str = "end_turn") -> dict[str, A
     }
 
 
-def fake_client(bodies: list[dict[str, Any]]) -> Any:
+def fake_client(bodies: list[dict[str, Any]], *, request_ids: bool = True) -> Any:
     """Return a stand-in for ``anthropic.Anthropic`` that answers each call with the next body.
 
-    Its ``sent`` list keeps the keyword arguments of every request.
+    Its ``sent`` list keeps the keyword arguments of every request. Without ``request_ids`` it sends no
+    request-id header, as some compatible servers do.
     """
     sent: list[dict[str, Any]] = []
     queue = iter(bodies)
@@ -82,7 +83,8 @@ def fake_client(bodies: list[dict[str, Any]]) -> Any:
     def create(**kwargs: Any) -> Any:
         sent.append(kwargs)
         body = next(queue)
-        return SimpleNamespace(request_id=f"req_{body['id']}", json=lambda: json.loads(json.dumps(body)))
+        request_id = f"req_{body['id']}" if request_ids else None
+        return SimpleNamespace(request_id=request_id, json=lambda: json.loads(json.dumps(body)))
 
     return SimpleNamespace(
         messages=SimpleNamespace(with_raw_response=SimpleNamespace(create=create)), sent=sent, base_url=BASE_URL
@@ -119,10 +121,11 @@ def completion(index: int, text: str | None, finish_reason: str = "stop", refusa
     }
 
 
-def fake_openai_client(bodies: list[dict[str, Any]]) -> Any:
+def fake_openai_client(bodies: list[dict[str, Any]], *, request_ids: bool = True) -> Any:
     """Return a stand-in for ``openai.OpenAI`` that answers each call with the next body.
 
-    Its ``sent`` list keeps the keyword arguments of every request.
+    Its ``sent`` list keeps the keyword arguments of every request. Without ``request_ids`` it sends no
+    request-id header, as some compatible servers do.
     """
     sent: list[dict[str, Any]] = []
     queue = iter(bodies)
@@ -130,7 +133,8 @@ def fake_openai_client(bodies: list[dict[str, Any]]) -> Any:
     def create(**kwargs: Any) -> Any:
         sent.append(kwargs)
         body = next(queue)
-        return SimpleNamespace(request_id=f"req_{body['id']}", text=json.dumps(body))
+        request_id = f"req_{body['id']}" if request_ids else None
+        return SimpleNamespace(request_id=request_id, text=json.dumps(body))
 
     completions = SimpleNamespace(with_raw_response=SimpleNamespace(create=create))
     return SimpleNamespace(chat=SimpleNamespace(completions=completions), sent=sent, base_url=OPENAI_BASE_URL)

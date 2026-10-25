@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import anthropic
 import openai
@@ -180,3 +181,24 @@ def test_openai_output_refuses_a_refusal() -> None:
 def test_openai_output_refuses_text_that_is_not_json() -> None:
     with pytest.raises(provider.ProviderError, match="not JSON"):
         provider.output(openai_record(completion(1, "no json here")))
+
+
+@pytest.mark.parametrize(
+    ("name", "make", "body"),
+    [
+        ("anthropic", fake_client, message(1, "{}")),
+        ("openai", fake_openai_client, completion(1, "{}")),
+    ],
+)
+def test_without_a_request_id_header_the_response_id_stands_in(name: str, make: Any, body: dict) -> None:
+    client = make([body], request_ids=False)
+    record = provider.call("p", SCHEMA, model=MODEL, max_tokens=8, provider=name, client=client)
+    assert record["request"]["request_id"] == body["id"]
+
+
+def test_without_a_request_id_header_or_a_response_id_the_request_id_is_null() -> None:
+    body = completion(1, "{}")
+    del body["id"]
+    client = fake_openai_client([body], request_ids=False)
+    record = provider.call("p", SCHEMA, model=MODEL, max_tokens=8, provider="openai", client=client)
+    assert record["request"]["request_id"] is None
