@@ -1,6 +1,6 @@
 ---
 title: Classify pass
-description: The classify pass: records, the prompt, the output schema and the repair round.
+description: The classify pass, covering records, the prompt, the output schema and the repair round.
 ---
 
 <!-- prettier-ignore-start -->
