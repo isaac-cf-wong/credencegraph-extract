@@ -380,6 +380,43 @@ def test_a_second_check_of_a_type_on_one_node_is_rejected(tmp_path: Path) -> Non
     assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3", "e-2"]
 
 
+def run_on_paper(tmp_path: Path, old: str, new: str, proposal: dict[str, Any]) -> Path:
+    """Run the fixture answers, with this one proposal, on the fixture paper with ``old`` replaced by ``new``."""
+    paper = tmp_path / "paper.tex"
+    text = PAPER.read_text(encoding="utf-8")
+    assert old in text
+    paper.write_text(text.replace(old, new), encoding="utf-8")
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([proposal]), paper=paper)
+    return run_dir
+
+
+def test_an_operand_only_a_float_confuses_with_a_written_numeral_is_unfaithful(tmp_path: Path) -> None:
+    # 0.10000000000000001 and 0.1 are one float but two decimals: the text does not contain 0.1.
+    old = "Of the 400 realisations, 12.5\\% are rejected"
+    new = "Of the 400 realisations, a share of 0.12500000000000001 is rejected"
+    run_dir = run_on_paper(tmp_path, old, new, {**RECOMPUTE, "expected": "350"})
+    assert [item["code"] for item in check_rejections(run_dir)] == ["unfaithful-numeral"]
+    assert checks_of(read_graph(run_dir)) == {}
+
+
+def test_a_reported_value_only_a_float_confuses_with_a_written_numeral_is_unfaithful(tmp_path: Path) -> None:
+    run_dir = run_on_paper(
+        tmp_path, "which leaves 350.", "which leaves 350.00000000000001.", {**RECOMPUTE, "expected": "350"}
+    )
+    assert [item["code"] for item in check_rejections(run_dir)] == ["unfaithful-numeral"]
+
+
+def test_the_reported_value_and_its_rounding_are_the_exactly_written_numeral(tmp_path: Path) -> None:
+    # The text writes both 3.5e2 (350 ± 5) and 350.00000000000001; only the second is the reported value.
+    old = "which leaves 350."
+    new = "which leaves 350.00000000000001, about 3.5e2."
+    run_dir = run_on_paper(tmp_path, old, new, {**RECOMPUTE, "expected": "350.00000000000001"})
+    [node] = checks_of(read_graph(run_dir)).values()
+    assert node.attributes["check"]["result"] == "failed"
+    assert node.attributes["check"]["detail"].endswith("outside 350.00000000000001 ± 0.000000000000005")
+
+
 def test_the_tolerance_is_the_rounding_of_the_reported_numeral(tmp_path: Path) -> None:
     paper = tmp_path / "paper.tex"
     text = PAPER.read_text(encoding="utf-8").replace("which leaves 350.", "which leaves 349.6.")

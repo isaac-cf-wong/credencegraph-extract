@@ -217,11 +217,12 @@ lists the node's type in its `targets`:
 
 - `recompute-numbers`: an arithmetic expression over numerals of the chunks the
   proposal cites, and the reported result. Every numeral, the result included,
-  must be one those chunks' text contains, so the model cannot supply a number
-  the document does not. The expression is parsed with `ast` against a whitelist
-  (numerals, `+ - * / **`, signs and parentheses; never `eval`) and evaluated
-  exactly with `fractions`. It passes when it falls within the rounding the
-  reported numeral's own digits imply: `350` is `350 ± 0.5`.
+  must be one those chunks' text contains, compared exactly as the decimal it
+  writes (never as a float), so the model cannot supply a number the document
+  does not. The expression is parsed with `ast` against a whitelist (numerals,
+  `+ - * / **`, signs and parentheses; never `eval`) and evaluated exactly with
+  `fractions`. It passes when it falls within the rounding the reported
+  numeral's own digits imply: `350` is `350 ± 0.5`.
 - `rederive-maths`: a step between equation chunks, encoded as two expressions
   `lhs` and `rhs` over declared symbols with sympy assumptions. The expressions
   are built from the same kind of whitelist, with a fixed set of functions. The

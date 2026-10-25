@@ -6,7 +6,8 @@ document, and the model proposes checks, each of a type the runner implements:
 
 - ``recompute-numbers``: an arithmetic expression over numerals of the cited chunks, and the
   reported result. Every numeral, the result included, must be one the cited chunks' text contains,
-  so the model cannot supply a number the document does not. The expression is evaluated exactly;
+  compared exactly as the decimal each writes, so the model cannot supply a number the document does
+  not, not even one a float cannot tell apart from a number it does. The expression is evaluated exactly;
   it passes when it falls within the rounding the reported result's own digits imply.
 - ``rederive-maths``: a step between equation chunks encoded as two sympy expressions over declared
   symbols, ``lhs`` and ``rhs``, that the step claims are equal. It passes when sympy simplifies their
@@ -50,7 +51,7 @@ from typing import Any
 from credencegraph.core import Graph, Node, SourceAnchor
 from credencegraph.core.relation import OBSERVES, Relation
 from credencegraph.ingest.chunks import EQUATION, REFERENCE
-from credencegraph.rubric import Rubric, has_numeral, normalise_text, text_digest
+from credencegraph.rubric import Rubric, normalise_text, text_digest
 from credencegraph.rubric.model import ANALYST, DOCUMENT, EVIDENCE, Check
 from credencegraph.rubric.validate import CITES, FAILS, HOLDS, NOT_ASSESSED, PART_OF, UNDETERMINED, node_text, origin_of
 
@@ -401,9 +402,9 @@ def _plan(graph: Graph, rubric: Rubric, record: Any) -> _Plan:
             raise _ProposalError(INVALID_RECORD, str(error)) from None
         if not evaluate.NUMERAL.fullmatch(record["expected"].removeprefix("-")):
             raise _ProposalError(INVALID_RECORD, f"expected {record['expected']!r} is not one decimal numeral")
-        texts = [node_text(graph, node) for node in nodes]
+        written = {value for node in nodes for value, _ in evaluate.text_numerals(node_text(graph, node))}
         for numeral in (*numerals, record["expected"]):
-            if not any(has_numeral(text, float(numeral)) for text in texts):
+            if Fraction(Decimal(numeral)) not in written:
                 raise _ProposalError(UNFAITHFUL, f"no numeral of {[node.id for node in nodes]} equals {numeral}")
     else:
         _strings(record, "lhs", "rhs", "assumption")
@@ -429,13 +430,16 @@ def _recompute(graph: Graph, plan: _Plan) -> Result:
     """Run ``recompute-numbers``."""
     expression, expected = plan.record["expression"], plan.record["expected"]
     value = evaluate.arithmetic(expression).value
-    # The reported value and its rounding as the text writes it; of several numerals equal to it, the coarsest.
+    # The reported value and its rounding as the text writes it; of several numerals exactly equal to it, the
+    # coarsest. Values are compared as exact fractions of their decimal text, never as floats, which would let
+    # 0.10000000000000001 stand for 0.1.
+    exact = Fraction(Decimal(expected))
     reported, half = max(
         (
             (number, rounding)
             for node in plan.nodes
             for number, rounding in evaluate.text_numerals(node_text(graph, node))
-            if float(number) == float(expected)
+            if number == exact
         ),
         key=lambda pair: pair[1],
     )
