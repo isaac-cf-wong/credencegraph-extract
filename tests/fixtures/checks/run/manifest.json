@@ -2,7 +2,7 @@
   "format": "credencegraph-extract-run",
   "version": 1,
   "run": "20261025T120000Z-checks",
-  "created_at": "2026-10-25T12:32:38Z",
+  "created_at": "2026-10-25T19:49:28Z",
   "source": {
     "document": "paper.tex",
     "file": "paper.tex",
@@ -30,7 +30,7 @@
           "prompt": "prompts/0001.txt",
           "prompt_digest": "sha256:92377c6bd8702e721524d6c7e75e379e1b50a028fc6a9dac9da5fd09ff68b229",
           "raw": "raw/0001.json",
-          "raw_digest": "sha256:045dd6dff5b7a34c5eabc5e969d0b928987193ebe24418b343e2b7b35b1d2e23",
+          "raw_digest": "sha256:0f6b458f6c76ec79068ac3458ddaa88cfa0c156a0630b3981989f12ae4c6984b",
           "provider": "anthropic",
           "model": "claude-fixture-20261024",
           "parameters": {

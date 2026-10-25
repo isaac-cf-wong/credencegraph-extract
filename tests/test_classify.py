@@ -201,32 +201,54 @@ def test_an_answer_without_records_is_an_error(tmp_path: Path) -> None:
     assert caught.value.code == "invalid-record"
 
 
+def branches(schema: dict) -> dict[str, dict]:
+    """The single-record branches of the schema, by the type each fixes."""
+    *singles, _ = schema["properties"]["records"]["items"]["anyOf"]
+    return {branch["properties"]["type"]["enum"][0]: branch for branch in singles}
+
+
 def test_the_schema_has_no_credence_field() -> None:
     schema = output_schema(load_rubric(RUBRIC))
     text = json.dumps(schema)
     for word in ("base", "strength", "stated", "credence", "probability"):
         assert f'"{word}"' not in text
-    record, split = schema["properties"]["records"]["items"]["anyOf"]
-    assert set(record["properties"]) == {"node", "type", "form", "rests_on", "hedge"}
+    split = schema["properties"]["records"]["items"]["anyOf"][-1]
     assert set(split["properties"]) == {"node", "split", "children"}
-    assert set(split["properties"]["children"]["items"]["properties"]) == {"type", "form", "rests_on", "hedge"}
-    assert record["properties"]["type"]["enum"] == [
-        "reference",
-        "method",
-        "result",
-        "derivation",
-        "literature_claim",
-        "claim",
-    ]
+    assert list(branches(schema)) == ["reference", "method", "result", "derivation", "literature_claim", "claim"]
+    for branch in branches(schema).values():
+        assert set(branch["properties"]) <= {"node", "type", "form", "rests_on", "hedge"}
+        assert branch["additionalProperties"] is False
+        assert branch["properties"]["type"]["enum"] == [branch["properties"]["type"]["enum"][0]]
 
 
-def test_the_schema_describes_each_form_field() -> None:
-    form = output_schema(load_rubric(RUBRIC))["properties"]["records"]["items"]["anyOf"][0]["properties"]["form"]
-    assert form["additionalProperties"] is False
-    assert form["properties"]["kind"] == {"type": "string", "enum": ["simulation", "dataset", "procedure"]}
-    assert form["properties"]["equation"] == {"type": "string"}
-    # claim's statement and literature_claim's statement are both verbatim, so one schema serves both.
-    assert form["properties"]["statement"] == {"type": "string"}
+def test_only_a_type_with_an_edge_rule_may_rest_on_chunks() -> None:
+    by_type = branches(output_schema(load_rubric(RUBRIC)))
+    assert [name for name, branch in by_type.items() if "rests_on" in branch["properties"]] == ["claim"]
+
+
+def test_each_type_has_only_its_own_form_fields_and_requires_its_required_ones() -> None:
+    by_type = branches(output_schema(load_rubric(RUBRIC)))
+    assert "form" not in by_type["reference"]["properties"]
+    method = by_type["method"]["properties"]["form"]
+    assert method["properties"] == {"kind": {"type": "string", "enum": ["simulation", "dataset", "procedure"]}}
+    assert method["required"] == ["kind"]
+    derivation = by_type["derivation"]["properties"]["form"]
+    assert derivation["properties"] == {"equation": {"type": "string"}}
+    assert "required" not in derivation
+    assert by_type["derivation"]["required"] == ["node", "type"]
+    result = by_type["result"]["properties"]["form"]
+    assert set(result["properties"]) == {"quantity", "trend"}
+    assert result["required"] == ["quantity"]
+    assert result["additionalProperties"] is False
+    assert by_type["result"]["required"] == ["node", "type", "form"]
+
+
+def test_split_children_use_the_branches_without_node() -> None:
+    schema = output_schema(load_rubric(RUBRIC))
+    children = schema["properties"]["records"]["items"]["anyOf"][-1]["properties"]["children"]["items"]["anyOf"]
+    for child, single in zip(children, branches(schema).values(), strict=True):
+        assert child["properties"] == {k: v for k, v in single["properties"].items() if k != "node"}
+        assert child["required"] == [k for k in single["required"] if k != "node"]
 
 
 def test_the_prompt_lists_types_hedges_and_chunks() -> None:
