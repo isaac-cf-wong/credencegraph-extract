@@ -2,7 +2,7 @@
   "format": "credencegraph-extract-run",
   "version": 1,
   "run": "20261025T120000Z-classify",
-  "created_at": "2026-10-25T07:57:28Z",
+  "created_at": "2026-10-25T08:01:23Z",
   "source": {
     "document": "paper.tex",
     "file": "paper.tex",
@@ -18,7 +18,7 @@
   "rubric": {
     "name": "classify-test",
     "version": "1",
-    "digest": "sha256:89d969c6d16d1a979248a0b93daa3ec4d02771decf1b78471abc1d44b4a4a371"
+    "digest": "sha256:395ee62bf17759f95d95913f15140f1a0195e1a4b35e8467c1962c41d37e78dc"
   },
   "passes": [
     {

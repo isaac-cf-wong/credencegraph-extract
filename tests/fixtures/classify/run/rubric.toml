@@ -20,13 +20,22 @@ description = "A bibliography entry."
 [types.method]
 description = "What was done: a procedure, simulation or dataset."
 base = "beta:9,1"
-form.kind = { type = "enum", values = ["simulation", "dataset", "procedure"], required = true }
+form.kind = { type = "enum", values = [
+  "simulation",
+  "dataset",
+  "procedure",
+], required = true }
 
 [types.result]
 description = "What was found."
 base = "beta:8,2"
 form.quantity = { type = "verbatim", required = true }
-form.trend = { type = "enum", values = ["vanishes", "increases", "decreases", "bounded"] }
+form.trend = { type = "enum", values = [
+  "vanishes",
+  "increases",
+  "decreases",
+  "bounded",
+] }
 
 [types.derivation]
 description = "A step of mathematics the document carries out."
@@ -41,9 +50,18 @@ form.statement = { type = "verbatim", required = true }
 [types.claim]
 description = "A conclusion the document asserts."
 base = "beta:5,5"
-form.shape = { type = "enum", values = ["universal", "existential", "bound"], required = true }
+form.shape = { type = "enum", values = [
+  "universal",
+  "existential",
+  "bound",
+], required = true }
 form.statement = { type = "verbatim", required = true }
-rests_on = { types = ["result", "method", "derivation", "literature_claim"], min = 1, relation = "requires", strength = "beta:9,1" }
+rests_on = { types = [
+  "result",
+  "method",
+  "derivation",
+  "literature_claim",
+], min = 1, relation = "requires", strength = "beta:9,1" }
 
 [hedges]
 "suggests" = "beta:6,4"
