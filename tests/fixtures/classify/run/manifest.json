@@ -2,7 +2,7 @@
   "format": "credencegraph-extract-run",
   "version": 1,
   "run": "20261025T120000Z-classify",
-  "created_at": "2026-10-25T08:01:23Z",
+  "created_at": "2026-10-25T10:27:34Z",
   "source": {
     "document": "paper.tex",
     "file": "paper.tex",
@@ -11,14 +11,14 @@
   },
   "versions": {
     "python": "3.15.0",
-    "credencegraph": "0.3.1.dev30+g29e9ed5a4",
-    "credencegraph-extract": "0.1.dev3+g88eb00350.d20261025",
+    "credencegraph": "0.4.0",
+    "credencegraph-extract": "0.1.dev5+g6faef2cc5",
     "anthropic": "2.3.0"
   },
   "rubric": {
     "name": "classify-test",
     "version": "1",
-    "digest": "sha256:395ee62bf17759f95d95913f15140f1a0195e1a4b35e8467c1962c41d37e78dc"
+    "digest": "sha256:e3b01c8aaf80f9f29393328c787567e83936592374413cfb84ed03836fd64489"
   },
   "passes": [
     {
@@ -50,7 +50,37 @@
           "sdk_version": "2.3.0"
         }
       ]
+    },
+    {
+      "name": "premises",
+      "template_digest": "sha256:4872cd1bad5a2c31bfa6987e134b45f35ea4ecd4392c935405bae2ddce17623f",
+      "calls": [
+        {
+          "prompt": "prompts/0003.txt",
+          "prompt_digest": "sha256:ae1046adf2f20bbd21bda83642b0acef9e752f424dad4b056bad4097134f2318",
+          "raw": "raw/0003.json",
+          "raw_digest": "sha256:e8b8536d8a183d06e22924bea6900d9ae4b4597460e79fd38d32b4bdcec5a5f1",
+          "provider": "anthropic",
+          "model": "claude-fixture-20261024",
+          "parameters": {
+            "max_tokens": 1024
+          },
+          "sdk_version": "2.3.0"
+        },
+        {
+          "prompt": "prompts/0004.txt",
+          "prompt_digest": "sha256:17c6ce02acfbd152d7a80d814b27c77632994f1327c635fca2620f9f126c407d",
+          "raw": "raw/0004.json",
+          "raw_digest": "sha256:5b6bc3c4ef3e5102ad85ce0c820c38c0ae5898e22799384081827a4ea208f314",
+          "provider": "anthropic",
+          "model": "claude-fixture-20261024",
+          "parameters": {
+            "max_tokens": 1024
+          },
+          "sdk_version": "2.3.0"
+        }
+      ]
     }
   ],
-  "graph_digest": "sha256:5ec3342f568343ba9cc4cb176ef2787fcb88c7ac517ed929f4bb4669d01b55f6"
+  "graph_digest": "sha256:09a7b4dccd626b05c7ac03981d14505c3cf2343f2ea8ec3b325366f51228b7cf"
 }

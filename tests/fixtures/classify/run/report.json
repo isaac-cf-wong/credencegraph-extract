@@ -4,10 +4,10 @@
       "name": "classify-test",
       "version": "1"
     },
-    "nodes": 9,
+    "nodes": 12,
     "by_origin": {
       "document": 9,
-      "analyst": 0,
+      "analyst": 3,
       "evidence": 0
     },
     "by_type": {
@@ -53,6 +53,14 @@
         {
           "node": "s-5",
           "phrase": "We expect"
+        }
+      ]
+    },
+    "premises": {
+      "overflow": [
+        {
+          "conclusion": "s-2b",
+          "statement": "The segments are independent."
         }
       ]
     }

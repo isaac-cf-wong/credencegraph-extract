@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from credencegraph_extract.classify import ClassifyPass
+from credencegraph_extract.premises import PremisePass
 from credencegraph_extract.run import Pass
 
-PASSES: tuple[Pass, ...] = (ClassifyPass(),)
+PASSES: tuple[Pass, ...] = (ClassifyPass(), PremisePass())

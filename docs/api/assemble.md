@@ -1,6 +1,6 @@
 ---
 title: Assembler
-description: Applying classify records through the core's split and annotate.
+description: Applying classify and premise records through the core's edits.
 ---
 
 <!-- prettier-ignore-start -->

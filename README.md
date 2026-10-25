@@ -20,9 +20,9 @@ analyst is a language model. The model never writes graph JSON and never sets a
 credence: it returns records, and everything that turns those records into a
 graph is deterministic code built on credencegraph's public API.
 
-> **Status: experimental.** A run ingests the document and classifies its
-> chunks. The passes that add implicit premises and run checks are not built
-> yet.
+> **Status: experimental.** A run ingests the document, classifies its chunks
+> and adds the implicit premises of its conclusions. The pass that runs checks
+> is not built yet.
 
 ## Installation
 
@@ -156,6 +156,55 @@ before any model call. An assembled graph can be checked independently with
 ```shell
 credencegraph check runs/paper/graph.json --rubric rubric.toml --level typed --rubric-credences
 ```
+
+## Premise pass
+
+After classification, the premise pass asks, for every node whose type is in the
+rubric's `premises.for`: what else must be true for this conclusion to follow
+from what it rests on? It runs in a fresh prompt that holds each conclusion's
+text, the texts of the chunks it already rests on, and the id and text of every
+chunk of the document. It is given nothing else of the classification (no types,
+forms, hedges or reasoning), so its mistakes are not the classify pass's. It
+answers with one **premise record** per conclusion:
+
+```json
+{
+    "conclusion": "s-3",
+    "premises": [
+        { "stated_at": "s-1" },
+        { "statement": "The noise is stationary over the observation." }
+    ]
+}
+```
+
+- `stated_at` names a chunk that states the premise, linked or not by the
+  classify pass. It becomes a `requires` relation from that chunk, with the edge
+  rule's strength.
+- `statement` is a premise the document leaves unsaid. It becomes an **analyst
+  node**: origin `analyst`, type `assumption` (which the rubric must declare for
+  origin `analyst`), no source, base `premises.base`, joined to the conclusion
+  by a `requires` of `premises.strength`.
+
+A conclusion takes at most `premises.max_per_conclusion` analyst premises; the
+statements beyond are not added and are listed in `report.json` under
+`passes.premises.overflow`. Analyst nodes whose statements are identical after
+text normalisation are one node with a `requires` into each of its conclusions,
+so a shared assumption is a common parent rather than independent copies.
+Records are applied whole or not at all, refused ones go to `rejections.json`,
+and the model gets one repair round, as in the classify pass. A rubric without a
+`[premises]` table runs no premise call.
+
+**Analyst node ids.** Analyst nodes are named `a-1`, `a-2`, …: the number counts
+from 1 in the order the nodes are created (conclusions in document order, then
+each record's premises in the order given; the repair round continues the
+count), skipping any id the graph already has. It is not zero-padded, since it
+is assigned before the total is known. `replay` applies the same records in the
+same order, so it gives the same ids.
+
+An analyst node has no source and no inferential parent, so credencegraph's
+`unanchored` diagnostic reports it: these are the assumptions a reviewer should
+look at. As a `requires` premise it can only lower the credence of its
+conclusion.
 
 ## Replay
 

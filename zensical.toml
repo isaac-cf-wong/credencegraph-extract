@@ -51,6 +51,7 @@ nav = [
     { "Provider" = "api/provider.md" },
     { "Runs" = "api/run.md" },
     { "Classify pass" = "api/classify.md" },
+    { "Premise pass" = "api/premises.md" },
     { "Assembler" = "api/assemble.md" },
   ] },
   { "Contributing" = "contributing.md" },

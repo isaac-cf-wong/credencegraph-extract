@@ -31,5 +31,23 @@
       ],
       "hedge": "We expect"
     }
+  },
+  {
+    "pass": "premises",
+    "round": "initial",
+    "node": "s-5",
+    "code": "invalid-argument",
+    "message": "a relation with id 's-4-requires-s-5' already exists",
+    "record": {
+      "conclusion": "s-5",
+      "premises": [
+        {
+          "statement": "The settings of Smith match ours."
+        },
+        {
+          "stated_at": "s-4"
+        }
+      ]
+    }
   }
 ]
