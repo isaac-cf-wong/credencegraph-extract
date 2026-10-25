@@ -394,7 +394,7 @@ def _part_fixes(graph: Graph, rubric: Rubric, part: Any, *, text: str, where: st
 
 
 # An id followed by the label a prompt lists it with, as in "s-2 (result)".
-_LABELLED = re.compile(r"(\S+) \(.*\)")
+_LABELLED = re.compile(r"([^\s(]+)\s*\(.*\)")
 
 
 def unlabelled(value: Any) -> str | None:

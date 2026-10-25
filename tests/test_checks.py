@@ -390,6 +390,36 @@ def test_chunk_ids_written_with_their_labels_are_told_the_ids() -> None:
     assert fix("unknown-node", RECOMPUTE) == "use only chunk ids listed under Chunks"
 
 
+def test_a_refused_unknown_target_does_not_open_the_repair_to_other_targets(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([{**RECOMPUTE, "target": "ghost-99"}], repair=[{**RECOMPUTE, "expected": "350"}]))
+    assert [(item["round"], item["node"], item["code"]) for item in check_rejections(run_dir)] == [
+        ("initial", "ghost-99", "not-a-target"),
+        ("repair", "s-3", "not-rejected"),
+    ]
+    assert checks_of(read_graph(run_dir)) == {}
+
+
+def test_a_labelled_and_an_unknown_target_admit_only_the_labelled_ones_correction(tmp_path: Path) -> None:
+    refused = [{**RECOMPUTE, "target": "s-3 (result)", "expected": "350"}, {**PRODUCT, "target": "ghost-99"}]
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with(refused, repair=[{**RECOMPUTE, "expected": "350"}, PRODUCT]))
+    assert [(item["round"], item["node"], item["code"]) for item in check_rejections(run_dir)][2:] == [
+        ("repair", "e-2", "not-rejected")
+    ]
+    assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3"]
+
+
+@pytest.mark.parametrize("written", ["s-3 (result)", "s-3(result)", "s-3  (result)"])
+def test_a_label_is_recognised_however_it_is_spaced(tmp_path: Path, written: str) -> None:
+    run_dir = tmp_path / "run"
+    make_run(
+        run_dir,
+        bodies_with([{**RECOMPUTE, "target": written, "expected": "350"}], repair=[{**RECOMPUTE, "expected": "350"}]),
+    )
+    assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3"]
+
+
 def test_a_correction_of_a_proposal_that_named_no_target_may_be_on_any_target(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     make_run(run_dir, bodies_with([{"type": "recompute-numbers"}], repair=[{**RECOMPUTE, "expected": "350"}]))

@@ -654,17 +654,18 @@ def directory_digest(files: Mapping[str, bytes]) -> str:
     return bytes_digest(listing.encode("utf-8"))
 
 
-def _corrected(graph: Graph, refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
+def _corrected(refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
     """The targets a repair answer may propose checks on: those of the refused proposals.
 
     A target written with its label, as ``s-2 (result)``, counts as the id it names, so its correction is
-    admitted. When a refused proposal names no node at all, its correction may be on any target: there is
-    no id to hold it to. Returns ``None`` then, for no restriction; duplicates are still refused.
+    admitted. When a refused proposal names no target at all (its target is missing or not a string), its
+    correction may be on any target: there is no id to hold it to. Returns ``None`` then, for no restriction; duplicates are still refused.
     """
-    named = [unlabelled(rejection["node"]) or rejection["node"] for rejection in refused]
-    if not all(isinstance(target, str) and target in graph for target in named):
+    named = [rejection["node"] for rejection in refused]
+    if not all(isinstance(target, str) for target in named):
         return None
-    return set(named)
+    # An unknown name stays in the set as written: it matches no correction, so it opens nothing.
+    return {unlabelled(target) or target for target in named}
 
 
 def _admit(
@@ -760,7 +761,7 @@ class CheckPass:
             rejections = [{"round": INITIAL, **rejection} for rejection in refused]
             if refused:
                 answer = ask(render(graph, rubric, refused), output_schema(rubric))
-                again = _admit(graph, rubric, _proposals(answer), plans, only=_corrected(graph, refused))
+                again = _admit(graph, rubric, _proposals(answer), plans, only=_corrected(refused))
                 rejections.extend({"round": REPAIR, **rejection} for rejection in again)
         order = {node_id: i for i, node_id in enumerate(graph.nodes)}
         plans.sort(key=lambda plan: order[plan.target.id])
