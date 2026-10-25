@@ -1,0 +1,181 @@
+{
+  "pass": "checks",
+  "request": {
+    "provider": "anthropic",
+    "sdk_version": "2.3.0",
+    "model": "claude-fixture-20261024",
+    "parameters": {
+      "max_tokens": 1024
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "recompute-numbers"
+                    ]
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expression": {
+                    "type": "string"
+                  },
+                  "expected": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "type",
+                  "nodes",
+                  "expression",
+                  "expected"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "rederive-maths"
+                    ]
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "lhs": {
+                    "type": "string"
+                  },
+                  "rhs": {
+                    "type": "string"
+                  },
+                  "symbols": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "assumptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "real",
+                              "positive",
+                              "negative",
+                              "nonnegative",
+                              "nonpositive",
+                              "nonzero",
+                              "integer"
+                            ]
+                          }
+                        },
+                        "domain": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "assumptions",
+                        "domain"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "assumption": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "type",
+                  "nodes",
+                  "lhs",
+                  "rhs",
+                  "symbols",
+                  "assumption"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "citation-support"
+                    ]
+                  },
+                  "reference": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "type",
+                  "reference"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "checks"
+      ],
+      "additionalProperties": false
+    },
+    "prompt_digest": "sha256:fa0a40fe70a7f789e8be6ce18a36f18db3beaeaf073a32445bcaa782ed1269f2",
+    "request_id": "req_msg_fixture0002"
+  },
+  "response": {
+    "id": "msg_fixture0002",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-fixture-20261024",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"checks\": [{\"target\": \"s-7\", \"type\": \"citation-support\", \"reference\": \"r-1\"}, {\"target\": \"s-3\", \"type\": \"recompute-numbers\", \"nodes\": [\"s-3\"], \"expression\": \"400 - 400 * 0.125\", \"expected\": \"350\"}, {\"target\": \"s-2\", \"type\": \"recompute-numbers\", \"nodes\": [\"s-1\", \"s-2\"], \"expression\": \"400 * 250\", \"expected\": \"90000\"}, {\"target\": \"e-2\", \"type\": \"rederive-maths\", \"nodes\": [\"e-1\", \"e-2\"], \"lhs\": \"c / N * N\", \"rhs\": \"c\", \"symbols\": [{\"name\": \"c\", \"assumptions\": [\"real\"], \"domain\": [-10, 10]}, {\"name\": \"N\", \"assumptions\": [\"positive\"], \"domain\": [1, 100]}], \"assumption\": \"N is the number of segments, so it is positive.\"}, {\"target\": \"e-3\", \"type\": \"rederive-maths\", \"nodes\": [\"e-3\"], \"lhs\": \"atan(x) + atan(1/x)\", \"rhs\": \"pi/2\", \"symbols\": [{\"name\": \"x\", \"assumptions\": [\"positive\"], \"domain\": [0.01, 100]}], \"assumption\": \"x is positive.\"}, {\"target\": \"s-8\", \"type\": \"citation-support\", \"reference\": \"r-2\"}, {\"target\": \"s-2\", \"type\": \"recompute-numbers\", \"nodes\": [\"s-2\"], \"expression\": \"300 * 300\", \"expected\": \"90000\"}, {\"target\": \"s-1\", \"type\": \"recompute-numbers\", \"nodes\": [\"s-1\"], \"expression\": \"400\", \"expected\": \"400\"}]}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 40,
+      "output_tokens": 12
+    }
+  }
+}

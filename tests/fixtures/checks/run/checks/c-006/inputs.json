@@ -1,0 +1,16 @@
+{
+  "type": "citation-support",
+  "target": "s-7",
+  "artifact": {
+    "kind": "citation",
+    "reference": "r-1",
+    "document": "smith2020.txt",
+    "locator": "chars=88-167",
+    "quote": "In comparable settings the bias stays below 1% for all segment lengths we tried",
+    "digest": "sha256:7e71cf0cfc9dc5a13a3355684a315c82717bd35514e09de8bbf55886b5e7e05a"
+  },
+  "inputs": {
+    "statement": "Smith reports a bias below 1\\% in comparable settings~\\cite{smith2020}.",
+    "source_digest": "sha256:56355fd8168cfea5de305e6935040731fa346ac81451b90b3b51443cfe763693"
+  }
+}

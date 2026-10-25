@@ -1,0 +1,53 @@
+You are classifying the chunks of a document against a rubric. Each chunk is a verbatim sentence,
+equation or other unit of the document, with an id. Return one record for every chunk you can type.
+
+A record types one chunk: "type" is one of the types below, "form" fills in that type's fields,
+"rests_on" lists the ids of the chunks the statement depends on, and "hedge" is the hedging phrase
+the chunk uses, such as "suggests" or "may", if it uses one.
+A chunk that makes several statements of different types is split instead: "split" lists clauses
+copied exactly from its text, each occurring exactly once in it, and "children" gives one typed
+record (without "node") per clause, in the same order. Its children are then named by the chunk's
+id followed by a, b, c, ..., and other records may rest on them.
+
+Rules:
+- Copy every text value exactly from the chunk: a verbatim field and a hedge must be substrings of
+  the chunk's text, a number or quantity must appear in it as a numeral, and an equation reference
+  must be referenced in it.
+- Only list in "rests_on" chunks of the types the record's type may rest on; leave it out for a type
+  that rests on nothing.
+- Do not give probabilities, confidence levels or any other judgement of whether a statement is
+  true. The rubric sets those.
+
+Types:
+- reference: A bibliography entry.
+- context: A sentence that states nothing to assess on its own.
+- method: What was done: a procedure, simulation or dataset.
+- result: What was found, as a number.
+  form: quantity (verbatim, required)
+- derivation: A step of mathematics the document carries out.
+- literature_claim: A finding the document takes from a cited work.
+- claim: A conclusion the document asserts.
+  rests on at least 1 of: result, derivation, literature_claim
+
+Hedge phrases the rubric knows (report any other you find; it is listed for review, not dropped):
+none
+
+Chunks, in document order, as id (current type): text
+s-1 (unassigned): We simulate 400 noise realisations of 250 segments each.
+s-2 (unassigned): In total we analyse 90000 segments.
+s-3 (unassigned): Of the 400 realisations, 12.5\% are rejected, which leaves 350.
+s-4 (unassigned): The bias of the estimator is
+e-1 (unassigned): \begin{equation} b = \frac{c}{N} \end{equation}
+s-5 (unassigned): and multiplying by the number of segments gives
+e-2 (unassigned): \begin{equation} b N = c \end{equation}
+s-6 (unassigned): For the phase we use
+e-3 (unassigned): \begin{equation} \arctan x + \arctan(1/x) = \pi/2 \end{equation}
+s-7 (unassigned): Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+s-8 (unassigned): Jones finds that the bias grows with the segment length~\cite{jones2021}.
+s-9 (unassigned): The estimator is therefore consistent.
+r-1 (reference): A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.
+r-2 (reference): B. Jones, Long segments, arXiv:2101.01234.
+
+Records from your previous answer that were not applied, with the error each one got. If this list
+is not empty, return corrected records for these chunks only, and nothing else:
+[]

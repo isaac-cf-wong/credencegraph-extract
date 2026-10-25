@@ -1,0 +1,4 @@
+rederive-maths-numeric on e-3: passed
+the sides agree to rtol 1E-12 at all 32 points
+tool: {"name": "credencegraph-extract", "python": "3.15.0", "sympy": "1.14.0", "version": "0.1.dev7+g70142a561.d20261025"}
+model: null

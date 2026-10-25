@@ -1,0 +1,106 @@
+{
+  "coverage": {
+    "rubric": {
+      "name": "checks-test",
+      "version": "1"
+    },
+    "nodes": 21,
+    "by_origin": {
+      "document": 14,
+      "analyst": 0,
+      "evidence": 7
+    },
+    "by_type": {
+      "method": {
+        "count": 1,
+        "share": 0.07142857142857142
+      },
+      "result": {
+        "count": 2,
+        "share": 0.14285714285714285
+      },
+      "context": {
+        "count": 3,
+        "share": 0.21428571428571427
+      },
+      "derivation": {
+        "count": 3,
+        "share": 0.21428571428571427
+      },
+      "literature_claim": {
+        "count": 2,
+        "share": 0.14285714285714285
+      },
+      "claim": {
+        "count": 1,
+        "share": 0.07142857142857142
+      },
+      "reference": {
+        "count": 2,
+        "share": 0.14285714285714285
+      }
+    },
+    "untyped": [],
+    "unexamined": [],
+    "not_assessed": {
+      "count": 2,
+      "reasons": {
+        "e-1": "not selected",
+        "s-9": "no v1 check applies"
+      }
+    }
+  },
+  "passes": {
+    "classify": {
+      "hedge-unmapped": []
+    },
+    "premises": {},
+    "checks": {
+      "checks": [
+        {
+          "id": "c-001",
+          "type": "recompute-numbers",
+          "target": "s-2",
+          "result": "failed"
+        },
+        {
+          "id": "c-002",
+          "type": "recompute-numbers",
+          "target": "s-3",
+          "result": "passed"
+        },
+        {
+          "id": "c-003",
+          "type": "rederive-maths",
+          "target": "e-2",
+          "result": "passed"
+        },
+        {
+          "id": "c-004",
+          "type": "rederive-maths",
+          "target": "e-3",
+          "result": "error"
+        },
+        {
+          "id": "c-005",
+          "type": "rederive-maths-numeric",
+          "target": "e-3",
+          "result": "passed"
+        },
+        {
+          "id": "c-006",
+          "type": "citation-support",
+          "target": "s-7",
+          "result": "passed"
+        },
+        {
+          "id": "c-007",
+          "type": "citation-support",
+          "target": "s-8",
+          "result": "error"
+        }
+      ],
+      "uncalibrated": []
+    }
+  }
+}

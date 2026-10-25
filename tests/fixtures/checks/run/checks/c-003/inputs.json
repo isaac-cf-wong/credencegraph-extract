@@ -1,0 +1,42 @@
+{
+  "type": "rederive-maths",
+  "target": "e-2",
+  "artifact": {
+    "kind": "equation",
+    "nodes": [
+      "e-1",
+      "e-2"
+    ],
+    "labels": [
+      "eq:bias",
+      "eq:product"
+    ]
+  },
+  "inputs": {
+    "lhs": "c / N * N",
+    "rhs": "c",
+    "symbols": [
+      {
+        "name": "c",
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          -10,
+          10
+        ]
+      },
+      {
+        "name": "N",
+        "assumptions": [
+          "positive"
+        ],
+        "domain": [
+          1,
+          100
+        ]
+      }
+    ],
+    "assumption": "N is the number of segments, so it is positive."
+  }
+}

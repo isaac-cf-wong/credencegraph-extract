@@ -1,0 +1,15 @@
+{
+  "type": "recompute-numbers",
+  "target": "s-2",
+  "artifact": {
+    "kind": "numbers",
+    "nodes": [
+      "s-1",
+      "s-2"
+    ]
+  },
+  "inputs": {
+    "expression": "400 * 250",
+    "expected": "90000"
+  }
+}

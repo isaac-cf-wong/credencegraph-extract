@@ -1,0 +1,4 @@
+{
+  "result": "error",
+  "detail": "sympy cannot decide whether atan(1/x) + atan(x) - pi/2 is 0"
+}

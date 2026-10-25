@@ -1,0 +1,152 @@
+{
+  "pass": "classify",
+  "request": {
+    "provider": "anthropic",
+    "sdk_version": "2.3.0",
+    "model": "claude-fixture-20261024",
+    "parameters": {
+      "max_tokens": 1024
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "reference",
+                      "context",
+                      "method",
+                      "result",
+                      "derivation",
+                      "literature_claim",
+                      "claim"
+                    ]
+                  },
+                  "form": {
+                    "type": "object",
+                    "properties": {
+                      "quantity": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "rests_on": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "hedge": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "split": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "children": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "reference",
+                            "context",
+                            "method",
+                            "result",
+                            "derivation",
+                            "literature_claim",
+                            "claim"
+                          ]
+                        },
+                        "form": {
+                          "type": "object",
+                          "properties": {
+                            "quantity": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "rests_on": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "hedge": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "node",
+                  "split",
+                  "children"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "prompt_digest": "sha256:92377c6bd8702e721524d6c7e75e379e1b50a028fc6a9dac9da5fd09ff68b229",
+    "request_id": "req_msg_fixture0001"
+  },
+  "response": {
+    "id": "msg_fixture0001",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-fixture-20261024",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"records\": [{\"node\": \"s-1\", \"type\": \"method\"}, {\"node\": \"s-2\", \"type\": \"result\", \"form\": {\"quantity\": \"segments\"}}, {\"node\": \"s-3\", \"type\": \"result\", \"form\": {\"quantity\": \"realisations\"}}, {\"node\": \"s-4\", \"type\": \"context\"}, {\"node\": \"e-1\", \"type\": \"derivation\"}, {\"node\": \"s-5\", \"type\": \"context\"}, {\"node\": \"e-2\", \"type\": \"derivation\"}, {\"node\": \"s-6\", \"type\": \"context\"}, {\"node\": \"e-3\", \"type\": \"derivation\"}, {\"node\": \"s-7\", \"type\": \"literature_claim\"}, {\"node\": \"s-8\", \"type\": \"literature_claim\"}, {\"node\": \"s-9\", \"type\": \"claim\", \"rests_on\": [\"s-3\", \"e-2\"]}]}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 40,
+      "output_tokens": 12
+    }
+  }
+}

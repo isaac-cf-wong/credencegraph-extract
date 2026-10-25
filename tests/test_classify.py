@@ -39,7 +39,7 @@ def read_json(path: Path) -> Any:
 
 
 def test_the_pipeline_runs_the_classify_pass_first() -> None:
-    assert [item.name for item in PASSES] == ["classify", "premises"]
+    assert [item.name for item in PASSES] == ["classify", "premises", "checks"]
 
 
 def test_the_fixture_paper_passes_the_typed_check_with_rubric_credences(tmp_path: Path) -> None:
@@ -83,6 +83,7 @@ def test_the_run_reproduces_the_recorded_fixture(tmp_path: Path) -> None:
         "prompts/0004.txt",
         "prompts/classify.template.txt",
         "prompts/premises.template.txt",
+        "prompts/checks.template.txt",
     ):
         assert (run_dir / name).read_bytes() == (RUN / name).read_bytes(), name
 

@@ -1,0 +1,25 @@
+\documentclass{article}
+\begin{document}
+We simulate 400 noise realisations of 250 segments each.
+In total we analyse 90000 segments.
+Of the 400 realisations, 12.5\% are rejected, which leaves 350.
+The bias of the estimator is
+\begin{equation}
+  b = \frac{c}{N} \label{eq:bias}
+\end{equation}
+and multiplying by the number of segments gives
+\begin{equation}
+  b N = c \label{eq:product}
+\end{equation}
+For the phase we use
+\begin{equation}
+  \arctan x + \arctan(1/x) = \pi/2 \label{eq:phase}
+\end{equation}
+Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+Jones finds that the bias grows with the segment length~\cite{jones2021}.
+The estimator is therefore consistent.
+\begin{thebibliography}{2}
+\bibitem{smith2020} A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.
+\bibitem{jones2021} B. Jones, Long segments, arXiv:2101.01234.
+\end{thebibliography}
+\end{document}

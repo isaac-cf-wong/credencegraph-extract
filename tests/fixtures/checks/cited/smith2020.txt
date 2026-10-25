@@ -1,0 +1,5 @@
+Estimators of noise. A. Smith.
+
+We study estimators of the noise power spectral density. In comparable
+settings the bias stays below 1% for all segment lengths we tried, and it
+decreases as the number of averaged segments grows.

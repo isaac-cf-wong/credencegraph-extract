@@ -1,0 +1,32 @@
+You are classifying the chunks of a document against a rubric. Each chunk is a verbatim sentence,
+equation or other unit of the document, with an id. Return one record for every chunk you can type.
+
+A record types one chunk: "type" is one of the types below, "form" fills in that type's fields,
+"rests_on" lists the ids of the chunks the statement depends on, and "hedge" is the hedging phrase
+the chunk uses, such as "suggests" or "may", if it uses one.
+A chunk that makes several statements of different types is split instead: "split" lists clauses
+copied exactly from its text, each occurring exactly once in it, and "children" gives one typed
+record (without "node") per clause, in the same order. Its children are then named by the chunk's
+id followed by a, b, c, ..., and other records may rest on them.
+
+Rules:
+- Copy every text value exactly from the chunk: a verbatim field and a hedge must be substrings of
+  the chunk's text, a number or quantity must appear in it as a numeral, and an equation reference
+  must be referenced in it.
+- Only list in "rests_on" chunks of the types the record's type may rest on; leave it out for a type
+  that rests on nothing.
+- Do not give probabilities, confidence levels or any other judgement of whether a statement is
+  true. The rubric sets those.
+
+Types:
+$types
+
+Hedge phrases the rubric knows (report any other you find; it is listed for review, not dropped):
+$hedges
+
+Chunks, in document order, as id (current type): text
+$chunks
+
+Records from your previous answer that were not applied, with the error each one got. If this list
+is not empty, return corrected records for these chunks only, and nothing else:
+$rejected
