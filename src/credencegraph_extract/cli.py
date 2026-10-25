@@ -22,10 +22,10 @@ from typing import Any
 
 import anthropic
 
-from credencegraph_extract import cited, provider
+from credencegraph_extract import cited, provider, session
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.pipeline import passes
-from credencegraph_extract.run import GRAPH, RunError, read_manifest, read_run_file, replay, run_extraction
+from credencegraph_extract.run import GRAPH, MANIFEST, RunError, read_manifest, read_run_file, replay, run_extraction
 from credencegraph_extract.verify import plain, rubric_reuse, verify_run
 
 DEFAULT_MAX_TOKENS = 16000
@@ -69,6 +69,11 @@ def _parser() -> argparse.ArgumentParser:
     rerun.add_argument("--source", type=Path, help="The source document, for a run that did not store it.")
     rerun.add_argument("--output", type=Path, help="Also write the rebuilt graph to this file.")
     rerun.add_argument("--cited", type=Path, help="The directory of cited works the run read.")
+    rerun.add_argument(
+        "--sources",
+        type=Path,
+        help="For an agent-tool run: the fetched sources it did not store, as files named by their digest.",
+    )
 
     check = commands.add_parser(
         "verify", help="Run each run's deterministic checks again and compare them with their records."
@@ -77,8 +82,38 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _format_version(run_dir: Path) -> Any:
+    """The format version a run directory's manifest names, or ``None`` when it cannot be read."""
+    try:
+        return json.loads((run_dir / MANIFEST).read_bytes()).get("version")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _replay_tools(args: argparse.Namespace) -> int:
+    """Replay an agent-tool run's call log; 0 if the graph it leads to is byte-identical, 1 if it differs."""
+    rebuilt = session.replay(args.run_dir, source=args.source, sources=args.sources)
+    recorded = session.recorded_graph(args.run_dir)
+    if args.output:
+        try:
+            args.output.write_bytes(rebuilt)
+        except OSError as error:
+            raise RunError("io-error", f"cannot write {str(args.output)!r}: {error.strerror or error}") from None
+    calls = len(session.read_calls(args.run_dir))
+    if rebuilt == recorded:
+        print(f"replayed {args.run_dir}: the graph after {calls} calls is byte-identical ({bytes_digest(rebuilt)})")
+        return 0
+    print(
+        f"replayed {args.run_dir}: the graph after {calls} calls differs: "
+        f"recorded {bytes_digest(recorded)}, rebuilt {bytes_digest(rebuilt)}"
+    )
+    return 1
+
+
 def _replay(args: argparse.Namespace) -> int:
     """Replay a run and report whether its graph is byte-identical; 0 if it is, 1 if it differs."""
+    if _format_version(args.run_dir) == session.VERSION:
+        return _replay_tools(args)
     resolve = cited.directory(args.cited) if args.cited else cited.no_sources
     rebuilt = replay(args.run_dir, passes=passes(cited=resolve, allow_uncalibrated=True), source=args.source)
     recorded = read_manifest(args.run_dir)["graph_digest"]
