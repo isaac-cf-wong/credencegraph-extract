@@ -302,13 +302,16 @@ runs every deterministic check of each run again — `recompute-numbers`,
 `graph.json` holds, with the code installed now, and prints each field of a
 check record the re-run does not reproduce: the result, the detail, the inputs
 (a numeric check draws its points again from its seed), and the digest of the
-check's files. It also compares the files in `checks/c-NNN/` with that digest.
-Recorded inputs are checked again as the run checked the proposal, so an operand
-the document's text does not contain makes the re-run an `error`. Citation
-checks are judged by a model and are not run again; `replay` answers them from
-their recorded responses. `verify` needs neither the source nor the network, and
-refuses a run whose `graph.json` or `rubric.toml` differs from the manifest's
-digest.
+check's files. It also compares the files in `checks/c-NNN/` with that digest,
+and every check record, citation checks included, with the `inputs.json` and
+`output.json` its check wrote, so a record edited after the run is reported even
+where its files were left alone. A check of a type the runner does not have is
+reported too. Recorded inputs are checked again as the run checked the proposal,
+so an operand the document's text does not contain makes the re-run an `error`.
+Citation checks are judged by a model and are not run again; `replay` answers
+them from their recorded responses. `verify` needs neither the source nor the
+network, and refuses a run whose `graph.json` or `rubric.toml` differs from the
+manifest's digest.
 
 A rubric's `version` names its values. When the runs given record one rubric
 name and version with different file digests, `verify` prints a `warning:` line

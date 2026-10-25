@@ -74,9 +74,8 @@ def test_a_recorded_result_the_rerun_does_not_give_is_reported(run_dir: Path) ->
 
     edit_check(run_dir, "c-002", flip)
     found = verify_run(run_dir)
-    assert fields(found, "c-002") == ["result"]
-    (difference,) = found.differences
-    assert (difference.recorded, difference.found) == ("failed", "passed")
+    assert fields(found, "c-002") == ["result", "result (output.json)"]
+    assert [(d.recorded, d.found) for d in found.differences] == [("failed", "passed"), ("failed", "passed")]
 
 
 def test_a_changed_input_changes_the_result_detail_and_log(run_dir: Path) -> None:
@@ -86,7 +85,7 @@ def test_a_changed_input_changes_the_result_detail_and_log(run_dir: Path) -> Non
 
     edit_check(run_dir, "c-002", change)
     found = verify_run(run_dir)
-    assert fields(found, "c-002") == ["result", "detail", "log"]
+    assert fields(found, "c-002") == ["result", "detail", "log", "inputs (inputs.json)"]
     assert found.differences[0].found == "failed"
 
 
@@ -134,6 +133,44 @@ def test_check_files_that_differ_from_the_record_are_reported(run_dir: Path) -> 
     found = verify_run(run_dir)
     assert [(d.check, d.field) for d in found.differences] == [("c-001", "files"), ("c-006", "files")]
     assert found.differences[1].found is None
+
+
+def test_a_check_retyped_as_a_citation_is_not_skipped(run_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Rewriting the type would otherwise move a deterministic check out of the re-run, and its files still
+    # match the record's log digest.
+    def retype(record: dict[str, Any]) -> None:
+        record["type"] = "citation-support"
+        record["result"] = "failed"
+
+    edit_check(run_dir, "c-002", retype)
+    found = verify_run(run_dir)
+    assert "c-002" in found.not_rerun
+    assert fields(found, "c-002") == ["type (inputs.json)", "result (output.json)"]
+    assert main(["verify", str(run_dir)]) == 1
+
+
+def test_a_check_of_a_type_the_runner_does_not_have_is_reported(run_dir: Path) -> None:
+    def retype(record: dict[str, Any]) -> None:
+        record["type"] = "rerun-code"
+
+    edit_check(run_dir, "c-002", retype)
+    found = verify_run(run_dir)
+    assert "c-002" not in found.rerun + found.not_rerun
+    assert fields(found, "c-002") == ["type", "type (inputs.json)"]
+    assert found.differences[0].found.startswith("one of ['recompute-numbers'")
+
+
+def test_an_edited_citation_record_is_reported(run_dir: Path) -> None:
+    def edit(record: dict[str, Any]) -> None:
+        record["artifact"]["quote"] = "The bias is always zero."
+
+    edit_check(run_dir, "c-006", edit)
+    assert fields(verify_run(run_dir), "c-006") == ["artifact (inputs.json)"]
+
+
+def test_check_files_that_are_not_json_are_reported(run_dir: Path) -> None:
+    (run_dir / "checks" / "c-001" / "output.json").write_text("{", encoding="utf-8")
+    assert fields(verify_run(run_dir), "c-001") == ["files", "inputs.json and output.json"]
 
 
 def test_a_graph_that_differs_from_the_manifest_is_refused(run_dir: Path) -> None:
@@ -209,6 +246,7 @@ def test_the_command_exits_1_and_names_each_difference(run_dir: Path, capsys: py
     assert main(["verify", str(run_dir)]) == 1
     assert capsys.readouterr().out.splitlines() == [
         f'{run_dir}: c-002: result differs: recorded "failed", verified "passed"',
+        f'{run_dir}: c-002: result (output.json) differs: recorded "failed", verified "passed"',
         f"verified {run_dir}: 5 checks run again, 1 differ; 2 model-judged checks not run again",
     ]
 

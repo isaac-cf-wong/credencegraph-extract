@@ -5,7 +5,8 @@ one by one, from the run directory alone, without the source. Each ``recompute-n
 ``rederive-maths`` and ``rederive-maths-numeric`` check of the graph is run again from the inputs its
 record holds, and any field of the record the re-run does not reproduce is reported: a result, a
 detail, the digest of the check's files. The files in ``checks/c-NNN/`` are compared with the digest
-the record holds. Citation checks are judged by a model, so they are not run again: ``replay``
+the record holds, and every check record, citation checks included, with the ``inputs.json`` and
+``output.json`` its check wrote; a check of a type the runner does not have is reported. Citation checks are judged by a model, so they are not run again: ``replay``
 answers them from their recorded responses.
 
 A rubric's ``version`` names its values, so two runs that record one rubric name and version with
@@ -15,6 +16,7 @@ each such name and version.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,7 +25,17 @@ from typing import Any
 from credencegraph.core import CredenceGraphError, Graph, loads
 from credencegraph.rubric import Rubric, RubricError, loads_rubric
 
-from credencegraph_extract.checks import DETERMINISTIC, INPUTS, LOG, OUTPUT, directory_digest, plain, rerun
+from credencegraph_extract.checks import (
+    CITATION,
+    DETERMINISTIC,
+    IMPLEMENTED,
+    INPUTS,
+    LOG,
+    OUTPUT,
+    directory_digest,
+    plain,
+    rerun,
+)
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.run import CHECKS, GRAPH, RUBRIC, RunError, read_manifest, read_run_file
 
@@ -60,13 +72,32 @@ class Verification:
     differences: tuple[Difference, ...]
 
 
-def _files_digest(run_dir: Path, check_id: str) -> str | None:
-    """The digest of the files in a check's directory, or ``None`` when one cannot be read."""
+def _files(run_dir: Path, check_id: str) -> dict[str, bytes] | None:
+    """The files of a check's directory by name, or ``None`` when one cannot be read."""
     try:
-        files = {name: (run_dir / CHECKS / check_id / name).read_bytes() for name in (INPUTS, OUTPUT, LOG)}
+        return {name: (run_dir / CHECKS / check_id / name).read_bytes() for name in (INPUTS, OUTPUT, LOG)}
     except OSError:
         return None
-    return directory_digest(files)
+
+
+def _file_differences(check_id: str, recorded: Mapping[str, Any], files: Mapping[str, bytes]) -> list[Difference]:
+    """The fields of a check record that differ from what its ``inputs.json`` and ``output.json`` say.
+
+    A record whose fields were edited after the run disagrees with the files the check wrote, even when the
+    files themselves still match the record's log digest.
+    """
+    try:
+        written = {INPUTS: json.loads(files[INPUTS]), OUTPUT: json.loads(files[OUTPUT])}
+    except ValueError:
+        return [Difference(check_id, f"{INPUTS} and {OUTPUT}", "JSON", "not JSON")]
+    fields = {INPUTS: ("type", "target", "artifact", "inputs"), OUTPUT: ("result", "detail")}
+    return [
+        Difference(check_id, f"{key} ({name})", recorded.get(key), written[name].get(key))
+        for name, keys in fields.items()
+        if isinstance(written[name], dict)
+        for key in keys
+        if plain(recorded.get(key)) != plain(written[name].get(key))
+    ]
 
 
 def verify_run(run_dir: Path) -> Verification:
@@ -101,8 +132,11 @@ def verify_run(run_dir: Path) -> Verification:
         recorded = node.attributes.get("check")
         if not isinstance(recorded, Mapping):
             continue
-        if recorded.get("type") not in DETERMINISTIC:
+        kind = recorded.get("type")
+        if kind == CITATION:
             not_rerun.append(node.id)
+        elif kind not in DETERMINISTIC:
+            differences.append(Difference(node.id, "type", kind, f"one of {list(IMPLEMENTED)}"))
         else:
             rerun_ids.append(node.id)
             found, _ = rerun(graph, rubric, node)
@@ -113,9 +147,12 @@ def verify_run(run_dir: Path) -> Verification:
             )
         log = recorded.get("log")
         digest = log.get("digest") if isinstance(log, Mapping) else None
-        on_disk = _files_digest(run_dir, node.id)
+        files = _files(run_dir, node.id)
+        on_disk = directory_digest(files) if files is not None else None
         if on_disk != digest:
             differences.append(Difference(node.id, "files", digest, on_disk))
+        if files is not None:
+            differences.extend(_file_differences(node.id, recorded, files))
     return Verification(tuple(rerun_ids), tuple(not_rerun), tuple(differences))
 
 
