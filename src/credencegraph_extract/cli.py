@@ -10,6 +10,7 @@ recorded one, and 2 on any error, reported as one line on stderr.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Mapping, Sequence
 from functools import partial
@@ -32,6 +33,19 @@ def _no_model(prompt: str, schema: Mapping[str, Any]) -> dict[str, Any]:
     raise RunError("missing-model", "a pass needs the model: pass --model with the exact dated model id")
 
 
+def _options(text: str) -> dict[str, Any]:
+    """Read ``--request-options``: a JSON object."""
+    try:
+        value = json.loads(text)
+    except ValueError as error:
+        msg = f"not JSON: {error}"
+        raise argparse.ArgumentTypeError(msg) from None
+    if not isinstance(value, dict):
+        msg = "not a JSON object"
+        raise argparse.ArgumentTypeError(msg)
+    return value
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="credencegraph-extract", description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -51,6 +65,11 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--base-url",
         help="The endpoint of a server that speaks the provider's API; the provider SDK's default by default.",
+    )
+    run.add_argument(
+        "--request-options",
+        type=_options,
+        help="Further fields of every request body, as a JSON object, such as '{\"thinking_budget\": 4000}'.",
     )
     run.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS, help="The output token limit per call.")
     run.add_argument(
@@ -104,10 +123,15 @@ def _run(args: argparse.Namespace) -> int:
             max_tokens=args.max_tokens,
             provider=args.provider,
             base_url=args.base_url,
+            options=args.request_options,
         )
         if args.model
         else _no_model
     )
+    try:
+        provider.check_options(args.provider, args.request_options or {})
+    except ValueError as error:
+        raise RunError("invalid-argument", str(error)) from None
     if args.fetch_arxiv and not args.cited:
         raise RunError("invalid-argument", "--fetch-arxiv needs --cited, the directory to download into")
     resolve = cited.directory(args.cited, fetch_arxiv=args.fetch_arxiv) if args.cited else cited.no_sources

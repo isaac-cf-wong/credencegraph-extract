@@ -62,9 +62,13 @@ for a JSON answer under the pass's schema: as `output_config` with `anthropic`,
 as a `json_schema` response format with `openai`. A server that ignores the
 schema still has every answer checked by the pass that reads it. The output
 token limit is sent to an OpenAI-compatible endpoint as `max_completion_tokens`.
-A call's request id is the one the provider's request-id header gives; a server
-that sends no such header gets the `id` its response body gives itself recorded
-instead.
+`--request-options` adds fields of the server's own to every request body, as a
+JSON object: `'{"thinking_budget": 4000}'` caps the reasoning of a thinking
+model on a server that supports it, and `'{"enable_thinking": false}'` turns it
+off on some. The options are recorded with each call's parameters; they may not
+set a field the call sets itself. A call's request id is the one the provider's
+request-id header gives; a server that sends no such header gets the `id` its
+response body gives itself recorded instead.
 
 The run writes a **run directory**:
 

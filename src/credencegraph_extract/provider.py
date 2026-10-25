@@ -37,11 +37,36 @@ PROVIDERS = (ANTHROPIC, OPENAI)
 # The name an OpenAI response format gives its schema.
 SCHEMA_NAME = "output"
 
+# The body fields each call sets itself, which request options may not override.
+_SET_BY_CALL = {
+    ANTHROPIC: frozenset({"model", "max_tokens", "messages", "output_config"}),
+    OPENAI: frozenset({"model", "max_completion_tokens", "messages", "response_format"}),
+}
+
 _NO_CREDENTIALS = "no API key: set {variable}; a server that checks none still needs some value there"
 
 
 class ProviderError(Exception):
     """A response carries no structured output: it is malformed, the model refused or ran out of tokens, or it is not JSON."""
+
+
+def check_options(provider: str, options: Mapping[str, Any]) -> None:
+    """Refuse an unknown provider, or request options that set a field a call to it sets itself.
+
+    Args:
+        provider: The provider.
+        options: The request options.
+
+    Raises:
+        ValueError: If ``provider`` is not one of ``PROVIDERS``, or ``options`` sets such a field.
+    """
+    if provider not in PROVIDERS:
+        msg = f"unknown provider {provider!r}: not one of {list(PROVIDERS)}"
+        raise ValueError(msg)
+    taken = sorted(set(options) & _SET_BY_CALL[provider])
+    if taken:
+        msg = f"request options may not set {taken}: the call sets them"
+        raise ValueError(msg)
 
 
 def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
@@ -52,6 +77,7 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
     max_tokens: int,
     provider: str = ANTHROPIC,
     base_url: str | None = None,
+    options: Mapping[str, Any] | None = None,
     client: Any = None,
 ) -> dict[str, Any]:
     """Send one prompt and return the record of the call.
@@ -64,6 +90,9 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
             ``max_completion_tokens``.
         provider: ``anthropic`` or ``openai``: the wire format, and the SDK that speaks it.
         base_url: The endpoint of a server that speaks it; the SDK's default by default.
+        options: Further fields of the request body, for what a server accepts beyond the API, such as
+            ``{"thinking_budget": 4000}``; recorded with the sampling parameters. They may not set a
+            field the call sets itself.
         client: The client to send with; one of the provider's SDK, built from ``base_url`` and the
             environment's credentials, by default.
 
@@ -74,9 +103,12 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
         from a server that sends none, it is the ``id`` the response body gives itself.
 
     Raises:
-        ValueError: If ``provider`` is not one of ``PROVIDERS``.
+        ValueError: If ``provider`` is not one of ``PROVIDERS``, or ``options`` sets a field the call sets.
         ProviderError: If no client is given and the environment has no credentials for the provider.
     """
+    options = dict(options or {})
+    check_options(provider, options)
+    extra = {"extra_body": options} if options else {}
     if provider == ANTHROPIC:
         if client is None:
             client = anthropic.Anthropic(base_url=base_url)
@@ -89,9 +121,10 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
             output_config={"format": {"type": "json_schema", "schema": dict(schema)}},
+            **extra,
         )
         response = raw.json()
-    elif provider == OPENAI:
+    else:
         if client is None:
             try:
                 client = openai.OpenAI(base_url=base_url)
@@ -103,17 +136,15 @@ def call(  # noqa: PLR0913 - each argument is a separate choice of the caller
             max_completion_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_schema", "json_schema": {"name": SCHEMA_NAME, "schema": dict(schema)}},
+            **extra,
         )
         response = json.loads(raw.text)
-    else:
-        msg = f"unknown provider {provider!r}: not one of {list(PROVIDERS)}"
-        raise ValueError(msg)
     request = {
         "provider": provider,
         "sdk_version": sdk_version,
         "base_url": str(client.base_url),
         "model": model,
-        "parameters": {"max_tokens": max_tokens},
+        "parameters": {"max_tokens": max_tokens, **({"options": options} if options else {})},
         "output_schema": dict(schema),
         "prompt_digest": bytes_digest(prompt.encode("utf-8")),
         # A server that sends no request-id header still names its response; that name stands in.

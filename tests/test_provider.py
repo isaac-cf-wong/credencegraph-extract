@@ -210,3 +210,34 @@ def test_a_missing_api_key_is_a_provider_error(name: str, variable: str, monkeyp
         monkeypatch.delenv(unset, raising=False)
     with pytest.raises(provider.ProviderError, match=f"no API key: set {variable}"):
         provider.call("p", SCHEMA, model=MODEL, max_tokens=8, provider=name, base_url="http://127.0.0.1:9")
+
+
+@pytest.mark.parametrize(
+    ("name", "make", "body"),
+    [
+        ("anthropic", fake_client, message(1, "{}")),
+        ("openai", fake_openai_client, completion(1, "{}")),
+    ],
+)
+def test_request_options_are_sent_in_the_body_and_recorded(name: str, make: Any, body: dict) -> None:
+    client = make([body])
+    options = {"thinking_budget": 4000, "chat_template_kwargs": {"enable_thinking": True}}
+    record = provider.call("p", SCHEMA, model=MODEL, max_tokens=8, provider=name, options=options, client=client)
+    assert client.sent[0]["extra_body"] == options
+    assert record["request"]["parameters"] == {"max_tokens": 8, "options": options}
+
+
+def test_without_request_options_neither_body_nor_record_changes() -> None:
+    client = fake_openai_client([completion(1, "{}")])
+    record = provider.call("p", SCHEMA, model=MODEL, max_tokens=8, provider="openai", options={}, client=client)
+    assert "extra_body" not in client.sent[0]
+    assert record["request"]["parameters"] == {"max_tokens": 8}
+
+
+@pytest.mark.parametrize(
+    ("name", "field"),
+    [("anthropic", "output_config"), ("anthropic", "model"), ("openai", "response_format"), ("openai", "messages")],
+)
+def test_request_options_may_not_set_a_field_the_call_sets(name: str, field: str) -> None:
+    with pytest.raises(ValueError, match=f"request options may not set \\['{field}'\\]"):
+        provider.call("p", SCHEMA, model=MODEL, max_tokens=8, provider=name, options={field: 1}, client=object())

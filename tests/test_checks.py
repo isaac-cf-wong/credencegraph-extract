@@ -604,6 +604,40 @@ def test_the_command_sends_to_the_provider_and_endpoint_given(tmp_path: Path, mo
     assert {(item["provider"], item["base_url"]) for item in sent} == {("openai", "http://localhost:8000/v1")}
 
 
+def test_the_command_sends_and_records_the_request_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = fake_client(BODIES)
+    monkeypatch.setattr(provider.anthropic, "Anthropic", lambda base_url: client)
+    run_dir = tmp_path / "run"
+    args = ["run", str(PAPER), str(run_dir), "--rubric", str(RUBRIC), "--model", MODEL, "--cited", str(CITED)]
+    assert main([*args, "--request-options", '{"thinking_budget": 4000}']) == 0
+    assert {json.dumps(sent["extra_body"]) for sent in client.sent} == {'{"thinking_budget": 4000}'}
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    calls = [call for entry in manifest["passes"] for call in entry["calls"]]
+    assert calls
+    assert all(call["parameters"]["options"] == {"thinking_budget": 4000} for call in calls)
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        ('{"messages": []}', "error [invalid-argument]: request options may not set ['messages']"),
+        ("[1]", "--request-options: not a JSON object"),
+        ("{", "--request-options: not JSON"),
+    ],
+)
+def test_the_command_refuses_bad_request_options_before_it_runs(
+    options: str, message: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["run", str(PAPER), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL]
+    try:
+        status = main([*args, "--request-options", options])
+    except SystemExit as exit_:
+        status = exit_.code
+    assert status == 2
+    assert message in capsys.readouterr().err
+    assert not (tmp_path / "run").exists()
+
+
 @pytest.mark.parametrize("name", ["anthropic", "openai"])
 def test_the_command_reports_a_missing_api_key_in_one_line(
     name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
