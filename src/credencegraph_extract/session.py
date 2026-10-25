@@ -381,11 +381,16 @@ def _apply(context: Context, state: State, call: Mapping[str, Any]) -> tuple[Sta
 
 
 def _rebuild(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls: list[dict[str, Any]]) -> State:
-    """The state the log leads to, from the ingested graph."""
+    """The state the log leads to, from the ingested graph, each call checked against its log line.
+
+    A log whose calls no longer give the results and graphs their lines record (edited by hand) is
+    refused rather than adopted.
+    """
     state = State(_graph(_read(run_dir, INGESTED), INGESTED))
     for call in calls[1:]:
         context = Context(run_dir, manifest["run"], rubric, call["seq"])
-        state, _ = _apply(context, state, call)
+        state, result = _apply(context, state, call)
+        _check_digests(call, state, result)
     return state
 
 
@@ -481,7 +486,9 @@ def write(  # noqa: PLR0913 - the call and who makes it
         calls = read_calls(run_dir)
         state = _reconcile(run_dir, manifest, rubric, calls)
         seq = len(calls) + 1
-        call = {"seq": seq, "tool": tool, "args": dict(args), **identity}
+        # The call is applied to its arguments as the log will hold them, so a replay, which reads them
+        # back from the log, gives the same result whatever order the agent wrote their keys in.
+        call = {"seq": seq, "tool": tool, "args": json.loads(_line(dict(args))), **identity}
         after, result = _apply(Context(run_dir, manifest["run"], rubric, seq), state, call)
         line = _line({**call, **_digests(after, result), "at": _now()})
         log_digest = bytes_digest(_read(run_dir, CALLS) + line)
@@ -505,9 +512,8 @@ def _graph_text(graph: Graph) -> bytes:
 def _digests(state: State, result: Mapping[str, Any]) -> dict[str, str]:
     """What a log line records of a call's effect: the digests of its result and of the graph it left.
 
-    The result is digested in a canonical encoding, with sorted keys: a result can echo the records it
-    was sent, and a live call has them in the order the agent wrote their keys while a replay reads them
-    back from the log, which sorts them.
+    The result is digested with sorted keys, so its digest does not depend on how its own keys were
+    built; the call itself is applied to its arguments as the log holds them (``write``).
     """
     canonical = json.dumps(result, ensure_ascii=False, allow_nan=False, sort_keys=True).encode("utf-8")
     return {"result_digest": bytes_digest(canonical), "graph_digest": bytes_digest(_graph_text(state.graph))}
@@ -532,7 +538,11 @@ def _reconcile(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls
     """
     state = current_state(run_dir)
     log_digest = bytes_digest(_read(run_dir, CALLS))
-    if json.loads(_read(run_dir, STATE)).get("log_digest") != log_digest:
+    try:
+        saved = json.loads((run_dir / STATE).read_bytes())
+    except (OSError, ValueError):
+        saved = None
+    if not isinstance(saved, dict) or saved.get("log_digest") != log_digest:
         _replace(run_dir / STATE, _state_file(state, len(calls), log_digest))
     if manifest.get("log_digest") != log_digest or manifest.get("finished") != state.finished:
         _replace(run_dir / MANIFEST, _manifest(manifest, calls, state, log_digest))

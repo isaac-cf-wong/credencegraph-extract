@@ -296,3 +296,36 @@ def test_every_refused_record_says_what_to_change(run_dir: Path) -> None:
     )
     rejections = read_json(run_dir / "state.json")["rejections"]
     assert all(item.get("fix") for item in rejections)
+
+
+def test_a_call_replays_whatever_order_the_agent_wrote_its_keys_in(run_dir: Path, no_network: None) -> None:
+    # The form's keys are not in sorted order and both its values are wrong: the refusal's fixes, and
+    # which field the core names first, follow the order of the keys.
+    record = {"type": "claim", "node": "s-1", "form": {"statement": "not present", "shape": "invalid"}}
+    assert classify(run_dir, [record], model=MODEL)["refused"]
+    assert replay(run_dir, source=PAPER) == recorded_graph(run_dir)
+
+
+def test_reconciling_refuses_a_log_edited_by_hand(run_dir: Path) -> None:
+    classify(run_dir, [{"node": "s-1", "type": "method", "form": {"kind": "simulation"}}], model=MODEL)
+    manifest_before = (run_dir / "manifest.json").read_bytes()
+    log = run_dir / "calls.jsonl"
+    log.write_text(log.read_text(encoding="utf-8").replace('"type": "method"', '"type": "context"'), encoding="utf-8")
+    with pytest.raises(RunError, match=r"call 2 \(classify\) gives another") as raised:
+        session.reconcile(run_dir)
+    assert raised.value.code == "record-mismatch"
+    assert (run_dir / "manifest.json").read_bytes() == manifest_before
+
+
+@pytest.mark.parametrize("damage", ["missing", "not-json"])
+def test_a_missing_or_unreadable_state_file_is_rebuilt(run_dir: Path, damage: str) -> None:
+    classify(run_dir, [{"node": "s-1", "type": "method", "form": {"kind": "simulation"}}], model=MODEL)
+    expected = recorded_graph(run_dir)
+    if damage == "missing":
+        (run_dir / "state.json").unlink()
+    else:
+        (run_dir / "state.json").write_text("{", encoding="utf-8")
+    assert get_state(run_dir)["calls"] == 2
+    assert read_json(run_dir / "state.json")["calls"] == 2
+    assert recorded_graph(run_dir) == expected
+    classify(run_dir, [{"node": "s-3", "type": "claim"}], model=MODEL)
