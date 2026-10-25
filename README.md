@@ -291,12 +291,36 @@ when the run stored its source; a run with citation checks needs the same
 ones included. Replay refuses a source, rubric or record whose digest differs
 from the manifest's, and a pass that asks a call that was not recorded.
 
-Both commands exit 0 on success, and `replay` exits 1 when the rebuilt graph
-differs from the recorded one. Every error exits 2 with one
-`error [<code>]: <message>` line on stderr: a run directory that is malformed or
-incomplete (an unreadable or invalid `manifest.json`, a missing `graph.json`,
-`rubric.toml` or `raw/` record), a file that cannot be read or written, a source
-or record that does not match the manifest, and a provider error.
+## Verify
+
+```shell
+credencegraph-extract verify runs/paper runs/other-paper
+```
+
+runs every deterministic check of each run again — `recompute-numbers`,
+`rederive-maths` and `rederive-maths-numeric` — from the inputs its record in
+`graph.json` holds, with the code installed now, and prints each field of a
+check record the re-run does not reproduce: the result, the detail, the inputs
+(a numeric check draws its points again from its seed), and the digest of the
+check's files. It also compares the files in `checks/c-NNN/` with that digest.
+Recorded inputs are checked again as the run checked the proposal, so an operand
+the document's text does not contain makes the re-run an `error`. Citation
+checks are judged by a model and are not run again; `replay` answers them from
+their recorded responses. `verify` needs neither the source nor the network, and
+refuses a run whose `graph.json` or `rubric.toml` differs from the manifest's
+digest.
+
+A rubric's `version` names its values. When the runs given record one rubric
+name and version with different file digests, `verify` prints a `warning:` line
+naming each digest and its runs: the values changed without a new version.
+
+All three commands exit 0 on success; `replay` exits 1 when the rebuilt graph
+differs from the recorded one, and `verify` when a check differs from its
+record. Every error exits 2 with one `error [<code>]: <message>` line on stderr:
+a run directory that is malformed or incomplete (an unreadable or invalid
+`manifest.json`, a missing `graph.json`, `rubric.toml` or `raw/` record), a file
+that cannot be read or written, a source or record that does not match the
+manifest, and a provider error.
 
 ## Development
 

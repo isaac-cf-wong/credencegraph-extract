@@ -56,6 +56,7 @@ nav = [
     { "Check pass" = "api/checks.md" },
     { "Evaluators" = "api/evaluate.md" },
     { "Cited works" = "api/cited.md" },
+    { "Verify" = "api/verify.md" },
   ] },
   { "Contributing" = "contributing.md" },
   { "Security" = "security.md" },
