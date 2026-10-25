@@ -35,7 +35,7 @@ from credencegraph.semantics.compiler import compile_graph
 from notes_pass import MODEL, fake_client, message
 
 from credencegraph_extract import cited, evaluate, provider
-from credencegraph_extract.checks import CheckPass, directory_digest, output_schema, render
+from credencegraph_extract.checks import CheckPass, directory_digest, fix, output_schema, render
 from credencegraph_extract.cli import main
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.pipeline import passes
@@ -368,6 +368,33 @@ def test_a_corrected_proposal_is_run(tmp_path: Path) -> None:
     make_run(run_dir, bodies_with([refused], repair=[{**RECOMPUTE, "expected": "350"}]))
     assert [(item["round"], item["code"]) for item in check_rejections(run_dir)] == [("initial", "unfaithful-numeral")]
     assert [node.attributes["check"]["result"] for node in checks_of(read_graph(run_dir)).values()] == ["passed"]
+
+
+def test_a_target_written_with_its_label_is_told_the_id_and_its_correction_runs(tmp_path: Path) -> None:
+    # A small model copied the target as the prompt lists it, "s-3 (result)", and its corrected id was then
+    # refused as a target with nothing refused.
+    labelled = {**RECOMPUTE, "target": "s-3 (result)", "expected": "350"}
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([labelled], repair=[{**RECOMPUTE, "expected": "350"}]))
+    assert [(item["round"], item["code"]) for item in check_rejections(run_dir)] == [("initial", "not-a-target")]
+    assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3"]
+    prompt = (run_dir / "prompts" / "0003.txt").read_text(encoding="utf-8")
+    assert "'s-3 (result)' is not a target id: write the id alone, 's-3', without the type in parentheses" in prompt
+
+
+def test_chunk_ids_written_with_their_labels_are_told_the_ids() -> None:
+    record = {**RECOMPUTE, "nodes": ["s-3 (result)", "s-2"]}
+    assert fix("unknown-node", record) == (
+        "['s-3 (result)'] are not chunk ids: write each id alone, as ['s-3'], without the type in parentheses"
+    )
+    assert fix("unknown-node", RECOMPUTE) == "use only chunk ids listed under Chunks"
+
+
+def test_a_correction_of_a_proposal_that_named_no_target_may_be_on_any_target(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([{"type": "recompute-numbers"}], repair=[{**RECOMPUTE, "expected": "350"}]))
+    assert [item["round"] for item in check_rejections(run_dir)] == ["initial"]
+    assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3"]
 
 
 def test_no_repair_call_is_made_when_every_proposal_is_admitted(tmp_path: Path) -> None:

@@ -24,6 +24,7 @@ stays as it was.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from itertools import count
@@ -392,12 +393,32 @@ def _part_fixes(graph: Graph, rubric: Rubric, part: Any, *, text: str, where: st
     return out
 
 
+# An id followed by the label a prompt lists it with, as in "s-2 (result)".
+_LABELLED = re.compile(r"(\S+) \(.*\)")
+
+
+def unlabelled(value: Any) -> str | None:
+    """Return the id a model wrote with the label its prompt lists it with, as ``s-2`` of ``s-2 (result)``.
+
+    Args:
+        value: What the model wrote where an id belongs.
+
+    Returns:
+        The id before the label, or ``None`` when ``value`` is not an id followed by a label.
+    """
+    match = _LABELLED.fullmatch(value) if isinstance(value, str) else None
+    return match[1] if match else None
+
+
 def _node_fix(graph: Graph, node_id: Any) -> str | None:
     """What to change in the node a classify record names, or ``None`` if it is a chunk of the document."""
     if isinstance(node_id, str) and node_id in graph:
         if origin_of(graph.nodes[node_id]) == DOCUMENT:
             return None
         return f"{node_id!r} is not a chunk of the document: send records only for the ids listed under Chunks"
+    bare = unlabelled(node_id)
+    if bare is not None and bare in graph:
+        return f"{node_id!r} is not a chunk id: write the id alone, {bare!r}, without the type in parentheses"
     base = node_id[:-1] if isinstance(node_id, str) and node_id[-1:].isalpha() else None
     if base is not None and base in graph:
         return (

@@ -320,3 +320,9 @@ def test_a_split_child_is_told_to_copy_from_its_clause(rubric: Rubric, graph: Gr
         ),
         "children[0]: hedge 'therefore' is not in the clause's text: copy the phrase exactly, or leave hedge out",
     ]
+
+
+def test_a_chunk_id_written_with_its_label_is_told_the_id(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "s-1 (unassigned)", "type": "method", "form": {"kind": "simulation"}}) == [
+        "'s-1 (unassigned)' is not a chunk id: write the id alone, 's-1', without the type in parentheses"
+    ]

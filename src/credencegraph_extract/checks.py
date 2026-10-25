@@ -57,6 +57,7 @@ from credencegraph.rubric.model import ANALYST, DOCUMENT, EVIDENCE, Check
 from credencegraph.rubric.validate import CITES, FAILS, HOLDS, NOT_ASSESSED, PART_OF, UNDETERMINED, node_text, origin_of
 
 from credencegraph_extract import evaluate
+from credencegraph_extract.assemble import unlabelled
 from credencegraph_extract.cited import Cited, CitedError, no_sources
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.evaluate import ERROR, FAILED, PASSED, EvaluationError
@@ -219,6 +220,30 @@ def applicable(rubric: Rubric, kind: str) -> list[str]:
     return [name for name in PROPOSED if name in rubric.checks and kind in rubric.checks[name].targets]
 
 
+# What to change in a refused proposal, by rejection code, where the code alone says it.
+_FIXES = {
+    NOT_A_TARGET: "propose a check only on a target listed under Targets, of a check type listed for it",
+    UNKNOWN_NODE: "use only chunk ids listed under Chunks",
+    DUPLICATE_RECORD: "propose at most one check of each type on a target",
+    NOT_REJECTED: "while correcting, send proposals only for the targets listed below",
+}
+
+
+def _label_fix(code: str, record: Any) -> str | None:
+    """What to change in a proposal that wrote an id with the label its prompt lists it with, as ``s-2 (result)``."""
+    if not isinstance(record, Mapping):
+        return None
+    target, nodes = record.get("target"), record.get("nodes")
+    bare = unlabelled(target)
+    if code == NOT_A_TARGET and bare is not None:
+        return f"{target!r} is not a target id: write the id alone, {bare!r}, without the type in parentheses"
+    labelled = [node for node in nodes if unlabelled(node)] if isinstance(nodes, list) else []
+    if code == UNKNOWN_NODE and labelled:
+        bare_nodes = [unlabelled(node) for node in labelled]
+        return f"{labelled} are not chunk ids: write each id alone, as {bare_nodes}, without the type in parentheses"
+    return None
+
+
 def fix(code: str, record: Any) -> str | None:
     """Say what to change in a refused proposal, as an instruction to the model, or ``None`` beyond the error.
 
@@ -230,6 +255,9 @@ def fix(code: str, record: Any) -> str | None:
         The instruction.
     """
     nodes = record.get("nodes") if isinstance(record, Mapping) else None
+    label_fix = _label_fix(code, record)
+    if label_fix is not None:
+        return label_fix
     if code == UNFAITHFUL:
         return (
             f"write every number, the expected value included, exactly as a numeral the text of {nodes} writes, "
@@ -237,15 +265,7 @@ def fix(code: str, record: Any) -> str | None:
             "1 - p or a 100, is not allowed: rewrite the expression without it, as a - a * p rather than "
             "a * (1 - p), where a and p are numerals the text writes"
         )
-    if code == NOT_A_TARGET:
-        return "propose a check only on a target listed under Targets, of a check type listed for it"
-    if code == UNKNOWN_NODE:
-        return "use only chunk ids listed under Chunks"
-    if code == DUPLICATE_RECORD:
-        return "propose at most one check of each type on a target"
-    if code == NOT_REJECTED:
-        return "while correcting, send proposals only for the targets listed below"
-    return None
+    return _FIXES.get(code)
 
 
 def render(graph: Graph, rubric: Rubric, rejected: Sequence[Mapping[str, Any]] = ()) -> str:
@@ -634,6 +654,19 @@ def directory_digest(files: Mapping[str, bytes]) -> str:
     return bytes_digest(listing.encode("utf-8"))
 
 
+def _corrected(graph: Graph, refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
+    """The targets a repair answer may propose checks on: those of the refused proposals.
+
+    A target written with its label, as ``s-2 (result)``, counts as the id it names, so its correction is
+    admitted. When a refused proposal names no node at all, its correction may be on any target: there is
+    no id to hold it to. Returns ``None`` then, for no restriction; duplicates are still refused.
+    """
+    named = [unlabelled(rejection["node"]) or rejection["node"] for rejection in refused]
+    if not all(isinstance(target, str) and target in graph for target in named):
+        return None
+    return set(named)
+
+
 def _admit(
     graph: Graph, rubric: Rubric, proposals: Sequence[Any], plans: list[_Plan], *, only: Collection[str] | None = None
 ) -> list[dict[str, Any]]:
@@ -727,8 +760,7 @@ class CheckPass:
             rejections = [{"round": INITIAL, **rejection} for rejection in refused]
             if refused:
                 answer = ask(render(graph, rubric, refused), output_schema(rubric))
-                only = {rejection["node"] for rejection in refused if rejection["node"] is not None}
-                again = _admit(graph, rubric, _proposals(answer), plans, only=only)
+                again = _admit(graph, rubric, _proposals(answer), plans, only=_corrected(graph, refused))
                 rejections.extend({"round": REPAIR, **rejection} for rejection in again)
         order = {node_id: i for i, node_id in enumerate(graph.nodes)}
         plans.sort(key=lambda plan: order[plan.target.id])
