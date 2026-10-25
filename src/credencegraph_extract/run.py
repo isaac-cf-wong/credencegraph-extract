@@ -11,6 +11,8 @@ whatever fails after them. The layout is::
       rubric.toml     byte copy of the rubric used
       prompts/        the template of each pass as shipped, and the rendered prompt of every call
       raw/            the record of every call: the provider's response verbatim, with its request metadata
+      rejections.json the records the core refused, each with its error code
+      report.json     the graph's coverage, and what each pass reports, such as hedge phrases the rubric does not map
       source/         a copy of the source document, only with ``store_source``
 
 Every node a run creates or changes carries ``attributes.extraction = {"run": <run id>, "pass":
@@ -26,7 +28,7 @@ import re
 import secrets
 import shutil
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -35,7 +37,7 @@ from typing import Any, Protocol
 from credencegraph.core import Graph, dumps
 from credencegraph.ingest.chunks import chunks_to_graph
 from credencegraph.ingest.latex import LatexError, read_latex
-from credencegraph.rubric import Rubric, RubricError, loads_rubric
+from credencegraph.rubric import Rubric, RubricError, coverage, loads_rubric
 
 from credencegraph_extract import provider
 from credencegraph_extract.digest import bytes_digest
@@ -50,6 +52,8 @@ GRAPH = "graph.json"
 RUBRIC = "rubric.toml"
 PROMPTS = "prompts"
 RAW = "raw"
+REJECTIONS = "rejections.json"
+REPORT = "report.json"
 SOURCE = "source"
 
 # Send a rendered prompt under an output schema and return the model's structured output.
@@ -59,8 +63,38 @@ Ask = Callable[[str, Mapping[str, Any]], Any]
 Call = Callable[[str, Mapping[str, Any]], dict[str, Any]]
 
 
+@dataclass(frozen=True)
+class Outcome:
+    """What a pass leads to.
+
+    Attributes:
+        graph: The graph after the pass.
+        rejections: The records the pass did not apply, each a JSON object naming why.
+        report: What the pass reports beside the graph, as JSON.
+    """
+
+    graph: Graph
+    rejections: Sequence[Mapping[str, Any]] = ()
+    report: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Built:
+    """The result of ingesting a document and applying each pass.
+
+    Attributes:
+        graph: The graph.
+        rejections: Every pass's rejections, in pass order, each with ``"pass"`` set to its pass's name.
+        report: Each pass's report, by pass name.
+    """
+
+    graph: Graph
+    rejections: list[dict[str, Any]]
+    report: dict[str, Any]
+
+
 class Pass(Protocol):
-    """A pass of the pipeline: it reads the graph, asks the model, and returns the graph it leads to.
+    """A pass of the pipeline: it reads the graph, asks the model, and returns what it leads to.
 
     Attributes:
         name: The pass's name, recorded in the manifest and in ``attributes.extraction``.
@@ -70,7 +104,7 @@ class Pass(Protocol):
     name: str
     template: str
 
-    def run(self, graph: Graph, rubric: Rubric, ask: Ask) -> Graph:
+    def run(self, graph: Graph, rubric: Rubric, ask: Ask) -> Outcome:
         """Apply the pass.
 
         Args:
@@ -79,13 +113,9 @@ class Pass(Protocol):
             ask: Sends one prompt to the model; the only way a pass may reach it.
 
         Returns:
-            The graph after the pass.
+            The graph after the pass, with what it rejected and reports.
         """
         ...
-
-
-# The pipeline, in order. Passes are added here as they are built.
-PASSES: tuple[Pass, ...] = ()
 
 
 class RunError(Exception):
@@ -147,7 +177,7 @@ def build_graph(  # noqa: PLR0913, PLR0917 - the run's inputs, each needed by in
     run_id: str,
     passes: Sequence[Pass],
     asker: Callable[[Pass], Ask],
-) -> Graph:
+) -> Built:
     """Ingest a document and apply each pass, stamping what each one creates or changes.
 
     Args:
@@ -159,7 +189,7 @@ def build_graph(  # noqa: PLR0913, PLR0917 - the run's inputs, each needed by in
         asker: Gives each pass its ``ask``.
 
     Returns:
-        The graph.
+        The graph, with what the passes rejected and report.
 
     Raises:
         RunError: If the document cannot be read.
@@ -170,10 +200,14 @@ def build_graph(  # noqa: PLR0913, PLR0917 - the run's inputs, each needed by in
         raise RunError("invalid-source", f"cannot read {str(source)!r}: {error}") from None
     graph, _ = chunks_to_graph(chunks, document, rubric.initial)
     graph = stamp(graph, Graph(), run_id, INGEST)
+    rejections: list[dict[str, Any]] = []
+    report: dict[str, Any] = {}
     for item in passes:
-        before = graph
-        graph = stamp(item.run(graph, rubric, asker(item)), before, run_id, item.name)
-    return graph
+        outcome = item.run(graph, rubric, asker(item))
+        graph = stamp(outcome.graph, graph, run_id, item.name)
+        rejections.extend({"pass": item.name, **rejection} for rejection in outcome.rejections)
+        report[item.name] = dict(outcome.report)
+    return Built(graph, rejections, report)
 
 
 def _write_json(path: Path, value: Any) -> bytes:
@@ -212,7 +246,7 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
     rubric_path: Path,
     *,
     call: Call,
-    passes: Sequence[Pass] = PASSES,
+    passes: Sequence[Pass],
     document: str | None = None,
     store_source: bool = False,
     run_id: str | None = None,
@@ -224,7 +258,7 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
         run_dir: The run directory to create; it must not exist or be empty.
         rubric_path: The rubric file.
         call: Sends one call to the provider and returns its record.
-        passes: The pipeline.
+        passes: The pipeline, such as ``pipeline.PASSES``.
         document: The document id of every anchor; the source's file name by default.
         store_source: Copy the source document into the run directory.
         run_id: The run's id; a fresh one by default.
@@ -289,9 +323,11 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
 
         return ask
 
-    graph = build_graph(source, document or source.name, rubric, run_id, passes, asker)
-    graph_bytes = graph_text(graph).encode("utf-8")
+    built = build_graph(source, document or source.name, rubric, run_id, passes, asker)
+    graph_bytes = graph_text(built.graph).encode("utf-8")
     (run_dir / GRAPH).write_bytes(graph_bytes)
+    _write_json(run_dir / REJECTIONS, built.rejections)
+    _write_json(run_dir / REPORT, {"coverage": coverage(built.graph, rubric), "passes": built.report})
     manifest = {
         "format": FORMAT,
         "version": VERSION,
@@ -396,7 +432,7 @@ def _recorded_output(record: Any, prompt: str, schema: Mapping[str, Any], name: 
         raise RunError("invalid-record", f"{where}: {error}") from None
 
 
-def replay(run_dir: Path, *, source: Path | None = None, passes: Sequence[Pass] = PASSES) -> bytes:
+def replay(run_dir: Path, *, passes: Sequence[Pass], source: Path | None = None) -> bytes:
     """Rebuild a run's graph from its recorded calls, without calling the provider.
 
     The source is the stored copy if the run kept one, else ``source``; its digest must match the
@@ -405,8 +441,8 @@ def replay(run_dir: Path, *, source: Path | None = None, passes: Sequence[Pass] 
 
     Args:
         run_dir: The run directory.
-        source: The source document, for a run that did not store it.
         passes: The pipeline; its pass names must be the manifest's, in order.
+        source: The source document, for a run that did not store it.
 
     Returns:
         The rebuilt ``graph.json`` bytes.
@@ -459,7 +495,7 @@ def replay(run_dir: Path, *, source: Path | None = None, passes: Sequence[Pass] 
 
         return ask
 
-    graph = build_graph(source, recorded["document"], rubric, manifest["run"], passes, asker)
+    graph = build_graph(source, recorded["document"], rubric, manifest["run"], passes, asker).graph
     for name, calls in pending.items():
         if next(calls, None) is not None:
             raise RunError("unrecorded-call", f"pass {name!r} asks fewer calls than were recorded")

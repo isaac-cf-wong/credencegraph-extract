@@ -19,6 +19,7 @@ import anthropic
 
 from credencegraph_extract import provider
 from credencegraph_extract.digest import bytes_digest
+from credencegraph_extract.pipeline import PASSES
 from credencegraph_extract.run import GRAPH, RunError, read_manifest, read_run_file, replay, run_extraction
 
 DEFAULT_MAX_TOKENS = 16000
@@ -55,7 +56,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _replay(args: argparse.Namespace) -> int:
     """Replay a run and report whether its graph is byte-identical; 0 if it is, 1 if it differs."""
-    rebuilt = replay(args.run_dir, source=args.source)
+    rebuilt = replay(args.run_dir, passes=PASSES, source=args.source)
     recorded = read_manifest(args.run_dir)["graph_digest"]
     if args.output:
         try:
@@ -77,6 +78,7 @@ def _run(args: argparse.Namespace) -> int:
         args.run_dir,
         args.rubric,
         call=call,
+        passes=PASSES,
         document=args.document,
         store_source=args.store_source,
     )

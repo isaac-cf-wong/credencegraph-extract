@@ -1,0 +1,38 @@
+{
+  "coverage": {
+    "rubric": {
+      "name": "test-rubric",
+      "version": "1"
+    },
+    "nodes": 5,
+    "by_origin": {
+      "document": 5,
+      "analyst": 0,
+      "evidence": 0
+    },
+    "by_type": {
+      "unassigned": {
+        "count": 4,
+        "share": 0.8
+      },
+      "reference": {
+        "count": 1,
+        "share": 0.2
+      }
+    },
+    "untyped": [
+      "s-1",
+      "s-2",
+      "e-1",
+      "s-3"
+    ],
+    "unexamined": [],
+    "not_assessed": {
+      "count": 0,
+      "reasons": {}
+    }
+  },
+  "passes": {
+    "notes": {}
+  }
+}

@@ -38,6 +38,8 @@ def test_run_writes_the_layout(tmp_path: Path) -> None:
         "raw/0001.json",
         "raw/0002.json",
         "raw/0003.json",
+        "rejections.json",
+        "report.json",
         "rubric.toml",
     ]
     assert (run_dir / "rubric.toml").read_bytes() == RUBRIC.read_bytes()
@@ -145,8 +147,9 @@ def test_records_are_kept_when_a_response_is_unusable(tmp_path: Path) -> None:
 
 
 def test_cli_run_and_replay_without_passes(
-    tmp_path: Path, no_network: None, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, no_network: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.setattr("credencegraph_extract.cli.PASSES", ())
     run_dir = tmp_path / "run"
     assert cli.main(["run", str(SOURCE), str(run_dir), "--rubric", str(RUBRIC), "--store-source"]) == 0
     assert (run_dir / "source" / "paper.tex").exists()
@@ -157,7 +160,7 @@ def test_cli_run_and_replay_without_passes(
 def test_cli_run_needs_a_model_when_a_pass_calls_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("credencegraph_extract.cli.run_extraction", partial(run_extraction, passes=[NotesPass()]))
+    monkeypatch.setattr("credencegraph_extract.cli.PASSES", (NotesPass(),))
     assert cli.main(["run", str(SOURCE), str(tmp_path / "run"), "--rubric", str(RUBRIC)]) == 2
     assert "missing-model" in capsys.readouterr().err
 
@@ -185,7 +188,7 @@ def test_cli_run_reports_an_unusable_response(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     refusal = {**BODIES[0], "stop_reason": "refusal"}
-    monkeypatch.setattr("credencegraph_extract.cli.run_extraction", partial(run_extraction, passes=[NotesPass()]))
+    monkeypatch.setattr("credencegraph_extract.cli.PASSES", (NotesPass(),))
     monkeypatch.setattr(provider, "call", partial(provider.call, client=fake_client([refusal])))
     status = cli.main(["run", str(SOURCE), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL])
     assert status == 2
