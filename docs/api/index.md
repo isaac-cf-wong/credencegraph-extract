@@ -22,3 +22,5 @@ This section documents the public API of credencegraph-extract.
 - **[Evaluators](evaluate)** – Exact arithmetic, symbolic identity and numeric
   sampling, over whitelisted expressions.
 - **[Cited works](cited)** – Reading the texts of cited works.
+- **[Verify](verify)** – Running the deterministic checks of a run again, and
+  reporting rubric versions reused with different values.

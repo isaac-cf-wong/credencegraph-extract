@@ -3,8 +3,11 @@
 ``run`` extracts a graph from a LaTeX document into a new run directory. ``replay`` rebuilds a run's
 graph from its recorded calls, without the network, and reports whether it is byte-identical to the
 recorded ``graph.json``. A run's citation checks read the cited works from ``--cited``; a replay
-needs the same directory, and re-runs every check that a run allowed, uncalibrated ones included. The exit status is 0 on success, 1 if a replayed graph differs from the
-recorded one, and 2 on any error, reported as one line on stderr.
+needs the same directory, and re-runs every check that a run allowed, uncalibrated ones included.
+``verify`` runs each run's deterministic checks again from their recorded inputs, reports every
+check whose record the re-run does not reproduce, and warns when the runs record one rubric name and
+version with different file digests. The exit status is 0 on success, 1 if a replayed graph or a
+verified check differs from the recorded one, and 2 on any error, reported as one line on stderr.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from credencegraph_extract import cited, provider
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.pipeline import passes
 from credencegraph_extract.run import GRAPH, RunError, read_manifest, read_run_file, replay, run_extraction
+from credencegraph_extract.verify import plain, rubric_reuse, verify_run
 
 DEFAULT_MAX_TOKENS = 16000
 
@@ -94,6 +98,11 @@ def _parser() -> argparse.ArgumentParser:
     rerun.add_argument("--source", type=Path, help="The source document, for a run that did not store it.")
     rerun.add_argument("--output", type=Path, help="Also write the rebuilt graph to this file.")
     rerun.add_argument("--cited", type=Path, help="The directory of cited works the run read.")
+
+    check = commands.add_parser(
+        "verify", help="Run each run's deterministic checks again and compare them with their records."
+    )
+    check.add_argument("run_dirs", type=Path, nargs="+", metavar="run_dir", help="The run directories.")
     return parser
 
 
@@ -112,6 +121,29 @@ def _replay(args: argparse.Namespace) -> int:
         return 0
     print(f"replayed {args.run_dir}: {GRAPH} differs: recorded {recorded}, rebuilt {bytes_digest(rebuilt)}")
     return 1
+
+
+def _verify(args: argparse.Namespace) -> int:
+    """Verify each run, and warn about rubric versions reused; 0 if every check agrees, 1 if one differs."""
+    manifests = [(str(run_dir), read_manifest(run_dir)) for run_dir in args.run_dirs]
+    status = 0
+    for run_dir in args.run_dirs:
+        found = verify_run(run_dir)
+        for difference in found.differences:
+            print(
+                f"{run_dir}: {difference.check}: {difference.field} differs: "
+                f"recorded {json.dumps(plain(difference.recorded), ensure_ascii=False)}, "
+                f"verified {json.dumps(plain(difference.found), ensure_ascii=False)}"
+            )
+        differing = len({difference.check for difference in found.differences})
+        status = max(status, 1 if differing else 0)
+        print(
+            f"verified {run_dir}: {len(found.rerun)} checks run again, {differing} differ; "
+            f"{len(found.not_rerun)} model-judged checks not run again"
+        )
+    for warning in rubric_reuse(manifests):
+        print(f"warning: {warning}")
+    return status
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -159,12 +191,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         argv: The arguments; ``sys.argv[1:]`` by default.
 
     Returns:
-        The exit status: 0 on success (for ``replay``, the rebuilt graph is byte-identical), 1 if
-        ``replay`` rebuilt a graph that differs from the recorded one, 2 on any error.
+        The exit status: 0 on success (for ``replay``, the rebuilt graph is byte-identical; for
+        ``verify``, every check agrees with its record), 1 if ``replay`` rebuilt a graph that differs
+        from the recorded one or ``verify`` found a check that differs, 2 on any error.
     """
     args = _parser().parse_args(argv)
     try:
-        return _run(args) if args.command == "run" else _replay(args)
+        command = {"run": _run, "replay": _replay, "verify": _verify}[args.command]
+        return command(args)
     except RunError as error:
         code, message = error.code, str(error)
     except provider.ProviderError as error:
