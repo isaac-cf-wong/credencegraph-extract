@@ -1,6 +1,8 @@
 ---
 title: Premise pass
-description: The premise pass: premise records, the prompt, the output schema and the repair round.
+description:
+    The premise pass, covering premise records, the prompt, the output schema
+    and the repair round.
 ---
 
 <!-- prettier-ignore-start -->
