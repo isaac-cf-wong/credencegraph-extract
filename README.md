@@ -163,9 +163,15 @@ refuses (an unknown type, a form value not found in the text, a clause that does
 not occur exactly once, a `rests_on` node of a type the edge rule does not
 allow) is not applied and not dropped: it goes to `rejections.json` with the
 core's error code, and its node stays as it was. The refused records and their
-errors go back to the model once; that repair answer is recorded in `raw/` like
-any other call, and what it does not fix stays rejected. Each entry of
-`rejections.json` names its round, `initial` or `repair`, so a node is still
+errors go back to the model once, each with a `fix`: what to change, read from
+the record and the rubric, such as "type 'derivation' rests on nothing: leave
+out rests_on" or how to split a chunk when the model wrote a clause id such as
+`s-2a` as a chunk. The prompt also states each type's form fields and what it
+rests on ("rests on nothing" where it has no edge rule), the JSON shape of a
+record, and that `node` is always a listed chunk id, so a model that is never
+shown the output schema still has the rules. That repair answer is recorded in
+`raw/` like any other call, and what it does not fix stays rejected. Each entry
+of `rejections.json` names its round, `initial` or `repair`, so a node is still
 rejected exactly when it has a `repair` entry; it shows as untyped in the
 report's coverage.
 
@@ -276,9 +282,13 @@ lists the node's type in its `targets`:
   under `passes.checks.uncalibrated`.
 
 A proposal that cannot be run, or a second of its type on one node (the two
-would pass or fail together), is rejected with a code in `rejections.json`. Each
-check that runs becomes an **evidence node** `c-NNN` (in document order of its
-target, then run order) of its check type, with a statement from a fixed
+would pass or fail together), is rejected with a code in `rejections.json`. The
+refused proposals go back to the model once, each with its error and a `fix`
+(for an unfaithful numeral: write the expression with the text's own numerals
+only, as `a - a * 0.05` rather than `a * (1 - 0.05)`); the corrections are
+checked the same way, and each rejection names its round, `initial` or `repair`.
+Each check that runs becomes an **evidence node** `c-NNN` (in document order of
+its target, then run order) of its check type, with a statement from a fixed
 template (`recompute-numbers on s-3: passed`), and the check record in
 `attributes.check`: `type`, `target`, `artifact`, `inputs`, `result`, `detail`,
 `tool` (this package, Python and the libraries used), `model` (provider, model

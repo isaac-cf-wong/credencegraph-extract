@@ -11,20 +11,154 @@
     "output_schema": {
       "type": "object",
       "properties": {
-        "passage": {
-          "type": "string"
-        },
-        "supports": {
-          "type": "boolean"
+        "checks": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "recompute-numbers"
+                    ]
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expression": {
+                    "type": "string"
+                  },
+                  "expected": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "type",
+                  "nodes",
+                  "expression",
+                  "expected"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "rederive-maths"
+                    ]
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "lhs": {
+                    "type": "string"
+                  },
+                  "rhs": {
+                    "type": "string"
+                  },
+                  "symbols": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "assumptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "real",
+                              "positive",
+                              "negative",
+                              "nonnegative",
+                              "nonpositive",
+                              "nonzero",
+                              "integer"
+                            ]
+                          }
+                        },
+                        "domain": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "assumptions",
+                        "domain"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "assumption": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "type",
+                  "nodes",
+                  "lhs",
+                  "rhs",
+                  "symbols",
+                  "assumption"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "citation-support"
+                    ]
+                  },
+                  "reference": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "type",
+                  "reference"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
         }
       },
       "required": [
-        "passage",
-        "supports"
+        "checks"
       ],
       "additionalProperties": false
     },
-    "prompt_digest": "sha256:91b5dc0dec5d0d9a9adacf4ce5d120640a03827991da074a505b822426b25c73",
+    "prompt_digest": "sha256:3fa0595281a3b60bf305b160430af524f4fc2185cff74cf6fd912143530dc4a0",
     "request_id": "req_msg_fixture0003"
   },
   "response": {
@@ -35,7 +169,7 @@
     "content": [
       {
         "type": "text",
-        "text": "{\"passage\": \"In comparable settings the bias stays below 1% for all segment lengths we tried\", \"supports\": true}"
+        "text": "{\"checks\": [{\"target\": \"s-2\", \"type\": \"recompute-numbers\", \"nodes\": [\"s-1\", \"s-2\"], \"expression\": \"400 * 250\", \"expected\": \"90000\"}, {\"target\": \"e-1\", \"type\": \"rederive-maths\", \"nodes\": [\"e-1\", \"e-2\"], \"lhs\": \"c / N * N\", \"rhs\": \"c\", \"symbols\": [{\"name\": \"c\", \"assumptions\": [\"real\"], \"domain\": [-10, 10]}, {\"name\": \"N\", \"assumptions\": [\"positive\"], \"domain\": [1, 100]}], \"assumption\": \"N is the number of segments, so it is positive.\"}]}"
       }
     ],
     "stop_reason": "end_turn",

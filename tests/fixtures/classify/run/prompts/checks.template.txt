@@ -26,6 +26,11 @@ $targets
 Chunks of the document, in document order, as id (type): text
 $chunks
 
+Proposals from your previous answer that were refused, each with the error it got and what to change
+("fix"). If this list is not empty, return corrected proposals for these targets only, and nothing
+else:
+$rejected
+
 A statement of a document cites the work below. Decide whether the work supports the statement.
 
 First copy, word for word, the one passage of the work that the decision rests on: "passage" must be

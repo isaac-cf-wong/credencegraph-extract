@@ -10,7 +10,8 @@ or, for a chunk that makes several statements::
     {"node": "s-2", "split": ["clause one", "clause two"], "children": [{"type": ...}, {"type": ...}]}
 
 A record has no credence field. The assembler applies the records; what the core refuses goes back
-to the model once, with the error each record got, and what still fails stays rejected. Both answers
+to the model once, with the error each record got and what to change in it, and what still fails
+stays rejected. Both answers
 are recorded like any other call.
 """
 
@@ -25,7 +26,7 @@ from credencegraph.rubric import FormField, Rubric
 from credencegraph.rubric.model import BOOL, DOCUMENT, ENUM, EQREF, NUMBER, QUANTITY, SCOPE, VERBATIM
 from credencegraph.rubric.validate import origin_of
 
-from credencegraph_extract.assemble import assemble, edge_rules_not_requires
+from credencegraph_extract.assemble import assemble, edge_rules_not_requires, fixes
 from credencegraph_extract.run import Outcome, RunError
 
 if TYPE_CHECKING:
@@ -47,12 +48,23 @@ copied exactly from its text, each occurring exactly once in it, and "children" 
 record (without "node") per clause, in the same order. Its children are then named by the chunk's
 id followed by a, b, c, ..., and other records may rest on them.
 
+The answer is one JSON object with a list of records, each of one of these two shapes:
+{"records": [
+  {"node": "<chunk id>", "type": "<type>", "form": {...}, "rests_on": ["<chunk id>", ...], "hedge": "<phrase>"},
+  {"node": "<chunk id>", "split": ["<clause>", "<clause>"], "children": [{"type": "<type>", ...}, {"type": "<type>", ...}]}
+]}
+Leave out "form", "rests_on" and "hedge" where the type has no form fields, rests on nothing, or the
+chunk has no hedge.
+
 Rules:
+- "node" is always one of the chunk ids listed below, exactly as written. Never write a clause id such
+  as s-2a as "node": a clause id exists only once a split record for its chunk is applied.
 - Copy every text value exactly from the chunk: a verbatim field and a hedge must be substrings of
   the chunk's text, a number or quantity must appear in it as a numeral, and an equation reference
   must be referenced in it.
-- Only list in "rests_on" chunks of the types the record's type may rest on; leave it out for a type
-  that rests on nothing.
+- Give a record only the form fields its type lists below, and every field marked required.
+- A type that "rests on nothing" below never has "rests_on". A type that rests on others lists in
+  "rests_on" only chunks that have, or are typed in this answer as, one of the types it names.
 - Do not give probabilities, confidence levels or any other judgement of whether a statement is
   true. The rubric sets those.
 
@@ -65,8 +77,9 @@ $hedges
 Chunks, in document order, as id (current type): text
 $chunks
 
-Records from your previous answer that were not applied, with the error each one got. If this list
-is not empty, return corrected records for these chunks only, and nothing else:
+Records from your previous answer that were not applied, each with the error it got and what to
+change ("fix"). If this list is not empty, return corrected records for these chunks only, and
+nothing else:
 $rejected
 """
 
@@ -86,8 +99,12 @@ def _types_text(rubric: Rubric) -> str:
         lines.append(f"- {name}: {spec.description}")
         if spec.form:
             lines.append(f"  form: {'; '.join(_field_text(field) for field in spec.form.values())}")
+        else:
+            lines.append("  form: no fields")
         if spec.rests_on is not None:
             lines.append(f"  rests on at least {spec.rests_on.min} of: {', '.join(spec.rests_on.types)}")
+        else:
+            lines.append("  rests on nothing")
     return "\n".join(lines)
 
 
@@ -97,13 +114,20 @@ def render(graph: Graph, rubric: Rubric, rejected: list[dict[str, Any]]) -> str:
     Args:
         graph: The graph.
         rubric: The rubric.
-        rejected: The rejections to repair; empty for the first call.
+        rejected: The rejections to repair; empty for the first call. Each is sent with what to
+            change in its record, ``assemble.fixes`` read against ``graph``, where any is found.
 
     Returns:
         The prompt.
     """
     chunks = [f"{node.id} ({node.kind}): {node.statement or ''}" for node in graph if origin_of(node) == DOCUMENT]
-    repair = [{key: rejection[key] for key in ("record", "code", "message")} for rejection in rejected]
+    repair = []
+    for rejection in rejected:
+        item = {key: rejection[key] for key in ("record", "code", "message")}
+        found = fixes(graph, rubric, rejection["record"])
+        if found:
+            item["fix"] = found
+        repair.append(item)
     return Template(TEMPLATE).substitute(
         types=_types_text(rubric),
         hedges=", ".join(json.dumps(phrase, ensure_ascii=False) for phrase in rubric.hedges) or "none",

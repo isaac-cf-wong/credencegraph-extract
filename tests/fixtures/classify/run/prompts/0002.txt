@@ -9,25 +9,42 @@ copied exactly from its text, each occurring exactly once in it, and "children" 
 record (without "node") per clause, in the same order. Its children are then named by the chunk's
 id followed by a, b, c, ..., and other records may rest on them.
 
+The answer is one JSON object with a list of records, each of one of these two shapes:
+{"records": [
+  {"node": "<chunk id>", "type": "<type>", "form": {...}, "rests_on": ["<chunk id>", ...], "hedge": "<phrase>"},
+  {"node": "<chunk id>", "split": ["<clause>", "<clause>"], "children": [{"type": "<type>", ...}, {"type": "<type>", ...}]}
+]}
+Leave out "form", "rests_on" and "hedge" where the type has no form fields, rests on nothing, or the
+chunk has no hedge.
+
 Rules:
+- "node" is always one of the chunk ids listed below, exactly as written. Never write a clause id such
+  as s-2a as "node": a clause id exists only once a split record for its chunk is applied.
 - Copy every text value exactly from the chunk: a verbatim field and a hedge must be substrings of
   the chunk's text, a number or quantity must appear in it as a numeral, and an equation reference
   must be referenced in it.
-- Only list in "rests_on" chunks of the types the record's type may rest on; leave it out for a type
-  that rests on nothing.
+- Give a record only the form fields its type lists below, and every field marked required.
+- A type that "rests on nothing" below never has "rests_on". A type that rests on others lists in
+  "rests_on" only chunks that have, or are typed in this answer as, one of the types it names.
 - Do not give probabilities, confidence levels or any other judgement of whether a statement is
   true. The rubric sets those.
 
 Types:
 - reference: A bibliography entry.
+  form: no fields
+  rests on nothing
 - method: What was done: a procedure, simulation or dataset.
   form: kind (enum one of ['simulation', 'dataset', 'procedure'], required)
+  rests on nothing
 - result: What was found.
   form: quantity (verbatim, required); trend (enum one of ['vanishes', 'increases', 'decreases', 'bounded'])
+  rests on nothing
 - derivation: A step of mathematics the document carries out.
   form: equation (eqref)
+  rests on nothing
 - literature_claim: A finding the document takes from a cited work.
   form: statement (verbatim, required)
+  rests on nothing
 - claim: A conclusion the document asserts.
   form: shape (enum one of ['universal', 'existential', 'bound'], required); statement (verbatim, required)
   rests on at least 1 of: result, method, derivation, literature_claim
@@ -46,8 +63,9 @@ s-4 (unassigned): Smith reports a bias below 1\% in comparable settings~\cite{sm
 s-5 (unassigned): We expect the estimator to stay unbiased in practice.
 r-1 (reference): A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.
 
-Records from your previous answer that were not applied, with the error each one got. If this list
-is not empty, return corrected records for these chunks only, and nothing else:
+Records from your previous answer that were not applied, each with the error it got and what to
+change ("fix"). If this list is not empty, return corrected records for these chunks only, and
+nothing else:
 [
   {
     "record": {
@@ -58,7 +76,10 @@ is not empty, return corrected records for these chunks only, and nothing else:
       }
     },
     "code": "invalid-argument",
-    "message": "node 's-4': 'statement': 'a bias below one percent' is not a substring of the text"
+    "message": "node 's-4': 'statement': 'a bias below one percent' is not a substring of the text",
+    "fix": [
+      "form field 'statement': 'a bias below one percent' is not a substring of the text; copy it exactly from the chunk's text"
+    ]
   },
   {
     "record": {
@@ -74,6 +95,9 @@ is not empty, return corrected records for these chunks only, and nothing else:
       "hedge": "We expect"
     },
     "code": "invalid-argument",
-    "message": "node 's-4' has type 'unassigned'; type 'claim' rests on ['result', 'method', 'derivation', 'literature_claim']"
+    "message": "node 's-4' has type 'unassigned'; type 'claim' rests on ['result', 'method', 'derivation', 'literature_claim']",
+    "fix": [
+      "'s-4' in rests_on is of type 'unassigned', and type 'claim' rests only on ['result', 'method', 'derivation', 'literature_claim']: type 's-4' as one of those in the same answer, or leave it out of rests_on"
+    ]
   }
 ]
