@@ -1,0 +1,14 @@
+\documentclass{article}
+\begin{document}
+We simulate 400 noise realisations with a Welch estimator.
+The bias vanishes for long segments, and the estimator is therefore consistent.
+\begin{equation}
+  b = \frac{c}{N} \label{eq:bias}
+\end{equation}
+This suggests that the method may extend to coloured noise.
+Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+We expect the estimator to stay unbiased in practice.
+\begin{thebibliography}{1}
+\bibitem{smith2020} A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.
+\end{thebibliography}
+\end{document}

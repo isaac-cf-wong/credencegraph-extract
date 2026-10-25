@@ -1,0 +1,62 @@
+"""The recorded answers of the classify pass on the invented fixture paper, ``fixtures/classify/paper.tex``.
+
+The first answer types every chunk, splits ``s-2`` into a result and a claim, and locates two hedges:
+``suggests``, which the fixture rubric maps, and ``We expect``, which it does not. Two of its records
+are refused: ``s-4``'s form quotes a statement the text does not contain, and ``s-5`` rests on
+``s-4``, which is still unassigned when ``s-5`` is applied. The repair answer corrects both. The
+records are listed out of document order, which the assembler restores.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from conftest import FIXTURES
+from notes_pass import message
+
+PAPER = FIXTURES / "classify" / "paper.tex"
+RUBRIC = FIXTURES / "classify" / "rubric.toml"
+RUN = FIXTURES / "classify" / "run"
+RUN_ID = "20261025T120000Z-classify"
+
+S5 = {
+    "node": "s-5",
+    "type": "claim",
+    "form": {"shape": "bound", "statement": "the estimator to stay unbiased"},
+    "rests_on": ["s-4"],
+    "hedge": "We expect",
+}
+
+FIRST: list[dict[str, Any]] = [
+    S5,
+    {"node": "s-1", "type": "method", "form": {"kind": "simulation"}},
+    {
+        "node": "s-2",
+        "split": ["The bias vanishes for long segments", "the estimator is therefore consistent"],
+        "children": [
+            {"type": "result", "form": {"quantity": "The bias", "trend": "vanishes"}},
+            {
+                "type": "claim",
+                "form": {"shape": "universal", "statement": "the estimator is therefore consistent"},
+                "rests_on": ["s-2a"],
+            },
+        ],
+    },
+    {
+        "node": "s-3",
+        "type": "claim",
+        "form": {"shape": "existential", "statement": "the method may extend to coloured noise"},
+        "rests_on": ["s-2a", "e-1"],
+        "hedge": "suggests",
+    },
+    {"node": "s-4", "type": "literature_claim", "form": {"statement": "a bias below one percent"}},
+    {"node": "e-1", "type": "derivation"},
+]
+
+REPAIR: list[dict[str, Any]] = [
+    {"node": "s-4", "type": "literature_claim", "form": {"statement": "a bias below 1\\% in comparable settings"}},
+    S5,
+]
+
+BODIES = [message(1, json.dumps({"records": FIRST})), message(2, json.dumps({"records": REPAIR}))]
