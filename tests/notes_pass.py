@@ -14,7 +14,7 @@ from typing import Any
 from credencegraph.core import Graph
 from credencegraph.rubric import Rubric
 
-from credencegraph_extract.run import Ask
+from credencegraph_extract.run import Ask, Outcome
 
 MODEL = "claude-fixture-20261024"
 SCHEMA = {
@@ -31,7 +31,7 @@ class NotesPass:
     name = "notes"
     template = "Write one short note on this sentence of a paper.\n\nSentence: {text}\n"
 
-    def run(self, graph: Graph, rubric: Rubric, ask: Ask) -> Graph:
+    def run(self, graph: Graph, rubric: Rubric, ask: Ask) -> Outcome:
         """Apply the pass.
 
         Args:
@@ -51,7 +51,7 @@ class NotesPass:
             out.add_node(replace(node, attributes={**node.attributes, "note": note}))
         for relation in graph.relations.values():
             out.add_relation(relation)
-        return out
+        return Outcome(out)
 
 
 def message(index: int, text: str, stop_reason: str = "end_turn") -> dict[str, Any]:

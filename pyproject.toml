@@ -18,7 +18,7 @@ classifiers = [
 ]
 requires-python = ">=3.13"
 dynamic = ["version"]
-dependencies = ["anthropic>=2.3.0", "credencegraph[ingest]>=0.3,<0.4"]
+dependencies = ["anthropic>=2.3.0", "credencegraph[ingest]>=0.4,<0.5"]
 
 [dependency-groups]
 dev = [

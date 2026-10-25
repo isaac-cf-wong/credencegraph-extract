@@ -20,10 +20,9 @@ analyst is a language model. The model never writes graph JSON and never sets a
 credence: it returns records, and everything that turns those records into a
 graph is deterministic code built on credencegraph's public API.
 
-> **Status: experimental.** The package is at its scaffold stage: it provides
-> the provider call, the run directory and replay. The passes that classify
-> chunks, add implicit premises and run checks are not built yet, so a run today
-> ingests the document and records it.
+> **Status: experimental.** A run ingests the document and classifies its
+> chunks. The passes that add implicit premises and run checks are not built
+> yet.
 
 ## Installation
 
@@ -52,6 +51,8 @@ runs/paper/
   rubric.toml     byte copy of the rubric used
   prompts/        each pass's prompt template as shipped, and the rendered prompt of every call
   raw/            every provider response verbatim, one file per call, with its request metadata
+  rejections.json the records the core refused, each with its error code
+  report.json     the graph's coverage, and what each pass reports
   source/         a copy of the source document, only with --store-source
 ```
 
@@ -72,6 +73,89 @@ The source document is **not** copied by default, since it is usually someone
 else's copyrighted work; its digest always is. `--store-source` copies it, for
 private use. Both the digest and the copy cover the main `.tex` file only: the
 files of a document split with `\input` are not yet recorded.
+
+## Classify pass
+
+The classify pass sends the document's chunks and the rubric's types to the
+model in one prompt and gets back one **classify record** per chunk:
+
+```json
+{
+    "node": "s-3",
+    "type": "claim",
+    "form": {
+        "shape": "existential",
+        "statement": "the method may extend to coloured noise"
+    },
+    "rests_on": ["s-2a", "e-1"],
+    "hedge": "suggests"
+}
+```
+
+or, for a chunk that makes several statements, a split into verbatim clauses
+with one typed child each:
+
+```json
+{
+    "node": "s-2",
+    "split": [
+        "The bias vanishes for long segments",
+        "the estimator is therefore consistent"
+    ],
+    "children": [
+        {
+            "type": "result",
+            "form": { "quantity": "The bias", "trend": "vanishes" }
+        },
+        {
+            "type": "claim",
+            "form": {
+                "shape": "universal",
+                "statement": "the estimator is therefore consistent"
+            },
+            "rests_on": ["s-2a"]
+        }
+    ]
+}
+```
+
+A record has no field for a credence: the output schema, built from the rubric,
+has none, and the assembler rejects a record that carries a field the format
+does not have.
+
+The **assembler** applies the records in document order through credencegraph's
+`split` and `annotate`, each record whole or not at all. Every `base` and
+`strength` it writes is therefore the rubric's: a typed node gets its type's
+base, and a `rests_on` relation gets the edge rule's strength. A record the core
+refuses (an unknown type, a form value not found in the text, a clause that does
+not occur exactly once, a `rests_on` node of a type the edge rule does not
+allow) is not applied and not dropped: it goes to `rejections.json` with the
+core's error code, and its node stays as it was. The refused records and their
+errors go back to the model once; that repair answer is recorded in `raw/` like
+any other call, and what it does not fix stays rejected. Each entry of
+`rejections.json` names its round, `initial` or `repair`, so a node is still
+rejected exactly when it has a `repair` entry; it shows as untyped in the
+report's coverage.
+
+**Hedges.** `hedge` is a phrase of the node's own text, such as "suggests"; the
+record is rejected if the text does not contain it. The rubric's `[hedges]`
+table (rubric format 2) maps it to `Node.stated`, compared after text
+normalisation and case-folding. The model locates the phrase and never gives the
+number. A phrase the table does not list sets nothing and is listed in
+`report.json` under `passes.classify.hedge-unmapped`, which is how the table
+grows. `stated` is read only by the overclaim and underclaim diagnostics, never
+by inference.
+
+**Only `requires` from the text.** Text may add `requires` relations (through
+the edge rule) and `part-of` relations (through `split`), nothing else: with
+only `requires` parents, a node's credence cannot exceed its type's base,
+whatever the text says. A rubric whose edge rules create `supports` relations
+would let a document raise the credence of its own claims, so a run refuses it
+before any model call. An assembled graph can be checked independently with
+
+```shell
+credencegraph check runs/paper/graph.json --rubric rubric.toml --level typed --rubric-credences
+```
 
 ## Replay
 

@@ -1,0 +1,68 @@
+# An invented rubric for the tests of the classify pass: its values are illustrative.
+
+[rubric]
+format = 2
+name = "classify-test"
+version = "1"
+
+[calibration]
+status = "example"
+scoring = "log"
+against = "nothing: the values are illustrative"
+date = 2026-10-25
+
+[initial]
+reference = "reference"
+
+[types.reference]
+description = "A bibliography entry."
+
+[types.method]
+description = "What was done: a procedure, simulation or dataset."
+base = "beta:9,1"
+form.kind = { type = "enum", values = [
+  "simulation",
+  "dataset",
+  "procedure",
+], required = true }
+
+[types.result]
+description = "What was found."
+base = "beta:8,2"
+form.quantity = { type = "verbatim", required = true }
+form.trend = { type = "enum", values = [
+  "vanishes",
+  "increases",
+  "decreases",
+  "bounded",
+] }
+
+[types.derivation]
+description = "A step of mathematics the document carries out."
+base = "beta:9,1"
+form.equation = { type = "eqref" }
+
+[types.literature_claim]
+description = "A finding the document takes from a cited work."
+base = "beta:8,2"
+form.statement = { type = "verbatim", required = true }
+
+[types.claim]
+description = "A conclusion the document asserts."
+base = "beta:5,5"
+form.shape = { type = "enum", values = [
+  "universal",
+  "existential",
+  "bound",
+], required = true }
+form.statement = { type = "verbatim", required = true }
+rests_on = { types = [
+  "result",
+  "method",
+  "derivation",
+  "literature_claim",
+], min = 1, relation = "requires", strength = "beta:9,1" }
+
+[hedges]
+"suggests" = "beta:6,4"
+"may" = "beta:5,5"

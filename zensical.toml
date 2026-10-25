@@ -50,6 +50,8 @@ nav = [
     { "Overview" = "api/index.md" },
     { "Provider" = "api/provider.md" },
     { "Runs" = "api/run.md" },
+    { "Classify pass" = "api/classify.md" },
+    { "Assembler" = "api/assemble.md" },
   ] },
   { "Contributing" = "contributing.md" },
   { "Security" = "security.md" },
