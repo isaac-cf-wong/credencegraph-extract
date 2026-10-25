@@ -637,6 +637,16 @@ def test_the_command_refuses_bad_request_options_in_one_line_before_it_runs(
     assert not (tmp_path / "run").exists()
 
 
+def test_the_command_refuses_an_unknown_provider_in_one_line_before_it_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["run", str(PAPER), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL, "--provider", "other"]
+    assert main(args) == 2
+    err = capsys.readouterr().err
+    assert err == "error [invalid-argument]: unknown provider 'other': not one of ['anthropic', 'openai']\n"
+    assert not (tmp_path / "run").exists()
+
+
 @pytest.mark.parametrize("name", ["anthropic", "openai"])
 def test_the_command_reports_a_missing_api_key_in_one_line(
     name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]

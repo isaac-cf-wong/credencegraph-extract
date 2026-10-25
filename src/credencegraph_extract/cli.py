@@ -58,7 +58,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--model", help="The exact model id the passes call, dated where the provider dates its ids.")
     run.add_argument(
         "--provider",
-        choices=provider.PROVIDERS,
+        # Checked in the command, not by argparse choices, so an unknown one is a one-line error.
         default=provider.ANTHROPIC,
         help="The API the endpoint speaks: anthropic (Messages) or openai (Chat Completions); anthropic by default.",
     )
