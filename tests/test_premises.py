@@ -71,6 +71,12 @@ def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def premise_rejections(run_dir: Path) -> list[dict[str, Any]]:
+    """The entries of a run's ``rejections.json`` that the premise pass made."""
+    # "pass" is the field naming the pipeline stage, not a credential.
+    return [item for item in read_json(run_dir / "rejections.json") if item["pass"] == "premises"]  # noqa: S105
+
+
 def make_run(run_dir: Path, bodies: list[dict[str, Any]], rubric: Path = RUBRIC) -> Any:
     client = fake_client(bodies)
     call = partial(provider.call, model=MODEL, max_tokens=1024, client=client)
@@ -272,7 +278,7 @@ def test_a_refused_record_is_repaired_once(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     client = make_run(run_dir, BODIES)
     assert len(client.sent) == 4
-    rejections = [item for item in read_json(run_dir / "rejections.json") if item["pass"] == "premises"]
+    rejections = premise_rejections(run_dir)
     assert [(item["round"], item["node"], item["code"]) for item in rejections] == [
         ("initial", "s-5", "invalid-argument")
     ]
@@ -289,7 +295,7 @@ def test_the_repair_answer_may_only_name_refused_conclusions(tmp_path: Path) -> 
     bodies = [*CLASSIFY_BODIES, BODIES[2], message(4, json.dumps({"records": [*PREMISES_REPAIR, stray]}))]
     run_dir = tmp_path / "run"
     make_run(run_dir, bodies)
-    rejections = [item for item in read_json(run_dir / "rejections.json") if item["pass"] == "premises"]
+    rejections = premise_rejections(run_dir)
     assert [(item["round"], item["node"], item["code"]) for item in rejections] == [
         ("initial", "s-5", "invalid-argument"),
         ("repair", "s-3", "not-rejected"),
