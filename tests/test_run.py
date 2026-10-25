@@ -27,7 +27,7 @@ def make_run(run_dir: Path, **kwargs: object) -> dict:
 def test_run_writes_the_layout(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     make_run(run_dir)
-    files = sorted(str(path.relative_to(run_dir)) for path in run_dir.rglob("*") if path.is_file())
+    files = sorted(path.relative_to(run_dir).as_posix() for path in run_dir.rglob("*") if path.is_file())
     assert files == [
         "graph.json",
         "manifest.json",
