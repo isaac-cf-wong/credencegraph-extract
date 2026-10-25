@@ -1,0 +1,8 @@
+{
+  "result": "passed",
+  "detail": "the passage at chars=88-167 supports the statement",
+  "answer": {
+    "passage": "In comparable settings the bias stays below 1% for all segment lengths we tried",
+    "supports": true
+  }
+}

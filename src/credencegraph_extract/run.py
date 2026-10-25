@@ -13,6 +13,7 @@ whatever fails after them. The layout is::
       raw/            the record of every call: the provider's response verbatim, with its request metadata
       rejections.json the records the core refused, each with its error code
       report.json     the graph's coverage, and what each pass reports, such as hedge phrases the rubric does not map
+      checks/c-NNN/   for each check the check pass ran: its inputs, the tool's output and a log
       source/         a copy of the source document, only with ``store_source``
 
 Every node a run creates or changes carries ``attributes.extraction = {"run": <run id>, "pass":
@@ -31,7 +32,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from importlib.metadata import version
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 from credencegraph.core import Graph, dumps
@@ -55,9 +56,14 @@ RAW = "raw"
 REJECTIONS = "rejections.json"
 REPORT = "report.json"
 SOURCE = "source"
+CHECKS = "checks"
 
-# Send a rendered prompt under an output schema and return the model's structured output.
-Ask = Callable[[str, Mapping[str, Any]], Any]
+# The paths a pass may not write: those the run writes itself.
+RESERVED = (MANIFEST, GRAPH, RUBRIC, PROMPTS, RAW, REJECTIONS, REPORT, SOURCE)
+
+# Send a rendered prompt under an output schema and return the model's structured output with the
+# request metadata of the call.
+Send = Callable[[str, Mapping[str, Any]], tuple[Any, Mapping[str, Any]]]
 
 # ``provider.call`` with the model and sampling parameters bound: prompt and schema to a record.
 Call = Callable[[str, Mapping[str, Any]], dict[str, Any]]
@@ -71,11 +77,55 @@ class Outcome:
         graph: The graph after the pass.
         rejections: The records the pass did not apply, each a JSON object naming why.
         report: What the pass reports beside the graph, as JSON.
+        files: Files to write into the run directory, by relative path; deterministic, like the graph.
     """
 
     graph: Graph
     rejections: Sequence[Mapping[str, Any]] = ()
     report: Mapping[str, Any] = field(default_factory=dict)
+    files: Mapping[str, bytes] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Ask:
+    """How a pass reaches the model, and the versions the run records.
+
+    Calling it sends one prompt and returns the model's structured output; ``answer`` returns the
+    request metadata of the call beside it. A run sends each call to the provider and records it; a
+    replay answers it from the record.
+
+    Attributes:
+        send: Sends one call and returns the output with the call's request metadata.
+        versions: The versions the run records, by name; a replay reads them from the manifest.
+    """
+
+    send: Send
+    versions: Mapping[str, str]
+
+    def __call__(self, prompt: str, schema: Mapping[str, Any]) -> Any:
+        """Send one prompt under an output schema.
+
+        Args:
+            prompt: The rendered prompt.
+            schema: The output schema.
+
+        Returns:
+            The model's structured output.
+        """
+        return self.send(prompt, schema)[0]
+
+    def answer(self, prompt: str, schema: Mapping[str, Any]) -> tuple[Any, Mapping[str, Any]]:
+        """Send one prompt under an output schema, and say which model answered.
+
+        Args:
+            prompt: The rendered prompt.
+            schema: The output schema.
+
+        Returns:
+            The model's structured output, and the request metadata of the call: provider, model,
+            request id and the rest of what ``provider.call`` records.
+        """
+        return self.send(prompt, schema)
 
 
 @dataclass(frozen=True)
@@ -86,11 +136,13 @@ class Built:
         graph: The graph.
         rejections: Every pass's rejections, in pass order, each with ``"pass"`` set to its pass's name.
         report: Each pass's report, by pass name.
+        files: The files the passes write into the run directory, by path inside it.
     """
 
     graph: Graph
     rejections: list[dict[str, Any]]
     report: dict[str, Any]
+    files: dict[str, bytes]
 
 
 class Pass(Protocol):
@@ -202,12 +254,18 @@ def build_graph(  # noqa: PLR0913, PLR0917 - the run's inputs, each needed by in
     graph = stamp(graph, Graph(), run_id, INGEST)
     rejections: list[dict[str, Any]] = []
     report: dict[str, Any] = {}
+    files: dict[str, bytes] = {}
     for item in passes:
         outcome = item.run(graph, rubric, asker(item))
         graph = stamp(outcome.graph, graph, run_id, item.name)
         rejections.extend({"pass": item.name, **rejection} for rejection in outcome.rejections)
         report[item.name] = dict(outcome.report)
-    return Built(graph, rejections, report)
+        for name, data in outcome.files.items():
+            path = PurePosixPath(name)
+            if path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] in RESERVED:
+                raise RunError("invalid-file", f"pass {item.name!r} may not write {name!r} in the run directory")
+            files[name] = data
+    return Built(graph, rejections, report, files)
 
 
 def _write_json(path: Path, value: Any) -> bytes:
@@ -218,7 +276,7 @@ def _write_json(path: Path, value: Any) -> bytes:
 
 
 def versions() -> dict[str, str]:
-    """Return the versions a run depends on: Python, the core, this package and the provider SDK.
+    """Return the versions a run depends on: Python, the core, this package, the provider SDK and sympy.
 
     Returns:
         The versions by name.
@@ -228,6 +286,7 @@ def versions() -> dict[str, str]:
         "credencegraph": version("credencegraph"),
         "credencegraph-extract": __version__,
         provider.PROVIDER: version(provider.PROVIDER),
+        "sympy": version("sympy"),
     }
 
 
@@ -293,6 +352,7 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
 
     pass_entries: list[dict[str, Any]] = []
     count = 0
+    recorded_versions = versions()
 
     def asker(item: Pass) -> Ask:
         template = item.template.encode("utf-8")
@@ -300,7 +360,7 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
         entry: dict[str, Any] = {"name": item.name, "template_digest": bytes_digest(template), "calls": []}
         pass_entries.append(entry)
 
-        def ask(prompt: str, schema: Mapping[str, Any]) -> Any:
+        def send(prompt: str, schema: Mapping[str, Any]) -> tuple[Any, Mapping[str, Any]]:
             nonlocal count
             count += 1
             prompt_path = f"{PROMPTS}/{count:04d}.txt"
@@ -319,13 +379,16 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
                     **{key: request[key] for key in ("provider", "model", "parameters", "sdk_version")},
                 }
             )
-            return provider.output(record)
+            return provider.output(record), request
 
-        return ask
+        return Ask(send, recorded_versions)
 
     built = build_graph(source, document or source.name, rubric, run_id, passes, asker)
     graph_bytes = graph_text(built.graph).encode("utf-8")
     (run_dir / GRAPH).write_bytes(graph_bytes)
+    for name, data in built.files.items():
+        (run_dir / name).parent.mkdir(parents=True, exist_ok=True)
+        (run_dir / name).write_bytes(data)
     _write_json(run_dir / REJECTIONS, built.rejections)
     _write_json(run_dir / REPORT, {"coverage": coverage(built.graph, rubric), "passes": built.report})
     manifest = {
@@ -339,7 +402,7 @@ def run_extraction(  # noqa: PLR0913 - each argument is a separate choice of the
             "digest": bytes_digest(source_bytes),
             "stored": store_source,
         },
-        "versions": versions(),
+        "versions": recorded_versions,
         "rubric": {**rubric.identity(), "digest": bytes_digest(rubric_bytes)},
         "passes": pass_entries,
         "graph_digest": bytes_digest(graph_bytes),
@@ -402,6 +465,8 @@ def read_manifest(run_dir: Path) -> dict[str, Any]:
         raise RunError("unsupported-version", f"{MANIFEST} is version {manifest.get('version')!r}, not {VERSION}")
     _field(manifest, "run", str, "")
     _field(manifest, "graph_digest", str, "")
+    if not all(isinstance(value, str) for value in _field(manifest, "versions", dict, "").values()):
+        raise RunError("invalid-manifest", f"{MANIFEST}: every version must be a string")
     source = _field(manifest, "source", dict, "")
     for key in ("document", "file", "digest"):
         _field(source, key, str, "source.")
@@ -419,15 +484,17 @@ def read_manifest(run_dir: Path) -> dict[str, Any]:
     return manifest
 
 
-def _recorded_output(record: Any, prompt: str, schema: Mapping[str, Any], name: str, where: str) -> Any:
-    """Return the output of a recorded call, after checking it answers ``prompt`` under ``schema``."""
+def _recorded_output(
+    record: Any, prompt: str, schema: Mapping[str, Any], name: str, where: str
+) -> tuple[Any, Mapping[str, Any]]:
+    """Return the output and request metadata of a recorded call, after checking it answers ``prompt`` under ``schema``."""
     request = record.get("request") if isinstance(record, dict) else None
     if not isinstance(request, dict) or "prompt_digest" not in request or "output_schema" not in request:
         raise RunError("invalid-record", f"{where} has no request metadata")
     if bytes_digest(prompt.encode("utf-8")) != request["prompt_digest"] or dict(schema) != request["output_schema"]:
         raise RunError("unrecorded-call", f"pass {name!r} asks a call that differs from {where}")
     try:
-        return provider.output(record)
+        return provider.output(record), request
     except provider.ProviderError as error:
         raise RunError("invalid-record", f"{where}: {error}") from None
 
@@ -474,13 +541,14 @@ def replay(run_dir: Path, *, passes: Sequence[Pass], source: Path | None = None)
     if names != [item.name for item in passes]:
         raise RunError("unknown-pass", f"the run's passes are {names}, not {[item.name for item in passes]}")
     entries = {entry["name"]: entry for entry in manifest["passes"]}
+    recorded_versions = manifest["versions"]
 
     pending: dict[str, Iterator[dict[str, Any]]] = {}
 
     def asker(item: Pass) -> Ask:
         calls = pending[item.name] = iter(entries[item.name]["calls"])
 
-        def ask(prompt: str, schema: Mapping[str, Any]) -> Any:
+        def send(prompt: str, schema: Mapping[str, Any]) -> tuple[Any, Mapping[str, Any]]:
             entry = next(calls, None)
             if entry is None:
                 raise RunError("unrecorded-call", f"pass {item.name!r} asks more calls than were recorded")
@@ -493,7 +561,7 @@ def replay(run_dir: Path, *, passes: Sequence[Pass], source: Path | None = None)
                 raise RunError("invalid-record", f"{entry['raw']} is not JSON: {error}") from None
             return _recorded_output(record, prompt, schema, item.name, entry["raw"])
 
-        return ask
+        return Ask(send, recorded_versions)
 
     graph = build_graph(source, recorded["document"], rubric, manifest["run"], passes, asker).graph
     for name, calls in pending.items():

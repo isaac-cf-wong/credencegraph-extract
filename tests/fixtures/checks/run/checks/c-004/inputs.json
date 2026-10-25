@@ -1,0 +1,30 @@
+{
+  "type": "rederive-maths",
+  "target": "e-3",
+  "artifact": {
+    "kind": "equation",
+    "nodes": [
+      "e-3"
+    ],
+    "labels": [
+      "eq:phase"
+    ]
+  },
+  "inputs": {
+    "lhs": "atan(x) + atan(1/x)",
+    "rhs": "pi/2",
+    "symbols": [
+      {
+        "name": "x",
+        "assumptions": [
+          "positive"
+        ],
+        "domain": [
+          0.01,
+          100
+        ]
+      }
+    ],
+    "assumption": "x is positive."
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "format": "credencegraph-extract-run",
+  "version": 1,
+  "run": "20261025T120000Z-checks",
+  "created_at": "2026-10-25T12:32:38Z",
+  "source": {
+    "document": "paper.tex",
+    "file": "paper.tex",
+    "digest": "sha256:4dc6783f0f3d78cb9a75e4526efc6ef41fba398ddfccf7aa446f2d8e4c3ba70e",
+    "stored": false
+  },
+  "versions": {
+    "python": "3.15.0",
+    "credencegraph": "0.4.0",
+    "credencegraph-extract": "0.1.dev7+g70142a561.d20261025",
+    "anthropic": "2.3.0",
+    "sympy": "1.14.0"
+  },
+  "rubric": {
+    "name": "checks-test",
+    "version": "1",
+    "digest": "sha256:7479507a4d960dd7079f3013de98f6bbd9c237e956dd663d2dba195966ea132c"
+  },
+  "passes": [
+    {
+      "name": "classify",
+      "template_digest": "sha256:7e8ef9f409dc440885de887284c1f4c0609f41bd3969fb695611d06991caaf68",
+      "calls": [
+        {
+          "prompt": "prompts/0001.txt",
+          "prompt_digest": "sha256:92377c6bd8702e721524d6c7e75e379e1b50a028fc6a9dac9da5fd09ff68b229",
+          "raw": "raw/0001.json",
+          "raw_digest": "sha256:045dd6dff5b7a34c5eabc5e969d0b928987193ebe24418b343e2b7b35b1d2e23",
+          "provider": "anthropic",
+          "model": "claude-fixture-20261024",
+          "parameters": {
+            "max_tokens": 1024
+          },
+          "sdk_version": "2.3.0"
+        }
+      ]
+    },
+    {
+      "name": "premises",
+      "template_digest": "sha256:4872cd1bad5a2c31bfa6987e134b45f35ea4ecd4392c935405bae2ddce17623f",
+      "calls": []
+    },
+    {
+      "name": "checks",
+      "template_digest": "sha256:fd6b4dbb66d8e8099ca41e133e532adf58f25b692c72d3d72c1f768adba94e9c",
+      "calls": [
+        {
+          "prompt": "prompts/0002.txt",
+          "prompt_digest": "sha256:fa0a40fe70a7f789e8be6ce18a36f18db3beaeaf073a32445bcaa782ed1269f2",
+          "raw": "raw/0002.json",
+          "raw_digest": "sha256:fe1046fb974de9e0685a3bba0d91d732c92e7f3c359747f5bb1cfe8b830e5b47",
+          "provider": "anthropic",
+          "model": "claude-fixture-20261024",
+          "parameters": {
+            "max_tokens": 1024
+          },
+          "sdk_version": "2.3.0"
+        },
+        {
+          "prompt": "prompts/0003.txt",
+          "prompt_digest": "sha256:91b5dc0dec5d0d9a9adacf4ce5d120640a03827991da074a505b822426b25c73",
+          "raw": "raw/0003.json",
+          "raw_digest": "sha256:0a95da8d609913b5cf00e84d0db7ace5915381810fc3ad5f789af8f2b35b8de9",
+          "provider": "anthropic",
+          "model": "claude-fixture-20261024",
+          "parameters": {
+            "max_tokens": 1024
+          },
+          "sdk_version": "2.3.0"
+        }
+      ]
+    }
+  ],
+  "graph_digest": "sha256:b0468f981a55ea6c25ef637da9f7babcb88130ec877ae8637d882a5e80a294c1"
+}

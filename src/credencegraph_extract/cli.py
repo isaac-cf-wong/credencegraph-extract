@@ -2,7 +2,8 @@
 
 ``run`` extracts a graph from a LaTeX document into a new run directory. ``replay`` rebuilds a run's
 graph from its recorded calls, without the network, and reports whether it is byte-identical to the
-recorded ``graph.json``. The exit status is 0 on success, 1 if a replayed graph differs from the
+recorded ``graph.json``. A run's citation checks read the cited works from ``--cited``; a replay
+needs the same directory, and re-runs every check that a run allowed, uncalibrated ones included. The exit status is 0 on success, 1 if a replayed graph differs from the
 recorded one, and 2 on any error, reported as one line on stderr.
 """
 
@@ -17,9 +18,9 @@ from typing import Any
 
 import anthropic
 
-from credencegraph_extract import provider
+from credencegraph_extract import cited, provider
 from credencegraph_extract.digest import bytes_digest
-from credencegraph_extract.pipeline import PASSES
+from credencegraph_extract.pipeline import passes
 from credencegraph_extract.run import GRAPH, RunError, read_manifest, read_run_file, replay, run_extraction
 
 DEFAULT_MAX_TOKENS = 16000
@@ -46,17 +47,30 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Copy the source document into the run directory (it is not copied by default; its digest always is).",
     )
+    run.add_argument("--cited", type=Path, help="The directory of cited works, each named by its bibliography key.")
+    run.add_argument(
+        "--fetch-arxiv",
+        action="store_true",
+        help="Download a cited work missing from --cited from arXiv, into --cited, when its entry names one.",
+    )
+    run.add_argument(
+        "--allow-uncalibrated",
+        action="store_true",
+        help="Run a model-judged check with a model its check type was not fitted with; the report lists each.",
+    )
 
     rerun = commands.add_parser("replay", help="Rebuild a run's graph from raw/ and compare it with graph.json.")
     rerun.add_argument("run_dir", type=Path, help="The run directory.")
     rerun.add_argument("--source", type=Path, help="The source document, for a run that did not store it.")
     rerun.add_argument("--output", type=Path, help="Also write the rebuilt graph to this file.")
+    rerun.add_argument("--cited", type=Path, help="The directory of cited works the run read.")
     return parser
 
 
 def _replay(args: argparse.Namespace) -> int:
     """Replay a run and report whether its graph is byte-identical; 0 if it is, 1 if it differs."""
-    rebuilt = replay(args.run_dir, passes=PASSES, source=args.source)
+    resolve = cited.directory(args.cited) if args.cited else cited.no_sources
+    rebuilt = replay(args.run_dir, passes=passes(cited=resolve, allow_uncalibrated=True), source=args.source)
     recorded = read_manifest(args.run_dir)["graph_digest"]
     if args.output:
         try:
@@ -73,12 +87,15 @@ def _replay(args: argparse.Namespace) -> int:
 def _run(args: argparse.Namespace) -> int:
     """Run the pipeline into a new run directory."""
     call = partial(provider.call, model=args.model, max_tokens=args.max_tokens) if args.model else _no_model
+    if args.fetch_arxiv and not args.cited:
+        raise RunError("invalid-argument", "--fetch-arxiv needs --cited, the directory to download into")
+    resolve = cited.directory(args.cited, fetch_arxiv=args.fetch_arxiv) if args.cited else cited.no_sources
     manifest = run_extraction(
         args.source,
         args.run_dir,
         args.rubric,
         call=call,
-        passes=PASSES,
+        passes=passes(cited=resolve, allow_uncalibrated=args.allow_uncalibrated),
         document=args.document,
         store_source=args.store_source,
     )

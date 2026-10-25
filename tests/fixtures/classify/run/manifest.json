@@ -2,7 +2,7 @@
   "format": "credencegraph-extract-run",
   "version": 1,
   "run": "20261025T120000Z-classify",
-  "created_at": "2026-10-25T10:27:34Z",
+  "created_at": "2026-10-25T12:30:42Z",
   "source": {
     "document": "paper.tex",
     "file": "paper.tex",
@@ -12,8 +12,9 @@
   "versions": {
     "python": "3.15.0",
     "credencegraph": "0.4.0",
-    "credencegraph-extract": "0.1.dev5+g6faef2cc5",
-    "anthropic": "2.3.0"
+    "credencegraph-extract": "0.1.dev7+g70142a561.d20261025",
+    "anthropic": "2.3.0",
+    "sympy": "1.14.0"
   },
   "rubric": {
     "name": "classify-test",
@@ -80,6 +81,11 @@
           "sdk_version": "2.3.0"
         }
       ]
+    },
+    {
+      "name": "checks",
+      "template_digest": "sha256:fd6b4dbb66d8e8099ca41e133e532adf58f25b692c72d3d72c1f768adba94e9c",
+      "calls": []
     }
   ],
   "graph_digest": "sha256:09a7b4dccd626b05c7ac03981d14505c3cf2343f2ea8ec3b325366f51228b7cf"

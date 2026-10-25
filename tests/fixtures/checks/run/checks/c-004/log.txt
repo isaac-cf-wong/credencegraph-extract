@@ -1,0 +1,4 @@
+rederive-maths on e-3: error
+sympy cannot decide whether atan(1/x) + atan(x) - pi/2 is 0
+tool: {"name": "credencegraph-extract", "python": "3.15.0", "sympy": "1.14.0", "version": "0.1.dev7+g70142a561.d20261025"}
+model: null

@@ -1,0 +1,1019 @@
+{
+  "format": "credencegraph",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "s-1",
+      "kind": "method",
+      "statement": "We simulate 400 noise realisations of 250 segments each.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=3-3",
+          "quote": "We simulate 400 noise realisations of 250 segments each.",
+          "digest": "sha256:199754287e218921d00cd9d64d11143405d6838546f8809b1c055d18dfdd5c7d"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "classify"
+        }
+      }
+    },
+    {
+      "id": "s-2",
+      "kind": "result",
+      "statement": "In total we analyse 90000 segments.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=4-4",
+          "quote": "In total we analyse 90000 segments.",
+          "digest": "sha256:78158011632514e26411c83adf294f36a49040968d239b8a183b4e7c51dbe771"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        },
+        "form": {
+          "quantity": "segments"
+        },
+        "assessment": {
+          "verdict": "fails"
+        }
+      }
+    },
+    {
+      "id": "s-3",
+      "kind": "result",
+      "statement": "Of the 400 realisations, 12.5\\% are rejected, which leaves 350.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=5-5",
+          "quote": "Of the 400 realisations, 12.5\\% are rejected, which leaves 350.",
+          "digest": "sha256:d02021897752ef21fde59cc4f6e2a59a86821d5cbbfb883ca4c0ac2301ab87f5"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        },
+        "form": {
+          "quantity": "realisations"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-4",
+      "kind": "context",
+      "statement": "The bias of the estimator is",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=6-6",
+          "quote": "The bias of the estimator is",
+          "digest": "sha256:d345939efb2b49fb87922e86082ffc8c5d2716a45f019f473143180f7c8e437c"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "classify"
+        }
+      }
+    },
+    {
+      "id": "e-1",
+      "kind": "derivation",
+      "statement": "\\begin{equation} b = \\frac{c}{N} \\end{equation}",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=7-9",
+          "quote": "\\begin{equation} b = \\frac{c}{N} \\end{equation}",
+          "digest": "sha256:0b6fc0a92683584381b436fb1eacea4542be7da2a62b13e3b70bcab5b6452bf8"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "equation",
+        "label": "eq:bias",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        },
+        "assessment": {
+          "verdict": "not_assessed",
+          "reason": "not selected"
+        }
+      }
+    },
+    {
+      "id": "s-5",
+      "kind": "context",
+      "statement": "and multiplying by the number of segments gives",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=10-10",
+          "quote": "and multiplying by the number of segments gives",
+          "digest": "sha256:c6f79d53258325b63905e3c56a1c98efc20baa72e35361fcd83b5c90101f67bf"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "classify"
+        }
+      }
+    },
+    {
+      "id": "e-2",
+      "kind": "derivation",
+      "statement": "\\begin{equation} b N = c \\end{equation}",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=11-13",
+          "quote": "\\begin{equation} b N = c \\end{equation}",
+          "digest": "sha256:68a2aa66c735c732888dd16a487300fcd3c0eced6f3524c8e86318f2699215c8"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "equation",
+        "label": "eq:product",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-6",
+      "kind": "context",
+      "statement": "For the phase we use",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=14-14",
+          "quote": "For the phase we use",
+          "digest": "sha256:fb96c10e100e7bb7678bb6254c9bd7e958717ef3d8fdb089062cc964b8464de2"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "classify"
+        }
+      }
+    },
+    {
+      "id": "e-3",
+      "kind": "derivation",
+      "statement": "\\begin{equation} \\arctan x + \\arctan(1/x) = \\pi/2 \\end{equation}",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=15-17",
+          "quote": "\\begin{equation} \\arctan x + \\arctan(1/x) = \\pi/2 \\end{equation}",
+          "digest": "sha256:2e727f4304590598bfe8c9edf651d1da6b7121c3df8010bdf44de9d01813bcd2"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "equation",
+        "label": "eq:phase",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-7",
+      "kind": "literature_claim",
+      "statement": "Smith reports a bias below 1\\% in comparable settings~\\cite{smith2020}.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=18-18",
+          "quote": "Smith reports a bias below 1\\% in comparable settings~\\cite{smith2020}.",
+          "digest": "sha256:23f4911fbf2bafd93144cd1d4c8467fb23ba149728b45270feaf4133af7ab82b"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-8",
+      "kind": "literature_claim",
+      "statement": "Jones finds that the bias grows with the segment length~\\cite{jones2021}.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=19-19",
+          "quote": "Jones finds that the bias grows with the segment length~\\cite{jones2021}.",
+          "digest": "sha256:3d5c7eedac4ee1ae55dec864df558f3285f93ca62ca91a8421a9283d3af11b26"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        },
+        "assessment": {
+          "verdict": "undetermined"
+        }
+      }
+    },
+    {
+      "id": "s-9",
+      "kind": "claim",
+      "statement": "The estimator is therefore consistent.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=20-20",
+          "quote": "The estimator is therefore consistent.",
+          "digest": "sha256:e077b142aa8e1bba610362ab140b439985de6b40cbd40b346f8074fe467c5113"
+        }
+      ],
+      "base": {
+        "alpha": 5.0,
+        "beta": 5.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        },
+        "assessment": {
+          "verdict": "not_assessed",
+          "reason": "no v1 check applies"
+        }
+      }
+    },
+    {
+      "id": "r-1",
+      "kind": "reference",
+      "statement": "A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=22-22",
+          "quote": "A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.",
+          "digest": "sha256:2a61d91f961858e74b921ebb12d662254024e2d405047be7bd8ac760dc76fd8d"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "reference",
+        "key": "smith2020",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "ingest"
+        }
+      }
+    },
+    {
+      "id": "r-2",
+      "kind": "reference",
+      "statement": "B. Jones, Long segments, arXiv:2101.01234.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=23-23",
+          "quote": "B. Jones, Long segments, arXiv:2101.01234.",
+          "digest": "sha256:c324c1b755e885012b3100e48668833e21802b59014d812ba7414860b728d9ca"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "reference",
+        "key": "jones2021",
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "ingest"
+        }
+      }
+    },
+    {
+      "id": "c-001",
+      "kind": "recompute-numbers",
+      "statement": "recompute-numbers on s-2: failed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "recompute-numbers",
+          "target": "s-2",
+          "artifact": {
+            "kind": "numbers",
+            "nodes": [
+              "s-1",
+              "s-2"
+            ]
+          },
+          "inputs": {
+            "expression": "400 * 250",
+            "expected": "90000"
+          },
+          "result": "failed",
+          "detail": "400 * 250 = 100000 (exact, Fraction); outside 90000 \u00b1 0.5",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev7+g70142a561.d20261025",
+            "python": "3.15.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-001/",
+            "digest": "sha256:a32e6898d7730592e72c0314e834695ffdf75fbc9980812a28a5b0193bd63410"
+          }
+        },
+        "observed": false,
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        }
+      }
+    },
+    {
+      "id": "c-002",
+      "kind": "recompute-numbers",
+      "statement": "recompute-numbers on s-3: passed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "recompute-numbers",
+          "target": "s-3",
+          "artifact": {
+            "kind": "numbers",
+            "nodes": [
+              "s-3"
+            ]
+          },
+          "inputs": {
+            "expression": "400 - 400 * 0.125",
+            "expected": "350"
+          },
+          "result": "passed",
+          "detail": "400 - 400 * 0.125 = 350 (exact, Fraction); within 350 \u00b1 0.5",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev7+g70142a561.d20261025",
+            "python": "3.15.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-002/",
+            "digest": "sha256:8386a001e468e88dce7223cada1bd0d18f161b669453aaaf67125aea5b0c6337"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        }
+      }
+    },
+    {
+      "id": "c-003",
+      "kind": "rederive-maths",
+      "statement": "rederive-maths on e-2: passed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "rederive-maths",
+          "target": "e-2",
+          "artifact": {
+            "kind": "equation",
+            "nodes": [
+              "e-1",
+              "e-2"
+            ],
+            "labels": [
+              "eq:bias",
+              "eq:product"
+            ]
+          },
+          "inputs": {
+            "lhs": "c / N * N",
+            "rhs": "c",
+            "symbols": [
+              {
+                "name": "c",
+                "assumptions": [
+                  "real"
+                ],
+                "domain": [
+                  -10,
+                  10
+                ]
+              },
+              {
+                "name": "N",
+                "assumptions": [
+                  "positive"
+                ],
+                "domain": [
+                  1,
+                  100
+                ]
+              }
+            ],
+            "assumption": "N is the number of segments, so it is positive."
+          },
+          "result": "passed",
+          "detail": "the difference simplifies to 0",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev7+g70142a561.d20261025",
+            "python": "3.15.0",
+            "sympy": "1.14.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-003/",
+            "digest": "sha256:96c8378d8726ee2241a38f0128c472cc982f0a0f94981ca77c95194684e27d1e"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        }
+      }
+    },
+    {
+      "id": "c-004",
+      "kind": "rederive-maths",
+      "statement": "rederive-maths on e-3: error",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "rederive-maths",
+          "target": "e-3",
+          "artifact": {
+            "kind": "equation",
+            "nodes": [
+              "e-3"
+            ],
+            "labels": [
+              "eq:phase"
+            ]
+          },
+          "inputs": {
+            "lhs": "atan(x) + atan(1/x)",
+            "rhs": "pi/2",
+            "symbols": [
+              {
+                "name": "x",
+                "assumptions": [
+                  "positive"
+                ],
+                "domain": [
+                  0.01,
+                  100
+                ]
+              }
+            ],
+            "assumption": "x is positive."
+          },
+          "result": "error",
+          "detail": "sympy cannot decide whether atan(1/x) + atan(x) - pi/2 is 0",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev7+g70142a561.d20261025",
+            "python": "3.15.0",
+            "sympy": "1.14.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-004/",
+            "digest": "sha256:dd639756835832e45458c331d262a020336b0ead6234990033829a46c5e6ac38"
+          }
+        },
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        }
+      }
+    },
+    {
+      "id": "c-005",
+      "kind": "rederive-maths-numeric",
+      "statement": "rederive-maths-numeric on e-3: passed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "rederive-maths-numeric",
+          "target": "e-3",
+          "artifact": {
+            "kind": "equation",
+            "nodes": [
+              "e-3"
+            ],
+            "labels": [
+              "eq:phase"
+            ]
+          },
+          "inputs": {
+            "lhs": "atan(x) + atan(1/x)",
+            "rhs": "pi/2",
+            "symbols": [
+              {
+                "name": "x",
+                "assumptions": [
+                  "positive"
+                ],
+                "domain": [
+                  0.01,
+                  100
+                ]
+              }
+            ],
+            "assumption": "x is positive.",
+            "seed": 3033578977768571,
+            "points": [
+              {
+                "x": "10.314512895271987"
+              },
+              {
+                "x": "11.207318523062597"
+              },
+              {
+                "x": "63.98764386159597"
+              },
+              {
+                "x": "2.864842281219468"
+              },
+              {
+                "x": "73.25172591188867"
+              },
+              {
+                "x": "99.2583068684104"
+              },
+              {
+                "x": "55.813653111655356"
+              },
+              {
+                "x": "67.04835904258316"
+              },
+              {
+                "x": "81.99836107003712"
+              },
+              {
+                "x": "52.74733242980896"
+              },
+              {
+                "x": "24.069185187749525"
+              },
+              {
+                "x": "6.010559713611822"
+              },
+              {
+                "x": "59.516862808159125"
+              },
+              {
+                "x": "30.672599580011084"
+              },
+              {
+                "x": "67.73226125467909"
+              },
+              {
+                "x": "63.34374394466943"
+              },
+              {
+                "x": "62.30770984788913"
+              },
+              {
+                "x": "47.68613836579244"
+              },
+              {
+                "x": "71.83469278749278"
+              },
+              {
+                "x": "5.090320804842063"
+              },
+              {
+                "x": "57.805733269719745"
+              },
+              {
+                "x": "46.50489681658768"
+              },
+              {
+                "x": "84.81687395060133"
+              },
+              {
+                "x": "9.148670556225833"
+              },
+              {
+                "x": "13.876440664282722"
+              },
+              {
+                "x": "97.38721419148439"
+              },
+              {
+                "x": "28.807584182436216"
+              },
+              {
+                "x": "3.0873968828936116"
+              },
+              {
+                "x": "58.862246675546814"
+              },
+              {
+                "x": "17.70543660640012"
+              },
+              {
+                "x": "2.789944950542201"
+              },
+              {
+                "x": "32.694730559502396"
+              }
+            ],
+            "rtol": "1E-12"
+          },
+          "result": "passed",
+          "detail": "the sides agree to rtol 1E-12 at all 32 points",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev7+g70142a561.d20261025",
+            "python": "3.15.0",
+            "sympy": "1.14.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-005/",
+            "digest": "sha256:a6e36fdf7121c527b75228bca9fbdcb414a3a7d6e826d0cb7a0dc90bb0fc9ea3"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        }
+      }
+    },
+    {
+      "id": "c-006",
+      "kind": "citation-support",
+      "statement": "citation-support on s-7: passed",
+      "sources": [
+        {
+          "document": "smith2020.txt",
+          "locator": "chars=88-167",
+          "quote": "In comparable settings the bias stays below 1% for all segment lengths we tried",
+          "digest": "sha256:7e71cf0cfc9dc5a13a3355684a315c82717bd35514e09de8bbf55886b5e7e05a"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "citation-support",
+          "target": "s-7",
+          "artifact": {
+            "kind": "citation",
+            "reference": "r-1",
+            "document": "smith2020.txt",
+            "locator": "chars=88-167",
+            "quote": "In comparable settings the bias stays below 1% for all segment lengths we tried",
+            "digest": "sha256:7e71cf0cfc9dc5a13a3355684a315c82717bd35514e09de8bbf55886b5e7e05a"
+          },
+          "inputs": {
+            "statement": "Smith reports a bias below 1\\% in comparable settings~\\cite{smith2020}.",
+            "source_digest": "sha256:56355fd8168cfea5de305e6935040731fa346ac81451b90b3b51443cfe763693"
+          },
+          "result": "passed",
+          "detail": "the passage at chars=88-167 supports the statement",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev7+g70142a561.d20261025",
+            "python": "3.15.0"
+          },
+          "model": {
+            "provider": "anthropic",
+            "model": "claude-fixture-20261024",
+            "request_id": "req_msg_fixture0003"
+          },
+          "log": {
+            "path": "checks/c-006/",
+            "digest": "sha256:9cf92225d5fddf566983d33e1fd845583e0c190b70736d86d7f56bacd488fbf4"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        }
+      }
+    },
+    {
+      "id": "c-007",
+      "kind": "citation-support",
+      "statement": "citation-support on s-8: error",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "citation-support",
+          "target": "s-8",
+          "artifact": {
+            "kind": "citation",
+            "reference": "r-2"
+          },
+          "inputs": {
+            "statement": "Jones finds that the bias grows with the segment length~\\cite{jones2021}."
+          },
+          "result": "error",
+          "detail": "no file jones2021{.txt,.tex,.pdf} among the cited works for 'r-2'",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev7+g70142a561.d20261025",
+            "python": "3.15.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-007/",
+            "digest": "sha256:e4ca903ff91ab31818ed64d8f3354588efa7ed4829eadd74e04a1b8c3793e3f6"
+          }
+        },
+        "extraction": {
+          "run": "20261025T120000Z-checks",
+          "pass": "checks"
+        }
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "s-7-cites-r-1",
+      "type": "cites",
+      "source": "s-7",
+      "target": "r-1",
+      "strength": null,
+      "attributes": {}
+    },
+    {
+      "id": "s-8-cites-r-2",
+      "type": "cites",
+      "source": "s-8",
+      "target": "r-2",
+      "strength": null,
+      "attributes": {}
+    },
+    {
+      "id": "s-3-requires-s-9",
+      "type": "requires",
+      "source": "s-3",
+      "target": "s-9",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "e-2-requires-s-9",
+      "type": "requires",
+      "source": "e-2",
+      "target": "s-9",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "s-2-observes-c-001",
+      "type": "observes",
+      "source": "s-2",
+      "target": "c-001",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 9.0
+      }
+    },
+    {
+      "id": "s-3-observes-c-002",
+      "type": "observes",
+      "source": "s-3",
+      "target": "c-002",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 9.0
+      }
+    },
+    {
+      "id": "e-2-observes-c-003",
+      "type": "observes",
+      "source": "e-2",
+      "target": "c-003",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 19.0
+      }
+    },
+    {
+      "id": "e-3-observes-c-004",
+      "type": "observes",
+      "source": "e-3",
+      "target": "c-004",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 19.0
+      }
+    },
+    {
+      "id": "e-3-observes-c-005",
+      "type": "observes",
+      "source": "e-3",
+      "target": "c-005",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 4.0
+      }
+    },
+    {
+      "id": "s-7-observes-c-006",
+      "type": "observes",
+      "source": "s-7",
+      "target": "c-006",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "false_pass": {
+        "alpha": 2.0,
+        "beta": 8.0
+      }
+    },
+    {
+      "id": "s-8-observes-c-007",
+      "type": "observes",
+      "source": "s-8",
+      "target": "c-007",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "false_pass": {
+        "alpha": 2.0,
+        "beta": 8.0
+      }
+    }
+  ]
+}

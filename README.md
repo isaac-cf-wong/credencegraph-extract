@@ -20,9 +20,9 @@ analyst is a language model. The model never writes graph JSON and never sets a
 credence: it returns records, and everything that turns those records into a
 graph is deterministic code built on credencegraph's public API.
 
-> **Status: experimental.** A run ingests the document, classifies its chunks
-> and adds the implicit premises of its conclusions. The pass that runs checks
-> is not built yet.
+> **Status: experimental.** A run ingests the document, classifies its chunks,
+> adds the implicit premises of its conclusions, and runs checks on the nodes
+> the rubric marks for assessment.
 
 ## Installation
 
@@ -30,8 +30,8 @@ graph is deterministic code built on credencegraph's public API.
 pip install credencegraph-extract
 ```
 
-It depends on `credencegraph[ingest]` (one 0.x minor series) and `anthropic`,
-and needs Python 3.13 or later.
+It depends on `credencegraph[ingest]` (one 0.x minor series), `anthropic` and
+`sympy` (the maths checks), and needs Python 3.13 or later.
 
 ## Runs
 
@@ -53,15 +53,16 @@ runs/paper/
   raw/            every provider response verbatim, one file per call, with its request metadata
   rejections.json the records the core refused, each with its error code
   report.json     the graph's coverage, and what each pass reports
+  checks/c-NNN/   each check's inputs, the tool's output and a log
   source/         a copy of the source document, only with --store-source
 ```
 
 `manifest.json` records the run id and time; the source document's id, its
 SHA-256 digest and whether a copy is stored; the versions of Python,
-`credencegraph`, this package and the provider SDK; the rubric's name, version
-and digest; for each pass, the digest of its template and, for every call, the
-provider, the exact model id, the sampling parameters, the SDK version and the
-digests of the rendered prompt and the raw record; and the digest of
+`credencegraph`, this package, the provider SDK and `sympy`; the rubric's name,
+version and digest; for each pass, the digest of its template and, for every
+call, the provider, the exact model id, the sampling parameters, the SDK version
+and the digests of the rendered prompt and the raw record; and the digest of
 `graph.json`.
 
 Every node a run creates or changes carries
@@ -206,6 +207,59 @@ An analyst node has no source and no inferential parent, so credencegraph's
 look at. As a `requires` premise it can only lower the credence of its
 conclusion.
 
+## Check pass
+
+The last pass checks the nodes of every type with `assess = true`. It sends
+those a rubric check type may run on, with the document's chunks, and the model
+**proposes** checks; it never says whether one passes. Four check types are
+implemented, each run only if the rubric's `[checks]` table declares it and
+lists the node's type in its `targets`:
+
+- `recompute-numbers`: an arithmetic expression over numerals of the chunks the
+  proposal cites, and the reported result. Every numeral, the result included,
+  must be one those chunks' text contains, compared exactly as the decimal it
+  writes (never as a float), so the model cannot supply a number the document
+  does not. The expression is parsed with `ast` against a whitelist (numerals,
+  `+ - * / **`, signs and parentheses; never `eval`) and evaluated exactly with
+  `fractions`. It passes when it falls within the rounding the reported
+  numeral's own digits imply: `350` is `350 ± 0.5`.
+- `rederive-maths`: a step between equation chunks, encoded as two expressions
+  `lhs` and `rhs` over declared symbols with sympy assumptions. The expressions
+  are built from the same kind of whitelist, with a fixed set of functions. The
+  check passes when sympy simplifies `lhs - rhs` to 0, fails when sympy shows it
+  is never 0, and is an `error` otherwise. The encoding is recorded in the check
+  record's `inputs` for a human to audit.
+- `rederive-maths-numeric`: a separate check type, with its own priors, run only
+  when `rederive-maths` errs. It compares the two sides at 32 points drawn in
+  each symbol's domain to a relative tolerance of `1e-12`. The points come from
+  a generator seeded by the encoding, and the seed and the points are recorded
+  with the check, so the same points can be drawn again.
+- `citation-support`: the cited work's text is read from `--cited DIR`, named by
+  its bibliography key (`<key>.txt`, `.tex` or `.pdf`), and with
+  `--fetch-arxiv`, downloaded from arXiv into that directory when the entry
+  names an identifier. The model copies the passage the judgement rests on and
+  says whether it supports the citing node. A passage not found in the work's
+  normalised text is an `error`, not a fail. A check type that lists `models`
+  was fitted with those models: the pass refuses to run it with another unless
+  `--allow-uncalibrated` is given, and then `report.json` lists each such check
+  under `passes.checks.uncalibrated`.
+
+A proposal that cannot be run, or a second of its type on one node (the two
+would pass or fail together), is rejected with a code in `rejections.json`. Each
+check that runs becomes an **evidence node** `c-NNN` (in document order of its
+target, then run order) of its check type, with a statement from a fixed
+template (`recompute-numbers on s-3: passed`), and the check record in
+`attributes.check`: `type`, `target`, `artifact`, `inputs`, `result`, `detail`,
+`tool` (this package, Python and the libraries used), `model` (provider, model
+id and request id, or `null`) and `log` (`checks/c-NNN/` and its digest). It is
+joined to its target by `target --observes--> c-NNN` with the check type's
+`sensitivity` and `false_pass`. `attributes.observed` is `true` for a pass and
+`false` for a fail; an errored check carries none, so it is recorded but changes
+no credence. The target's `attributes.assessment` is derived from its checks:
+`fails`, `holds`, `undetermined` (only errors), or `not_assessed` with the
+reason `no v1 check applies` or `not selected`. The result passes
+`credencegraph check GRAPH --rubric RUBRIC --level assessed --rubric-credences`.
+
 ## Replay
 
 The model calls are recorded, not reproduced. Everything after them is
@@ -218,9 +272,10 @@ credencegraph-extract replay runs/paper --source paper.tex
 re-runs ingestion and every pass, answering each model call from `raw/` instead
 of the provider, and checks that the rebuilt `graph.json` is byte-identical to
 the recorded one. It needs no network and no API key. `--source` is not needed
-when the run stored its source. Replay refuses a source, rubric or record whose
-digest differs from the manifest's, and a pass that asks a call that was not
-recorded.
+when the run stored its source; a run with citation checks needs the same
+`--cited` directory, and a replay re-runs the checks a run allowed, uncalibrated
+ones included. Replay refuses a source, rubric or record whose digest differs
+from the manifest's, and a pass that asks a call that was not recorded.
 
 Both commands exit 0 on success, and `replay` exits 1 when the rebuilt graph
 differs from the recorded one. Every error exits 2 with one

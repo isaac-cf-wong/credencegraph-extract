@@ -1,0 +1,4 @@
+{
+  "result": "passed",
+  "detail": "the sides agree to rtol 1E-12 at all 32 points"
+}

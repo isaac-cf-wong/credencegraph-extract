@@ -1,0 +1,11 @@
+{
+  "type": "citation-support",
+  "target": "s-8",
+  "artifact": {
+    "kind": "citation",
+    "reference": "r-2"
+  },
+  "inputs": {
+    "statement": "Jones finds that the bias grows with the segment length~\\cite{jones2021}."
+  }
+}

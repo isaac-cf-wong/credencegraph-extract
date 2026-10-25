@@ -143,7 +143,7 @@ def test_replay_refuses_another_manifest_version(recorded_run: Path) -> None:
 def test_cli_replay_reports_byte_identity(
     recorded_run: Path, no_network: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("credencegraph_extract.cli.PASSES", (NotesPass(),))
+    monkeypatch.setattr("credencegraph_extract.cli.passes", lambda **_: (NotesPass(),))
     output = recorded_run.parent / "rebuilt.json"
     status = cli.main(["replay", str(recorded_run), "--source", str(SOURCE), "--output", str(output)])
     assert status == 0
@@ -154,7 +154,7 @@ def test_cli_replay_reports_byte_identity(
 def test_cli_replay_reports_a_difference(
     recorded_run: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("credencegraph_extract.cli.PASSES", (NotesPass(),))
+    monkeypatch.setattr("credencegraph_extract.cli.passes", lambda **_: (NotesPass(),))
     graph = recorded_run / "graph.json"
     graph.write_bytes(graph.read_bytes().replace(b"vanishing bias", b"vanishing noise"))
     assert cli.main(["replay", str(recorded_run), "--source", str(SOURCE)]) == 1
@@ -169,7 +169,7 @@ def test_cli_replay_reports_an_error(recorded_run: Path, capsys: pytest.CaptureF
 @pytest.fixture
 def notes_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make the command replay with the test pass, as the recorded run was made."""
-    monkeypatch.setattr("credencegraph_extract.cli.PASSES", (NotesPass(),))
+    monkeypatch.setattr("credencegraph_extract.cli.passes", lambda **_: (NotesPass(),))
 
 
 def replay_status(run_dir: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:

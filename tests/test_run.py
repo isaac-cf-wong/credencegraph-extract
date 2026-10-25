@@ -8,11 +8,13 @@ from pathlib import Path
 
 import pytest
 from conftest import FIXTURES
+from credencegraph.core import Graph
+from credencegraph.rubric import Rubric
 from notes_pass import BODIES, MODEL, NotesPass, fake_client
 
 from credencegraph_extract import cli, provider
 from credencegraph_extract.digest import bytes_digest
-from credencegraph_extract.run import FORMAT, VERSION, RunError, replay, run_extraction
+from credencegraph_extract.run import FORMAT, VERSION, Ask, Outcome, RunError, replay, run_extraction
 
 SOURCE = FIXTURES / "paper.tex"
 RUBRIC = FIXTURES / "rubric.toml"
@@ -66,7 +68,7 @@ def test_manifest_records_the_run(tmp_path: Path) -> None:
         "digest": bytes_digest(SOURCE.read_bytes()),
         "stored": False,
     }
-    assert set(manifest["versions"]) == {"python", "credencegraph", "credencegraph-extract", "anthropic"}
+    assert set(manifest["versions"]) == {"python", "credencegraph", "credencegraph-extract", "anthropic", "sympy"}
     assert manifest["rubric"] == {"name": "test-rubric", "version": "1", "digest": bytes_digest(RUBRIC.read_bytes())}
     assert manifest["graph_digest"] == bytes_digest((run_dir / "graph.json").read_bytes())
     [entry] = manifest["passes"]
@@ -149,7 +151,7 @@ def test_records_are_kept_when_a_response_is_unusable(tmp_path: Path) -> None:
 def test_cli_run_and_replay_without_passes(
     tmp_path: Path, no_network: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("credencegraph_extract.cli.PASSES", ())
+    monkeypatch.setattr("credencegraph_extract.cli.passes", lambda **_: ())
     run_dir = tmp_path / "run"
     assert cli.main(["run", str(SOURCE), str(run_dir), "--rubric", str(RUBRIC), "--store-source"]) == 0
     assert (run_dir / "source" / "paper.tex").exists()
@@ -160,7 +162,7 @@ def test_cli_run_and_replay_without_passes(
 def test_cli_run_needs_a_model_when_a_pass_calls_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("credencegraph_extract.cli.PASSES", (NotesPass(),))
+    monkeypatch.setattr("credencegraph_extract.cli.passes", lambda **_: (NotesPass(),))
     assert cli.main(["run", str(SOURCE), str(tmp_path / "run"), "--rubric", str(RUBRIC)]) == 2
     assert "missing-model" in capsys.readouterr().err
 
@@ -188,8 +190,38 @@ def test_cli_run_reports_an_unusable_response(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     refusal = {**BODIES[0], "stop_reason": "refusal"}
-    monkeypatch.setattr("credencegraph_extract.cli.PASSES", (NotesPass(),))
+    monkeypatch.setattr("credencegraph_extract.cli.passes", lambda **_: (NotesPass(),))
     monkeypatch.setattr(provider, "call", partial(provider.call, client=fake_client([refusal])))
     status = cli.main(["run", str(SOURCE), str(tmp_path / "run"), "--rubric", str(RUBRIC), "--model", MODEL])
     assert status == 2
     assert capsys.readouterr().err.startswith("error [provider-error]: ")
+
+
+@pytest.mark.parametrize("name", ["graph.json", "raw/0001.json", "../outside.txt", "/etc/outside.txt", ""])
+def test_a_pass_may_not_write_outside_its_own_files(tmp_path: Path, name: str) -> None:
+    class Writer:
+        name = "writer"
+        template = ""
+
+        def run(self, graph: Graph, rubric: Rubric, ask: Ask) -> Outcome:
+            return Outcome(graph, files={name: b"x"})
+
+    with pytest.raises(RunError) as raised:
+        run_extraction(SOURCE, tmp_path / "run", RUBRIC, call=_unused, passes=(Writer(),), run_id=RUN_ID)
+    assert raised.value.code == "invalid-file"
+
+
+def test_a_pass_writes_its_files_into_the_run_directory(tmp_path: Path) -> None:
+    class Writer:
+        name = "writer"
+        template = ""
+
+        def run(self, graph: Graph, rubric: Rubric, ask: Ask) -> Outcome:
+            return Outcome(graph, files={"checks/c-001/log.txt": b"logged\n"})
+
+    run_extraction(SOURCE, tmp_path / "run", RUBRIC, call=_unused, passes=(Writer(),), run_id=RUN_ID)
+    assert (tmp_path / "run" / "checks" / "c-001" / "log.txt").read_bytes() == b"logged\n"
+
+
+def _unused(prompt: str, schema: object) -> dict[str, object]:
+    raise AssertionError(prompt)

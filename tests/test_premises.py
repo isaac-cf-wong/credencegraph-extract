@@ -34,6 +34,7 @@ from notes_pass import MODEL, fake_client, message
 
 from credencegraph_extract import provider
 from credencegraph_extract.assemble import assemble, assemble_premises
+from credencegraph_extract.checks import CheckPass
 from credencegraph_extract.classify import ClassifyPass
 from credencegraph_extract.pipeline import PASSES
 from credencegraph_extract.premises import PremisePass, output_schema, render
@@ -411,5 +412,5 @@ def test_the_schema_has_no_credence_field() -> None:
     assert [set(kind["properties"]) for kind in kinds] == [{"stated_at"}, {"statement"}]
 
 
-def test_the_pipeline_runs_classify_then_premises() -> None:
-    assert [type(item) for item in PASSES] == [ClassifyPass, PremisePass]
+def test_the_pipeline_runs_classify_then_premises_then_checks() -> None:
+    assert [type(item) for item in PASSES] == [ClassifyPass, PremisePass, CheckPass]

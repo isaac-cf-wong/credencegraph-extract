@@ -1,0 +1,39 @@
+You are planning checks of the statements of a document. Each target below is a statement whose
+truth is to be assessed, with the check types that may be run on it. Propose the checks that can be
+run on each target from the document itself, at most one of each type per target, and none where
+no check fits. Do not judge whether any statement is true: the checks decide.
+
+Check types:
+- recompute-numbers: the target reports a number that follows from other numbers the document
+  reports. Give "nodes", the ids of the chunks whose numerals you use (the target's own included),
+  "expression", an arithmetic expression of those numerals with + - * / ** and parentheses, and
+  "expected", the reported result. Write every number exactly as a plain decimal numeral that occurs
+  in the text of one of "nodes" (a percentage such as 12.5% may be written 0.125); write no other
+  number, not even 100 or 2.
+- rederive-maths: the target rests on a step of mathematics from one equation to another. Give
+  "nodes", the ids of the equation chunks the step goes between, "lhs" and "rhs", two expressions the
+  step claims are equal for all values of the symbols, "symbols", each symbol with its sympy
+  assumptions (real, positive, negative, nonnegative, nonpositive, nonzero, integer) and a finite
+  domain [low, high] to sample it from, and "assumption", the step's assumptions in words. Use only
+  the declared symbols, numerals, + - * / ** and the functions sqrt, exp, log, sin, cos, tan, asin,
+  acos, atan, sinh, cosh, tanh, Abs and the constants pi, E and I.
+- citation-support: the target states what a cited work found. Give "reference", the id of the
+  bibliography entry it cites.
+
+Targets, as id (type): text, then the check types that may be run on it:
+$targets
+
+Chunks of the document, in document order, as id (type): text
+$chunks
+
+A statement of a document cites the work below. Decide whether the work supports the statement.
+
+First copy, word for word, the one passage of the work that the decision rests on: "passage" must be
+an exact substring of the work's text. Then set "supports" to true if the passage supports the
+statement as written and false if it does not.
+
+Statement:
+$statement
+
+Text of the cited work:
+$source

@@ -1,0 +1,32 @@
+[
+  {
+    "pass": "checks",
+    "node": "s-2",
+    "code": "unfaithful-numeral",
+    "message": "no numeral of ['s-2'] equals 300",
+    "record": {
+      "target": "s-2",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-2"
+      ],
+      "expression": "300 * 300",
+      "expected": "90000"
+    }
+  },
+  {
+    "pass": "checks",
+    "node": "s-1",
+    "code": "not-a-target",
+    "message": "'s-1' is not a node of a type to assess",
+    "record": {
+      "target": "s-1",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-1"
+      ],
+      "expression": "400",
+      "expected": "400"
+    }
+  }
+]

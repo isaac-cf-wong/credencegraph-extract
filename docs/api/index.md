@@ -16,3 +16,8 @@ This section documents the public API of credencegraph-extract.
   and adding those it leaves unsaid.
 - **[Assembler](assemble)** – Applying classify and premise records through the
   core's edits.
+- **[Check pass](checks)** – Proposing checks of the assessed nodes, running
+  them, and recording each as an observed evidence node.
+- **[Evaluators](evaluate)** – Exact arithmetic, symbolic identity and numeric
+  sampling, over whitelisted expressions.
+- **[Cited works](cited)** – Reading the texts of cited works.
