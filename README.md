@@ -256,12 +256,13 @@ lists the node's type in its `targets`:
 A proposal that cannot be run, or a second of its type on one node (the two
 would pass or fail together), is rejected with a code in `rejections.json`. The
 refused proposals go back to the model once, each with its error and a `fix`
-(for an unfaithful numeral: write the expression with the text's own numerals
-only, as `a - a * 0.05` rather than `a * (1 - 0.05)`); the corrections are
-checked the same way, and each rejection names its round, `initial` or `repair`.
-Each check that runs becomes an **evidence node** `c-NNN` (in document order of
-its target, then run order) of its check type, with a statement from a fixed
-template (`recompute-numbers on s-3: passed`), and the check record in
+(for an unfaithful numeral: cite every chunk whose numeral is used, and write
+the expression with the text's own numerals only, as `a - a * p` rather than
+`a * (1 - p)`); the corrections are checked the same way, and each rejection
+names its round, `initial` or `repair`. Each check that runs becomes an
+**evidence node** `c-NNN` (in document order of its target, then run order) of
+its check type, with a statement from a fixed template
+(`recompute-numbers on s-3: passed`), and the check record in
 `attributes.check`: `type`, `target`, `artifact`, `inputs`, `result`, `detail`,
 `tool` (this package, Python and the libraries used), `model` (provider, model
 id and request id, or `null`) and `log` (`checks/c-NNN/` and its digest). It is

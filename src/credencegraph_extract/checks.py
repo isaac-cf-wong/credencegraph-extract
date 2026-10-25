@@ -232,9 +232,10 @@ def fix(code: str, record: Any) -> str | None:
     nodes = record.get("nodes") if isinstance(record, Mapping) else None
     if code == UNFAITHFUL:
         return (
-            f"write every number, the expected value included, exactly as a numeral the text of {nodes} writes; "
-            "a constant the text does not write, such as the 1 of 1 - 0.05 or a 100, is not allowed: rewrite the "
-            "expression without it, as a - a * 0.05 rather than a * (1 - 0.05), or cite the chunk that writes it"
+            f"write every number, the expected value included, exactly as a numeral the text of {nodes} writes, "
+            "and add to nodes any chunk whose numeral you use; a constant no cited chunk writes, such as the 1 of "
+            "1 - p or a 100, is not allowed: rewrite the expression without it, as a - a * p rather than "
+            "a * (1 - p), where a and p are numerals the text writes"
         )
     if code == NOT_A_TARGET:
         return "propose a check only on a target listed under Targets, of a check type listed for it"

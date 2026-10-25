@@ -68,7 +68,7 @@ else:
     },
     "code": "unfaithful-numeral",
     "message": "no numeral of ['s-2'] equals 300",
-    "fix": "write every number, the expected value included, exactly as a numeral the text of ['s-2'] writes; a constant the text does not write, such as the 1 of 1 - 0.05 or a 100, is not allowed: rewrite the expression without it, as a - a * 0.05 rather than a * (1 - 0.05), or cite the chunk that writes it"
+    "fix": "write every number, the expected value included, exactly as a numeral the text of ['s-2'] writes, and add to nodes any chunk whose numeral you use; a constant no cited chunk writes, such as the 1 of 1 - p or a 100, is not allowed: rewrite the expression without it, as a - a * p rather than a * (1 - p), where a and p are numerals the text writes"
   },
   {
     "record": {

@@ -268,3 +268,55 @@ def test_a_split_names_each_clause_and_child_that_needs_a_change(rubric: Rubric,
 def test_a_record_the_core_accepts_needs_no_fix(rubric: Rubric, graph: Graph) -> None:
     assert fixes(graph, rubric, {"node": "s-1", "type": "method", "form": {"kind": "simulation"}}) == []
     assert fixes(graph, rubric, "not a record") == ["send each record as a JSON object"]
+
+
+def test_a_rests_on_that_is_not_a_list_is_named_as_such(rubric: Rubric, graph: Graph) -> None:
+    graph = assemble(graph, rubric, [{"node": "s-1", "type": "method", "form": {"kind": "simulation"}}]).graph
+    record = {
+        "node": "s-5",
+        "type": "claim",
+        "form": {"shape": "bound", "statement": "the estimator"},
+        "rests_on": "s-1",
+    }
+    assert fixes(graph, rubric, record) == ['rests_on must be a list of chunk ids, such as ["s-2"]']
+
+
+def test_a_form_that_is_not_an_object_lists_the_types_fields(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "s-1", "type": "method", "form": "simulation"}) == [
+        "form must be an object of field names and values; the form fields of type 'method' are ['kind']"
+    ]
+
+
+def test_an_enum_value_outside_its_values_lists_them(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "s-1", "type": "method", "form": {"kind": "survey"}}) == [
+        "form field 'kind' of type 'method' must be one of ['simulation', 'dataset', 'procedure']"
+    ]
+
+
+def test_an_incomplete_quantity_says_what_it_needs() -> None:
+    rubric = loads_rubric(
+        '[rubric]\nformat = 1\nname = "q"\nversion = "1"\n'
+        '[types.result]\ndescription = "r"\nform.amount = { type = "quantity", required = true }\n'
+    )
+    graph = chunks_to_graph(read_latex(PAPER), "paper.tex", rubric.initial)[0]
+    assert fixes(graph, rubric, {"node": "s-1", "type": "result", "form": {"amount": {"value": 400}}}) == [
+        "form field 'amount' of type 'result' must be an object with a number \"value\" and a string \"unit\""
+    ]
+
+
+def test_a_split_child_is_told_to_copy_from_its_clause(rubric: Rubric, graph: Graph) -> None:
+    record = {
+        "node": "s-2",
+        "split": ["The bias vanishes for long segments", "the estimator is therefore consistent"],
+        "children": [
+            {"type": "result", "form": {"quantity": "the estimator"}, "hedge": "therefore"},
+            {"type": "method", "form": {"kind": "procedure"}},
+        ],
+    }
+    assert fixes(graph, rubric, record) == [
+        (
+            "children[0]: form field 'quantity': 'the estimator' is not a substring of the text; copy it exactly "
+            "from the clause's text"
+        ),
+        "children[0]: hedge 'therefore' is not in the clause's text: copy the phrase exactly, or leave hedge out",
+    ]

@@ -355,7 +355,8 @@ def test_refused_proposals_go_back_once_with_what_to_change(made: Path) -> None:
         ("unfaithful-numeral", PLAN[6]),
         ("not-a-target", PLAN[7]),
     ]
-    assert "a constant the text does not write" in sent[0]["fix"]
+    assert "a constant no cited chunk writes, such as the 1 of 1 - p or a 100, is not allowed" in sent[0]["fix"]
+    assert "0.05" not in sent[0]["fix"]
     assert sent[1]["fix"] == "propose a check only on a target listed under Targets, of a check type listed for it"
     first = (made / "prompts" / "0002.txt").read_text(encoding="utf-8")
     assert first.endswith("and nothing\nelse:\n[]\n")

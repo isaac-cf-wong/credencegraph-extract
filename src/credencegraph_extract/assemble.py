@@ -33,9 +33,9 @@ from credencegraph.cli.common import UNKNOWN_NODE, translate
 from credencegraph.core import Graph, Node
 from credencegraph.core.errors import ValidationError
 from credencegraph.core.relation import REQUIRES, Relation
-from credencegraph.rubric import NodeType, Rubric, annotate_node, normalise_text, split_node
+from credencegraph.rubric import FormField, NodeType, Rubric, annotate_node, normalise_text, split_node
 from credencegraph.rubric.faithfulness import unfaithful
-from credencegraph.rubric.model import ANALYST, DOCUMENT, EQREF, NUMBER, QUANTITY, VERBATIM
+from credencegraph.rubric.model import ANALYST, DOCUMENT, ENUM, EQREF, NUMBER, QUANTITY, VERBATIM
 from credencegraph.rubric.validate import node_text, origin_of
 
 # Rejection codes of the assembler's own, beside the core's error codes.
@@ -321,7 +321,26 @@ def _rests_on_fixes(graph: Graph, spec: NodeType, label: str, rests_on: Sequence
     return out
 
 
-def _form_fixes(spec: NodeType, label: str, form: Mapping[str, Any], text: str) -> list[str]:
+def _value_fix(field: FormField, label: str, value: Any, *, text: str, where: str) -> str | None:
+    """What to change in one form value, or ``None`` if the core accepts it."""
+    name = field.name
+    if field.type == ENUM:
+        return None if value in field.values else f"form field {name!r} of {label} must be one of {list(field.values)}"
+    if field.type not in _VALUE_TYPES:
+        return None
+    if not isinstance(value, _VALUE_TYPES[field.type]) or isinstance(value, bool):
+        return f"form field {name!r} of {label} must be a {field.type}"
+    if field.type == QUANTITY and not (
+        isinstance(value.get("value"), int | float)
+        and not isinstance(value.get("value"), bool)
+        and isinstance(value.get("unit"), str)
+    ):
+        return f'form field {name!r} of {label} must be an object with a number "value" and a string "unit"'
+    problem = unfaithful(field.type, value, text)
+    return f"form field {name!r}: {problem}; copy it exactly from {where}" if problem else None
+
+
+def _form_fixes(spec: NodeType, label: str, form: Mapping[str, Any], text: str, where: str) -> list[str]:
     """What to change in the ``form`` of a typed part."""
     out = []
     extra = sorted(set(form) - set(spec.form))
@@ -335,34 +354,41 @@ def _form_fixes(spec: NodeType, label: str, form: Mapping[str, Any], text: str) 
     )
     for name, value in form.items():
         field = spec.form.get(name)
-        if field is None or field.type not in _VALUE_TYPES:
-            continue
-        if not isinstance(value, _VALUE_TYPES[field.type]) or isinstance(value, bool):
-            out.append(f"form field {name!r} of {label} must be a {field.type}")
-        elif field.type != QUANTITY or {"value", "unit"} <= set(value):
-            problem = unfaithful(field.type, value, text)
-            if problem:
-                out.append(f"form field {name!r}: {problem}; copy it exactly from the chunk's text")
+        found = _value_fix(field, label, value, text=text, where=where) if field is not None else None
+        if found:
+            out.append(found)
     return out
 
 
-def _part_fixes(graph: Graph, rubric: Rubric, part: Any, text: str, types: Sequence[str]) -> list[str]:
-    """What to change in one typed part of a classify record: the record itself, or one child of a split."""
+def _part_fixes(graph: Graph, rubric: Rubric, part: Any, *, text: str, where: str = "the chunk's text") -> list[str]:
+    """What to change in one typed part of a classify record: the record itself, or one child of a split.
+
+    ``text`` is what the part's values must be found in, named ``where`` in the instructions: the chunk's
+    text for a record, the clause's for a split's child.
+    """
     if not isinstance(part, Mapping):
         return ["send each typed record as a JSON object"]
     kind = part.get("type")
     spec = rubric.types.get(kind) if isinstance(kind, str) else None
     if spec is None or DOCUMENT not in spec.origins:
-        return [f"{kind!r} is not a type a chunk may have: use one of {list(types)}"]
+        types = [name for name, item in rubric.types.items() if DOCUMENT in item.origins]
+        return [f"{kind!r} is not a type a chunk may have: use one of {types}"]
     label = f"type {kind!r}"
-    rests_on = part.get("rests_on") or []
-    form = part.get("form") or {}
-    out = _rests_on_fixes(graph, spec, label, rests_on if isinstance(rests_on, list) else [rests_on])
-    if isinstance(form, Mapping):
-        out.extend(_form_fixes(spec, label, form, text))
+    out = []
+    rests_on = part.get("rests_on", [])
+    if not isinstance(rests_on, list) or not all(isinstance(item, str) for item in rests_on):
+        out.append('rests_on must be a list of chunk ids, such as ["s-2"]')
+    else:
+        out.extend(_rests_on_fixes(graph, spec, label, rests_on))
+    form = part.get("form", {})
+    if not isinstance(form, Mapping):
+        fields = list(spec.form) or "none"
+        out.append(f"form must be an object of field names and values; the form fields of {label} are {fields}")
+    else:
+        out.extend(_form_fixes(spec, label, form, text, where))
     hedge = part.get("hedge")
     if isinstance(hedge, str) and hedge and hedge not in text:
-        out.append(f"hedge {hedge!r} is not in the chunk's text: copy the phrase exactly, or leave hedge out")
+        out.append(f"hedge {hedge!r} is not in {where}: copy the phrase exactly, or leave hedge out")
     return out
 
 
@@ -404,11 +430,10 @@ def fixes(graph: Graph, rubric: Rubric, record: Any) -> list[str]:
     node_fix = _node_fix(graph, record.get("node"))
     if node_fix is not None:
         return [node_fix]
-    types = [name for name, spec in rubric.types.items() if DOCUMENT in spec.origins]
     node_id = record["node"]
     text = node_text(graph, graph.nodes[node_id])
     if "split" not in record:
-        return _part_fixes(graph, rubric, record, text, types)
+        return _part_fixes(graph, rubric, record, text=text)
     clauses, children = record.get("split"), record.get("children")
     if not isinstance(clauses, list) or not isinstance(children, list) or len(clauses) != len(children):
         return ['a split record needs "split", a list of clauses, and "children", one typed record per clause']
@@ -420,7 +445,8 @@ def fixes(graph: Graph, rubric: Rubric, record: Any) -> list[str]:
                 f"clause {i + 1} occurs {found} times in the text of {node_id!r}: copy a clause that occurs once"
             )
         clause_text = clause if isinstance(clause, str) else ""
-        out.extend(f"children[{i}]: {fix}" for fix in _part_fixes(graph, rubric, child, clause_text, types))
+        found = _part_fixes(graph, rubric, child, text=clause_text, where="the clause's text")
+        out.extend(f"children[{i}]: {fix}" for fix in found)
     return out
 
 
