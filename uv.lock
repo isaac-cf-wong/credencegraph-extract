@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -314,7 +314,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-github-actions-annotate-failures", specifier = ">=0.4.2" },
     { name = "pytest-mock", specifier = ">=3.17.0" },
-    { name = "ruff", specifier = ">=0.17.1" },
+    { name = "ruff", specifier = ">=0.17.2" },
     { name = "zizmor", specifier = ">=1.31.1" },
 ]
 docs = [
