@@ -189,3 +189,9 @@ convention = "google"
 # PLC0415: allow import statements not at the top level
 # PLR2004: allow magic values in the unit tests
 # D103: test functions are named for the behaviour they check and carry no docstring
+
+[tool.uv.sources]
+# Rubric format 2 ([hedges]) and `check --rubric-credences` are on the core's main branch but not yet
+# in a release. Until they are, development resolves the core at this commit; replace the pin with a
+# released range before publishing, since a wheel cannot carry a git dependency.
+credencegraph = { git = "https://github.com/isaac-cf-wong/credencegraph", rev = "29e9ed5a481ed46f82673ee829825a03f7380c6b" }
