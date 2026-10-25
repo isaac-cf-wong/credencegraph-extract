@@ -73,6 +73,7 @@ SOURCE = "source"
 LOCK = ".lock"
 
 START = "start_run"
+FINISH = "finish_run"
 
 # How long a tool call waits for the run's lock before it reports the run busy.
 LOCK_TIMEOUT = 30.0
@@ -215,6 +216,9 @@ def lock(run_dir: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
         RunError: If the lock is not free within ``timeout``.
     """
     with (run_dir / LOCK).open("a+b") as handle:
+        if handle.seek(0, os.SEEK_END) == 0:
+            handle.write(b"\0")
+            handle.flush()
         deadline = time.monotonic() + timeout
         while not _try_lock(handle):
             if time.monotonic() >= deadline:
@@ -353,7 +357,8 @@ def _apply(context: Context, state: State, call: Mapping[str, Any]) -> tuple[Sta
         raise RunError("unknown-tool", f"call {call['seq']} is of the unknown tool {call['tool']!r}")
     after, result = fn(context, state, call.get("args") or {})
     mark = {"run": context.run_id, "tool": call["tool"]}
-    return replace(after, graph=stamp(after.graph, state.graph, mark)), result
+    finished = after.finished if call["tool"] == FINISH else False
+    return replace(after, graph=stamp(after.graph, state.graph, mark), finished=finished), result
 
 
 def _rebuild(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls: list[dict[str, Any]]) -> State:
@@ -604,6 +609,50 @@ def _read_start(source: Path, rubric_path: Path, cited: Path | None) -> _Start:
     return _Start(rubric_bytes, rubric, source_bytes, _cited_copies(cited) if cited is not None else {})
 
 
+def _populate(  # noqa: PLR0913, PLR0917 - what start_run read and decided, written into the run
+    run: Path,
+    read: _Start,
+    graph: Graph,
+    result: Mapping[str, Any],
+    args: Mapping[str, Any],
+    identity: Mapping[str, Any],
+    run_id: str,
+    store_source: bool,
+    source_name: str,
+    document: str,
+) -> None:
+    """Write a new run's files.
+
+    They are the rubric, the cited copies, the document if stored, the ingested graph, the first log
+    line, the state and the manifest.
+    """
+    (run / RUBRIC).write_bytes(read.rubric_bytes)
+    (run / CITED).mkdir()
+    for name, data in read.cited.items():
+        (run / CITED / name).write_bytes(data)
+    if store_source:
+        (run / SOURCE).mkdir()
+        (run / SOURCE / source_name).write_bytes(read.source_bytes)
+    state = State(graph)
+    (run / INGESTED).write_bytes(_json({"graph": graph_to_dict(graph)}))
+    line = _line({"seq": 1, "tool": START, "args": args, **identity, **_digests(state, result), "at": _now()})
+    _durable_write(run / CALLS, line)
+    log_digest = bytes_digest(line)
+    _replace(run / STATE, _state_file(state, 1, log_digest))
+    manifest = {
+        "format": FORMAT,
+        "version": VERSION,
+        "run": run_id,
+        "created_at": _now(),
+        "harness": args["harness"],
+        "source": args["source"] | {"document": document},
+        "rubric": {**read.rubric.identity(), "digest": args["rubric_digest"]},
+        "cited": args["cited"],
+        "versions": versions(),
+    }
+    _replace(run / MANIFEST, _manifest(manifest, [json.loads(line)], state, log_digest))
+
+
 def start_run(  # noqa: PLR0913 - each argument is a separate choice of the caller
     source: Path,
     rubric: Path,
@@ -649,9 +698,19 @@ def start_run(  # noqa: PLR0913 - each argument is a separate choice of the call
     if run.exists() and any(run.iterdir()):
         raise RunError("run-exists", f"{run.name!r} exists and is not empty")
     read = _read_start(source, rubric, cited)
+    if document is not None and (not document.strip() or any(sep in document for sep in ("/", "\\"))):
+        raise RunError("invalid-argument", f"document {document!r} must be an id for the document, not a path")
     document = document or source.name
     run_id = new_run_id()
     graph = stamp(_ingest(source, document, read.rubric), Graph(), {"run": run_id, "tool": START})
+    # The digest and the stored copy are of the bytes read before ingesting; refuse a document that
+    # changed meanwhile, so a run never records a digest of other bytes than it ingested.
+    try:
+        unchanged = source.read_bytes() == read.source_bytes
+    except OSError:
+        unchanged = False
+    if not unchanged:
+        raise RunError("source-changed", f"{source.name!r} changed while start_run was reading it")
     args = {
         "document": document,
         "source": {"file": source.name, "digest": bytes_digest(read.source_bytes), "stored": store_source},
@@ -660,32 +719,18 @@ def start_run(  # noqa: PLR0913 - each argument is a separate choice of the call
         "harness": harness,
     }
     result = _start_result(graph, read.rubric, run_id)
-    run.mkdir(parents=True, exist_ok=True)
-    (run / RUBRIC).write_bytes(read.rubric_bytes)
-    (run / CITED).mkdir()
-    for name, data in read.cited.items():
-        (run / CITED / name).write_bytes(data)
-    if store_source:
-        (run / SOURCE).mkdir()
-        shutil.copyfile(source, run / SOURCE / source.name)
-    state = State(graph)
-    (run / INGESTED).write_bytes(_json({"graph": graph_to_dict(graph)}))
-    line = _line({"seq": 1, "tool": START, "args": args, **identity, **_digests(state, result), "at": _now()})
-    _durable_write(run / CALLS, line)
-    log_digest = bytes_digest(line)
-    _replace(run / STATE, _state_file(state, 1, log_digest))
-    manifest = {
-        "format": FORMAT,
-        "version": VERSION,
-        "run": run_id,
-        "created_at": _now(),
-        "harness": harness,
-        "source": args["source"] | {"document": document},
-        "rubric": {**read.rubric.identity(), "digest": args["rubric_digest"]},
-        "cited": args["cited"],
-        "versions": versions(),
-    }
-    _replace(run / MANIFEST, _manifest(manifest, [json.loads(line)], state, log_digest))
+    # Build the run in a temporary directory beside it and rename it into place, so a start that fails
+    # part-way leaves nothing that a second start_run would refuse as a run in use.
+    building = run.parent / f".{run.name}.{run_id}.starting"
+    building.mkdir(parents=True)
+    try:
+        _populate(building, read, graph, result, args, identity, run_id, store_source, source.name, document)
+    except BaseException:
+        shutil.rmtree(building, ignore_errors=True)
+        raise
+    if run.exists():
+        run.rmdir()
+    building.rename(run)
     return result
 
 

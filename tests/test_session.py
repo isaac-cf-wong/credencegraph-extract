@@ -421,3 +421,78 @@ def test_a_damaged_run_is_refused_with_its_code(run_dir: Path, damage: Any, code
     with pytest.raises(RunError) as raised:
         write(run_dir, "note", {"node": "s-2", "text": "m"}, model=MODEL)
     assert raised.value.code == code
+
+
+@pytest.mark.parametrize("document", ["/home/someone/paper.tex", "papers/paper.tex", "C:\\papers\\paper.tex", " "])
+def test_a_document_id_that_is_a_path_is_refused(tmp_path: Path, document: str) -> None:
+    with pytest.raises(RunError, match="must be an id for the document, not a path") as raised:
+        start(tmp_path / "run", document=document)
+    assert raised.value.code == "invalid-argument"
+    assert not (tmp_path / "run").exists()
+
+
+def test_a_document_that_changes_while_start_run_reads_it_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paper = tmp_path / "paper.tex"
+    shutil.copyfile(PAPER, paper)
+    ingest = session._ingest
+
+    def ingest_then_change(source: Path, document: str, rubric: Any) -> Any:
+        graph = ingest(source, document, rubric)
+        with source.open("a", encoding="utf-8") as handle:
+            handle.write("% changed\n")
+        return graph
+
+    monkeypatch.setattr(session, "_ingest", ingest_then_change)
+    with pytest.raises(RunError, match="changed while start_run was reading it") as raised:
+        start_run(paper, RUBRIC, tmp_path / "run", harness="h", model=MODEL, store_source=True)
+    assert raised.value.code == "source-changed"
+    assert not (tmp_path / "run").exists()
+
+
+def test_a_stored_document_is_the_bytes_whose_digest_is_recorded(tmp_path: Path) -> None:
+    start(tmp_path / "run", store_source=True)
+    stored = (tmp_path / "run" / "source" / "paper.tex").read_bytes()
+    assert bytes_digest(stored) == read_json(tmp_path / "run" / "manifest.json")["source"]["digest"]
+
+
+def test_a_write_after_finishing_marks_the_run_unfinished(run_dir: Path) -> None:
+    for name in ("state.json", "manifest.json"):
+        edit(run_dir / name, '"finished": false', '"finished": true')
+    assert get_state(run_dir)["finished"] is True
+    write(run_dir, "note", {"node": "s-1", "text": "after finishing"}, model=MODEL)
+    assert get_state(run_dir)["finished"] is False
+    assert read_json(run_dir / "manifest.json")["finished"] is False
+    assert read_json(run_dir / "state.json")["finished"] is False
+
+
+def test_a_start_that_fails_part_way_leaves_nothing_and_can_be_retried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    durable = session._durable_write
+
+    def crash_on_log(path: Path, data: bytes) -> None:
+        if path.name == "calls.jsonl":
+            raise OSError("simulated crash")
+        durable(path, data)
+
+    monkeypatch.setattr(session, "_durable_write", crash_on_log)
+    with pytest.raises(OSError, match="simulated crash"):
+        start(tmp_path / "run")
+    monkeypatch.undo()
+    assert sorted(path.name for path in tmp_path.iterdir()) == []
+    start(tmp_path / "run")
+    assert (tmp_path / "run" / "calls.jsonl").is_file()
+
+
+def test_start_run_may_use_an_empty_directory(tmp_path: Path) -> None:
+    (tmp_path / "run").mkdir()
+    start(tmp_path / "run")
+    assert (tmp_path / "run" / "manifest.json").is_file()
+
+
+def test_the_lock_file_is_never_empty(run_dir: Path) -> None:
+    with lock(run_dir):
+        pass
+    assert (run_dir / ".lock").stat().st_size >= 1
