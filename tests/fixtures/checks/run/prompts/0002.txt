@@ -51,3 +51,8 @@ s-8 (literature_claim): Jones finds that the bias grows with the segment length~
 s-9 (claim): The estimator is therefore consistent.
 r-1 (reference) [key smith2020]: A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.
 r-2 (reference) [key jones2021]: B. Jones, Long segments, arXiv:2101.01234.
+
+Proposals from your previous answer that were refused, each with the error it got and what to change
+("fix"). If this list is not empty, return corrected proposals for these targets only, and nothing
+else:
+[]

@@ -20,6 +20,7 @@ from checks_fixture import (
     PHASE,
     PLAN,
     PRODUCT,
+    REPAIR,
     RESULTS,
     RUBRIC,
     RUN,
@@ -58,9 +59,12 @@ def make_run(  # noqa: PLR0913 - each argument varies one input of the run
     return client
 
 
-def bodies_with(plan: list[dict[str, Any]], *judgements: dict[str, Any]) -> list[dict[str, Any]]:
-    """The fixture's classify answer, then this plan and these judgements."""
-    answers = [json.dumps({"checks": plan}), *(json.dumps(judgement) for judgement in judgements)]
+def bodies_with(
+    plan: list[dict[str, Any]], *judgements: dict[str, Any], repair: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """The fixture's classify answer, then this plan, the answer to its repair call if one is made, and these judgements."""
+    plans = [plan] if repair is None else [plan, repair]
+    answers = [*(json.dumps({"checks": item}) for item in plans), *(json.dumps(judgement) for judgement in judgements)]
     return [BODIES[0], *(message(i, text) for i, text in enumerate(answers, start=2))]
 
 
@@ -214,7 +218,7 @@ def test_each_check_records_its_tool_model_and_log(made: Path) -> None:
             assert record["model"] == {
                 "provider": "anthropic",
                 "model": MODEL,
-                "request_id": "req_msg_fixture0003",
+                "request_id": "req_msg_fixture0004",
             }
         else:
             assert record["model"] is None
@@ -283,7 +287,8 @@ def test_a_citation_check_without_the_cited_work_errs_without_a_judgement(made: 
     assert node.attributes["check"]["result"] == "error"
     assert "jones2021" in node.attributes["check"]["detail"]
     assert node.sources == ()
-    assert len(read_json(made / "manifest.json")["passes"][2]["calls"]) == 2
+    # The plan, its repair, and one judgement: none for the check without its cited work.
+    assert len(read_json(made / "manifest.json")["passes"][2]["calls"]) == 3
 
 
 def test_a_passage_not_in_the_cited_work_is_an_error_not_a_fail(tmp_path: Path) -> None:
@@ -310,14 +315,15 @@ def test_an_uncalibrated_model_is_refused_before_the_judgement(tmp_path: Path) -
     with pytest.raises(RunError) as raised:
         make_run(tmp_path / "run", rubric=rubric)
     assert raised.value.code == "uncalibrated-model"
-    assert len(list((tmp_path / "run" / "raw").iterdir())) == 2
+    # Classify, the plan and its repair: the refusal comes before the judgement call.
+    assert len(list((tmp_path / "run" / "raw").iterdir())) == 3
 
 
 def test_allow_uncalibrated_runs_the_check_and_reports_it(tmp_path: Path) -> None:
     rubric = edited_rubric(tmp_path, 'models = ["claude-fixture-20261024"]', 'models = ["another-model-20260101"]')
     run_dir = tmp_path / "run"
     make_run(run_dir, rubric=rubric, allow_uncalibrated=True)
-    model = {"provider": "anthropic", "model": MODEL, "request_id": "req_msg_fixture0003"}
+    model = {"provider": "anthropic", "model": MODEL, "request_id": "req_msg_fixture0004"}
     assert checks_report(run_dir)["uncalibrated"] == [
         {"check": "c-006", "type": "citation-support", "model": model},
         {"check": "c-007", "type": "citation-support", "model": None},
@@ -332,11 +338,41 @@ def test_a_check_type_without_models_needs_no_calibration_binding(made: Path) ->
 
 
 def test_rejected_proposals_are_kept_with_their_codes(made: Path) -> None:
-    assert [(item["node"], item["code"]) for item in check_rejections(made)] == [
-        ("s-2", "unfaithful-numeral"),
-        ("s-1", "not-a-target"),
+    assert [(item["round"], item["node"], item["code"]) for item in check_rejections(made)] == [
+        ("initial", "s-2", "unfaithful-numeral"),
+        ("initial", "s-1", "not-a-target"),
+        ("repair", "s-2", "duplicate-record"),
+        ("repair", "e-1", "not-rejected"),
     ]
     assert check_rejections(made)[0]["record"] == PLAN[6]
+    assert [item["record"] for item in check_rejections(made)[2:]] == REPAIR
+
+
+def test_refused_proposals_go_back_once_with_what_to_change(made: Path) -> None:
+    prompt = (made / "prompts" / "0003.txt").read_text(encoding="utf-8")
+    sent = json.loads(prompt[prompt.index("and nothing\nelse:\n") + len("and nothing\nelse:\n") :])
+    assert [(item["code"], item["record"]) for item in sent] == [
+        ("unfaithful-numeral", PLAN[6]),
+        ("not-a-target", PLAN[7]),
+    ]
+    assert "a constant the text does not write" in sent[0]["fix"]
+    assert sent[1]["fix"] == "propose a check only on a target listed under Targets, of a check type listed for it"
+    first = (made / "prompts" / "0002.txt").read_text(encoding="utf-8")
+    assert first.endswith("and nothing\nelse:\n[]\n")
+
+
+def test_a_corrected_proposal_is_run(tmp_path: Path) -> None:
+    refused = {**RECOMPUTE, "expected": "350", "expression": "400 * (1 - 0.125)"}
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([refused], repair=[{**RECOMPUTE, "expected": "350"}]))
+    assert [(item["round"], item["code"]) for item in check_rejections(run_dir)] == [("initial", "unfaithful-numeral")]
+    assert [node.attributes["check"]["result"] for node in checks_of(read_graph(run_dir)).values()] == ["passed"]
+
+
+def test_no_repair_call_is_made_when_every_proposal_is_admitted(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([{**RECOMPUTE, "expected": "350"}]))
+    assert len(read_json(run_dir / "manifest.json")["passes"][2]["calls"]) == 1
 
 
 RECOMPUTE = {"target": "s-3", "type": "recompute-numbers", "nodes": ["s-3"], "expression": "400 - 400 * 0.125"}
@@ -367,7 +403,7 @@ RECOMPUTE = {"target": "s-3", "type": "recompute-numbers", "nodes": ["s-3"], "ex
 )
 def test_a_proposal_the_runner_cannot_run_is_rejected(tmp_path: Path, proposal: Any, code: str) -> None:
     run_dir = tmp_path / "run"
-    make_run(run_dir, bodies_with([proposal]))
+    make_run(run_dir, bodies_with([proposal], repair=[]))
     assert [item["code"] for item in check_rejections(run_dir)] == [code]
     assert checks_of(read_graph(run_dir)) == {}
 
@@ -375,7 +411,7 @@ def test_a_proposal_the_runner_cannot_run_is_rejected(tmp_path: Path, proposal: 
 def test_a_second_check_of_a_type_on_one_node_is_rejected(tmp_path: Path) -> None:
     proposal = {**RECOMPUTE, "expected": "350"}
     run_dir = tmp_path / "run"
-    make_run(run_dir, bodies_with([proposal, {**proposal, "nodes": ["s-1", "s-3"]}, PRODUCT]))
+    make_run(run_dir, bodies_with([proposal, {**proposal, "nodes": ["s-1", "s-3"]}, PRODUCT], repair=[]))
     assert [(item["node"], item["code"]) for item in check_rejections(run_dir)] == [("s-3", "duplicate-record")]
     assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3", "e-2"]
 
@@ -387,7 +423,7 @@ def run_on_paper(tmp_path: Path, old: str, new: str, proposal: dict[str, Any]) -
     assert old in text
     paper.write_text(text.replace(old, new), encoding="utf-8")
     run_dir = tmp_path / "run"
-    make_run(run_dir, bodies_with([proposal]), paper=paper)
+    make_run(run_dir, bodies_with([proposal], repair=[]), paper=paper)
     return run_dir
 
 
@@ -423,7 +459,7 @@ def test_the_tolerance_is_the_rounding_of_the_reported_numeral(tmp_path: Path) -
     paper.write_text(text, encoding="utf-8")
     proposal = {**RECOMPUTE, "expression": "400 - 400 * 0.125", "expected": "349.6"}
     run_dir = tmp_path / "run"
-    make_run(run_dir, bodies_with([proposal]), paper=paper)
+    make_run(run_dir, bodies_with([proposal], repair=[]), paper=paper)
     [node] = checks_of(read_graph(run_dir)).values()
     assert node.attributes["check"]["result"] == "failed"
     text = text.replace("which leaves 349.6.", "which leaves 349.96.")
@@ -486,7 +522,7 @@ def test_the_plan_lists_targets_and_chunks_but_no_verdicts(rubric: Rubric, made:
 
 
 def test_the_judgement_prompt_carries_the_statement_and_the_cited_text(made: Path) -> None:
-    prompt = (made / "prompts" / "0003.txt").read_text(encoding="utf-8")
+    prompt = (made / "prompts" / "0004.txt").read_text(encoding="utf-8")
     assert "Smith reports a bias below 1\\% in comparable settings" in prompt
     assert JUDGEMENT["passage"] in prompt
 

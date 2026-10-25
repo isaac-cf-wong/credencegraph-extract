@@ -1,11 +1,87 @@
-A statement of a document cites the work below. Decide whether the work supports the statement.
+You are planning checks of the statements of a document. Each target below is a statement whose
+truth is to be assessed, with the check types that may be run on it. Propose the checks that can be
+run on each target from the document itself, at most one of each type per target, and none where
+no check fits. Do not judge whether any statement is true: the checks decide.
 
-First copy, word for word, the one passage of the work that the decision rests on: "passage" must be
-an exact substring of the work's text. Then set "supports" to true if the passage supports the
-statement as written and false if it does not.
+Check types:
+- recompute-numbers: the target reports a number that follows from other numbers the document
+  reports. Give "nodes", the ids of the chunks whose numerals you use (the target's own included),
+  "expression", an arithmetic expression of those numerals with + - * / ** and parentheses, and
+  "expected", the reported result. Write every number exactly as a plain decimal numeral that occurs
+  in the text of one of "nodes" (a percentage such as 12.5% may be written 0.125); write no other
+  number, not even 100 or 2.
+- rederive-maths: the target rests on a step of mathematics from one equation to another. Give
+  "nodes", the ids of the equation chunks the step goes between, "lhs" and "rhs", two expressions the
+  step claims are equal for all values of the symbols, "symbols", each symbol with its sympy
+  assumptions (real, positive, negative, nonnegative, nonpositive, nonzero, integer) and a finite
+  domain [low, high] to sample it from, and "assumption", the step's assumptions in words. Use only
+  the declared symbols, numerals, + - * / ** and the functions sqrt, exp, log, sin, cos, tan, asin,
+  acos, atan, sinh, cosh, tanh, Abs and the constants pi, E and I.
+- citation-support: the target states what a cited work found. Give "reference", the id of the
+  bibliography entry it cites.
 
-Statement:
-Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+Targets, as id (type): text, then the check types that may be run on it:
+s-2 (result): In total we analyse 90000 segments.
+  checks: recompute-numbers
+s-3 (result): Of the 400 realisations, 12.5\% are rejected, which leaves 350.
+  checks: recompute-numbers
+e-1 (derivation): \begin{equation} b = \frac{c}{N} \end{equation}
+  checks: rederive-maths
+e-2 (derivation): \begin{equation} b N = c \end{equation}
+  checks: rederive-maths
+e-3 (derivation): \begin{equation} \arctan x + \arctan(1/x) = \pi/2 \end{equation}
+  checks: rederive-maths
+s-7 (literature_claim): Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+  checks: citation-support
+s-8 (literature_claim): Jones finds that the bias grows with the segment length~\cite{jones2021}.
+  checks: citation-support
 
-Text of the cited work:
-Estimators of noise. A. Smith. We study estimators of the noise power spectral density. In comparable settings the bias stays below 1% for all segment lengths we tried, and it decreases as the number of averaged segments grows.
+Chunks of the document, in document order, as id (type): text
+s-1 (method): We simulate 400 noise realisations of 250 segments each.
+s-2 (result): In total we analyse 90000 segments.
+s-3 (result): Of the 400 realisations, 12.5\% are rejected, which leaves 350.
+s-4 (context): The bias of the estimator is
+e-1 (derivation) [label eq:bias]: \begin{equation} b = \frac{c}{N} \end{equation}
+s-5 (context): and multiplying by the number of segments gives
+e-2 (derivation) [label eq:product]: \begin{equation} b N = c \end{equation}
+s-6 (context): For the phase we use
+e-3 (derivation) [label eq:phase]: \begin{equation} \arctan x + \arctan(1/x) = \pi/2 \end{equation}
+s-7 (literature_claim): Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+s-8 (literature_claim): Jones finds that the bias grows with the segment length~\cite{jones2021}.
+s-9 (claim): The estimator is therefore consistent.
+r-1 (reference) [key smith2020]: A. Smith, Estimators of noise, J. Stat. 12 (2020) 1.
+r-2 (reference) [key jones2021]: B. Jones, Long segments, arXiv:2101.01234.
+
+Proposals from your previous answer that were refused, each with the error it got and what to change
+("fix"). If this list is not empty, return corrected proposals for these targets only, and nothing
+else:
+[
+  {
+    "record": {
+      "target": "s-2",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-2"
+      ],
+      "expression": "300 * 300",
+      "expected": "90000"
+    },
+    "code": "unfaithful-numeral",
+    "message": "no numeral of ['s-2'] equals 300",
+    "fix": "write every number, the expected value included, exactly as a numeral the text of ['s-2'] writes; a constant the text does not write, such as the 1 of 1 - 0.05 or a 100, is not allowed: rewrite the expression without it, as a - a * 0.05 rather than a * (1 - 0.05), or cite the chunk that writes it"
+  },
+  {
+    "record": {
+      "target": "s-1",
+      "type": "recompute-numbers",
+      "nodes": [
+        "s-1"
+      ],
+      "expression": "400",
+      "expected": "400"
+    },
+    "code": "not-a-target",
+    "message": "'s-1' is not a node of a type to assess",
+    "fix": "propose a check only on a target listed under Targets, of a check type listed for it"
+  }
+]

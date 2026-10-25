@@ -811,11 +811,11 @@
           "model": {
             "provider": "anthropic",
             "model": "claude-fixture-20261024",
-            "request_id": "req_msg_fixture0003"
+            "request_id": "req_msg_fixture0004"
           },
           "log": {
             "path": "checks/c-006/",
-            "digest": "sha256:9cf92225d5fddf566983d33e1fd845583e0c190b70736d86d7f56bacd488fbf4"
+            "digest": "sha256:d5dee35de402a9cb073c58699ab02d9a4881fb5756629101bbbfc1a5a4060b07"
           }
         },
         "observed": true,

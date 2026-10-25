@@ -368,7 +368,7 @@
       ],
       "additionalProperties": false
     },
-    "prompt_digest": "sha256:92377c6bd8702e721524d6c7e75e379e1b50a028fc6a9dac9da5fd09ff68b229",
+    "prompt_digest": "sha256:b56a6e4b9917e85ac3f0df436f86aba2267beb36f95dc399e5e13b78a3e07c80",
     "request_id": "req_msg_fixture0001"
   },
   "response": {

@@ -251,6 +251,30 @@ def test_split_children_use_the_branches_without_node() -> None:
         assert child["required"] == [k for k in single["required"] if k != "node"]
 
 
+def test_the_repair_call_sends_each_refused_record_with_what_to_change(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    make_run(run_dir)
+    prompt = (run_dir / "prompts" / "0002.txt").read_text(encoding="utf-8")
+    sent = json.loads(prompt[prompt.index("and\nnothing else:\n") + len("and\nnothing else:\n") :])
+    by_node = {item["record"]["node"]: item for item in sent}
+    assert set(by_node) == {"s-4", "s-5"}
+    assert by_node["s-4"]["fix"] == [
+        (
+            "form field 'statement': 'a bias below one percent' is not a substring of the text; "
+            "copy it exactly from the chunk's text"
+        )
+    ]
+    assert by_node["s-5"]["fix"] == [
+        (
+            "'s-4' in rests_on is of type 'unassigned', and type 'claim' rests only on "
+            "['result', 'method', 'derivation', 'literature_claim']: type 's-4' as one of those in the same answer, "
+            "or leave it out of rests_on"
+        )
+    ]
+    first = (run_dir / "prompts" / "0001.txt").read_text(encoding="utf-8")
+    assert first.endswith("and\nnothing else:\n[]\n")
+
+
 def test_the_prompt_lists_types_hedges_and_chunks() -> None:
     from credencegraph.ingest.chunks import chunks_to_graph
     from credencegraph.ingest.latex import read_latex
@@ -260,6 +284,12 @@ def test_the_prompt_lists_types_hedges_and_chunks() -> None:
     prompt = render(graph, rubric, [])
     assert "- claim: A conclusion the document asserts." in prompt
     assert "rests on at least 1 of: result, method, derivation, literature_claim" in prompt
+    assert (
+        "- derivation: A step of mathematics the document carries out.\n  form: equation (eqref)\n  rests on nothing"
+        in prompt
+    )
+    assert "- reference: A bibliography entry.\n  form: no fields\n  rests on nothing" in prompt
+    assert '"node" is always one of the chunk ids listed below' in prompt
     assert '"suggests", "may"' in prompt
     assert "s-4 (unassigned): Smith reports a bias below 1\\% in comparable settings~\\cite{smith2020}." in prompt
     assert prompt.endswith("nothing else:\n[]\n")

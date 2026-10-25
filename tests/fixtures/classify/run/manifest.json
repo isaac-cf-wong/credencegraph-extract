@@ -2,7 +2,7 @@
   "format": "credencegraph-extract-run",
   "version": 1,
   "run": "20261025T120000Z-classify",
-  "created_at": "2026-10-25T19:49:28Z",
+  "created_at": "2026-10-25T20:02:54Z",
   "source": {
     "document": "paper.tex",
     "file": "paper.tex",
@@ -24,13 +24,13 @@
   "passes": [
     {
       "name": "classify",
-      "template_digest": "sha256:7e8ef9f409dc440885de887284c1f4c0609f41bd3969fb695611d06991caaf68",
+      "template_digest": "sha256:4b81243827d69f19b0054d47530d6230da67f983b3ffb451054b238e0fc018e5",
       "calls": [
         {
           "prompt": "prompts/0001.txt",
-          "prompt_digest": "sha256:06cc61800906791fc9f4dfb4a27807c91b9c976bd57c6817fc96370f6213445d",
+          "prompt_digest": "sha256:df15a0b1fd54fa65fc814b785cc7f51a938cdd31e8c6e3e81d34d3098fa6ab2b",
           "raw": "raw/0001.json",
-          "raw_digest": "sha256:f083dcf8d91b0960550d648bf5517428abc0bd95f4318dcac32bc703cf9ed9f8",
+          "raw_digest": "sha256:7a9a527ed38859cfcfb95cd4d90fe7bd6d2e01d8ada54689546a8106324a578d",
           "provider": "anthropic",
           "model": "claude-fixture-20261024",
           "parameters": {
@@ -40,9 +40,9 @@
         },
         {
           "prompt": "prompts/0002.txt",
-          "prompt_digest": "sha256:7a3e63c1d0e31ea80a09718e01b08f2f5c1f874fcbde109f64e13e6334ce5a7a",
+          "prompt_digest": "sha256:2936312839919abcda50cd5692f3411c74f2da0a3d831b96d4063926957abff1",
           "raw": "raw/0002.json",
-          "raw_digest": "sha256:fa87ae66ee01464192856f4f3f179559064581c543c7094896eecd829ba25472",
+          "raw_digest": "sha256:c27577b423c0092f8883ad1f005aaea56f24bb5f8ee9dade24c2764a047cb989",
           "provider": "anthropic",
           "model": "claude-fixture-20261024",
           "parameters": {
@@ -84,7 +84,7 @@
     },
     {
       "name": "checks",
-      "template_digest": "sha256:fd6b4dbb66d8e8099ca41e133e532adf58f25b692c72d3d72c1f768adba94e9c",
+      "template_digest": "sha256:5c18ea9eae3ac3e051fa57dc3049e9c9ae4a87842b437ff1785c98961ece1597",
       "calls": []
     }
   ],

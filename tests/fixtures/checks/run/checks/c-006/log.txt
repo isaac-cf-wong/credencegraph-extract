@@ -1,4 +1,4 @@
 citation-support on s-7: passed
 the passage at chars=88-167 supports the statement
 tool: {"name": "credencegraph-extract", "python": "3.15.0", "version": "0.1.dev7+g70142a561.d20261025"}
-model: {"model": "claude-fixture-20261024", "provider": "anthropic", "request_id": "req_msg_fixture0003"}
+model: {"model": "claude-fixture-20261024", "provider": "anthropic", "request_id": "req_msg_fixture0004"}

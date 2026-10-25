@@ -2,7 +2,7 @@
   "format": "credencegraph-extract-run",
   "version": 1,
   "run": "20261025T120000Z-checks",
-  "created_at": "2026-10-25T19:49:28Z",
+  "created_at": "2026-10-25T20:02:54Z",
   "source": {
     "document": "paper.tex",
     "file": "paper.tex",
@@ -24,13 +24,13 @@
   "passes": [
     {
       "name": "classify",
-      "template_digest": "sha256:7e8ef9f409dc440885de887284c1f4c0609f41bd3969fb695611d06991caaf68",
+      "template_digest": "sha256:4b81243827d69f19b0054d47530d6230da67f983b3ffb451054b238e0fc018e5",
       "calls": [
         {
           "prompt": "prompts/0001.txt",
-          "prompt_digest": "sha256:92377c6bd8702e721524d6c7e75e379e1b50a028fc6a9dac9da5fd09ff68b229",
+          "prompt_digest": "sha256:b56a6e4b9917e85ac3f0df436f86aba2267beb36f95dc399e5e13b78a3e07c80",
           "raw": "raw/0001.json",
-          "raw_digest": "sha256:0f6b458f6c76ec79068ac3458ddaa88cfa0c156a0630b3981989f12ae4c6984b",
+          "raw_digest": "sha256:85b5521751fd9a207f0fcdcebeb78702b145bc6a2d6900bb0965e7f714d2ec8f",
           "provider": "anthropic",
           "model": "claude-fixture-20261024",
           "parameters": {
@@ -47,13 +47,13 @@
     },
     {
       "name": "checks",
-      "template_digest": "sha256:fd6b4dbb66d8e8099ca41e133e532adf58f25b692c72d3d72c1f768adba94e9c",
+      "template_digest": "sha256:5c18ea9eae3ac3e051fa57dc3049e9c9ae4a87842b437ff1785c98961ece1597",
       "calls": [
         {
           "prompt": "prompts/0002.txt",
-          "prompt_digest": "sha256:fa0a40fe70a7f789e8be6ce18a36f18db3beaeaf073a32445bcaa782ed1269f2",
+          "prompt_digest": "sha256:299b1ade47bad4204ee093b7fc9265d9cac1056f3c868520c5acf964d43ac9fd",
           "raw": "raw/0002.json",
-          "raw_digest": "sha256:fe1046fb974de9e0685a3bba0d91d732c92e7f3c359747f5bb1cfe8b830e5b47",
+          "raw_digest": "sha256:77f6cec27f7526eb3345380792af71ca464b21e15ebba4c33cde88c87d794adb",
           "provider": "anthropic",
           "model": "claude-fixture-20261024",
           "parameters": {
@@ -63,9 +63,21 @@
         },
         {
           "prompt": "prompts/0003.txt",
-          "prompt_digest": "sha256:91b5dc0dec5d0d9a9adacf4ce5d120640a03827991da074a505b822426b25c73",
+          "prompt_digest": "sha256:3fa0595281a3b60bf305b160430af524f4fc2185cff74cf6fd912143530dc4a0",
           "raw": "raw/0003.json",
-          "raw_digest": "sha256:0a95da8d609913b5cf00e84d0db7ace5915381810fc3ad5f789af8f2b35b8de9",
+          "raw_digest": "sha256:4ef70a0fbc8c7e45d080d0ef6ec223f48c2a9bdf8f38d6ee6c69f1bda50cac46",
+          "provider": "anthropic",
+          "model": "claude-fixture-20261024",
+          "parameters": {
+            "max_tokens": 1024
+          },
+          "sdk_version": "2.3.0"
+        },
+        {
+          "prompt": "prompts/0004.txt",
+          "prompt_digest": "sha256:91b5dc0dec5d0d9a9adacf4ce5d120640a03827991da074a505b822426b25c73",
+          "raw": "raw/0004.json",
+          "raw_digest": "sha256:7966d542c86849b0fd8a75ddf8c98978679119c67db5f25405c2228753d7f3f5",
           "provider": "anthropic",
           "model": "claude-fixture-20261024",
           "parameters": {
@@ -76,5 +88,5 @@
       ]
     }
   ],
-  "graph_digest": "sha256:b0468f981a55ea6c25ef637da9f7babcb88130ec877ae8637d882a5e80a294c1"
+  "graph_digest": "sha256:85afdaca600788dc2c27a13a39946304aebba6028d8931ed643396f7d8e2c99d"
 }

@@ -1,0 +1,11 @@
+A statement of a document cites the work below. Decide whether the work supports the statement.
+
+First copy, word for word, the one passage of the work that the decision rests on: "passage" must be
+an exact substring of the work's text. Then set "supports" to true if the passage supports the
+statement as written and false if it does not.
+
+Statement:
+Smith reports a bias below 1\% in comparable settings~\cite{smith2020}.
+
+Text of the cited work:
+Estimators of noise. A. Smith. We study estimators of the noise power spectral density. In comparable settings the bias stays below 1% for all segment lengths we tried, and it decreases as the number of averaged segments grows.
