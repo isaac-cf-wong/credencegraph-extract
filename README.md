@@ -291,6 +291,26 @@ when the run stored its source; a run with citation checks needs the same
 ones included. Replay refuses a source, rubric or record whose digest differs
 from the manifest's, and a pass that asks a call that was not recorded.
 
+## Agent-tool runs
+
+The package is becoming a set of tools an agent calls from its own harness,
+instead of a program that calls a model. A run made that way is a directory of
+format 2 (`credencegraph_extract.session`): `start_run` checks the rubric,
+ingests the document and copies the cited works into the run, each with its
+digest; every later tool call that changes the run takes the run's lock, so
+several agents can share one run, and is committed by one line appended to
+`calls.jsonl`. The log is the record of truth: a call interrupted after its line
+was written is completed from the log by the next call, and
+
+```shell
+credencegraph-extract replay runs/paper --source paper.tex
+```
+
+re-ingests the document and applies every logged call again, checking each
+call's result and graph against the digests its line recorded. No local path is
+recorded: files are named by name and digest. The tools that change the graph
+come next.
+
 ## Verify
 
 ```shell
