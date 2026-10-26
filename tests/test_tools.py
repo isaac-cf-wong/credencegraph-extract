@@ -371,3 +371,14 @@ def test_a_state_file_whose_content_was_changed_is_rebuilt(run_dir: Path) -> Non
     assert all(node["text"] != "tampered" for node in get_state(run_dir)["nodes"])
     assert "tampered" not in path.read_text(encoding="utf-8")
     assert recorded_graph(run_dir) == expected
+
+
+def test_a_record_that_only_links_a_node_reports_it_applied(run_dir: Path) -> None:
+    # Typing s-5 again with the same type and form but another rests_on changes only its relations.
+    classify(run_dir, FIRST, model=MODEL)
+    classify(run_dir, REPAIR, model=MODEL)
+    record = next(item for item in REPAIR if item["node"] == "s-5")
+    relinked = {**record, "rests_on": [*record.get("rests_on", []), "s-1"]}
+    result = classify(run_dir, [relinked], model=MODEL)
+    assert result["refused"] == []
+    assert result["applied"] == ["s-5"]

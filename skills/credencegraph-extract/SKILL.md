@@ -95,9 +95,10 @@ reasoning you want kept in `note`; it is recorded and never used in inference.
 
 ## Rules
 
-- **Ids exactly as `start_run` listed them**: `s-3`, never `s-3 (result)`, and
-  never a clause id such as `s-2a` as a record's `node` (split `s-2` instead). A
-  bibliography entry is named by its node id (`r-1`), not its key.
+- **Ids exactly as `start_run` listed them**: `s-3`, never `s-3 (result)`. A
+  record's `node` is a chunk id, or the id of a clause a split of yours has
+  created (`s-2a` after you split `s-2`); a clause id before its split names
+  nothing. A bibliography entry is named by its node id (`r-1`), not its key.
 - **A record has only what its type allows**: `form` with that type's fields and
   its required ones; `rests_on` only on a type that rests on something, and only
   naming nodes of the types it may rest on. A value of a form field is copied
