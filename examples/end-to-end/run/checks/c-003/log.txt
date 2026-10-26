@@ -1,0 +1,4 @@
+recompute-numbers on s-7: passed
+0.02 * 30 = 0.6 (exact, Fraction); within 0.6 ± 0.05
+tool: {"name": "credencegraph-extract", "python": "3.15.0", "version": "0.1.dev20+g4785bc2fb"}
+model: null

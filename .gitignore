@@ -136,3 +136,6 @@ dmypy.json
 
 # Node.js
 node_modules/
+
+# A run directory's lock, taken again when an example is replayed in place.
+examples/*/run/.lock*

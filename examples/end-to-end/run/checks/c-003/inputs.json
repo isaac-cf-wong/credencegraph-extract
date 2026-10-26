@@ -1,0 +1,14 @@
+{
+  "type": "recompute-numbers",
+  "target": "s-7",
+  "artifact": {
+    "kind": "numbers",
+    "nodes": [
+      "s-7"
+    ]
+  },
+  "inputs": {
+    "expression": "0.02 * 30",
+    "expected": "0.6"
+  }
+}

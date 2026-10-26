@@ -1,0 +1,297 @@
+{
+  "graph": {
+    "format": "credencegraph",
+    "version": 1,
+    "nodes": [
+      {
+        "id": "s-1",
+        "kind": "unassigned",
+        "statement": "We record an array of 24 thermometers once a minute, 1440 times a day, for 30 days.",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=4-4",
+            "quote": "We record an array of 24 thermometers once a minute, 1440 times a day, for 30 days.",
+            "digest": "sha256:fccb70ffb989ff292f5f531a20172a20db0ec6aa772f67ba071ed4b70afa11a6"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "s-2",
+        "kind": "unassigned",
+        "statement": "Each thermometer therefore yields 43200 readings.",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=5-5",
+            "quote": "Each thermometer therefore yields 43200 readings.",
+            "digest": "sha256:a2eff2f23d54fdfae9465eae890106b1ce8afe19f9d08c9d011c9f02a295d60b"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "s-3",
+        "kind": "unassigned",
+        "statement": "Across the array this gives 1036800 readings.",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=6-6",
+            "quote": "Across the array this gives 1036800 readings.",
+            "digest": "sha256:9462264c70196cc007d48d4875ee75818ce93f317753cc12ec7acd51b8572c88"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "s-4",
+        "kind": "unassigned",
+        "statement": "After removing 5\\% of the readings as outliers, 984460 readings remain.",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=7-7",
+            "quote": "After removing 5\\% of the readings as outliers, 984460 readings remain.",
+            "digest": "sha256:0634e6a5e4b77cc287578a11efa7406fab0ba8057aab7854574143b33a6fdc19"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "s-5",
+        "kind": "unassigned",
+        "statement": "We model the temperature reported by a drifting thermometer as",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=8-8",
+            "quote": "We model the temperature reported by a drifting thermometer as",
+            "digest": "sha256:dfda0ce5e69f815785e7886fa84a8daec92ab1b98fd469182bbed07eb8274adf"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "e-1",
+        "kind": "unassigned",
+        "statement": "\\begin{equation} T(t) = T_0 + \\alpha t \\end{equation}",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=9-11",
+            "quote": "\\begin{equation} T(t) = T_0 + \\alpha t \\end{equation}",
+            "digest": "sha256:f3a340a167d1cb1c9f954251bb1e156d70be1e8d087f2f23bf3339c74609e80b"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "equation",
+          "label": "eq:model",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "s-6",
+        "kind": "unassigned",
+        "statement": "so that over an interval $\\tau$ the reported temperature changes by",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=12-12",
+            "quote": "so that over an interval $\\tau$ the reported temperature changes by",
+            "digest": "sha256:e6912fed0d51c1e0f469cb15e0b42ec36dfc91f3cc2e195b48bec18c6a447f0c"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "e-2",
+        "kind": "unassigned",
+        "statement": "\\begin{equation} T(t + \\tau) - T(t) = \\alpha \\tau \\end{equation}",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=13-15",
+            "quote": "\\begin{equation} T(t + \\tau) - T(t) = \\alpha \\tau \\end{equation}",
+            "digest": "sha256:cac82f217de00720f3cdd90ff7e137be571ae427cc41eb5c0058d064df420609"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "equation",
+          "label": "eq:drift",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "s-7",
+        "kind": "unassigned",
+        "statement": "The mean fitted drift rate is 0.02 K per day, so the mean drift over the 30 days is 0.6 kelvin.",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=16-16",
+            "quote": "The mean fitted drift rate is 0.02 K per day, so the mean drift over the 30 days is 0.6 kelvin.",
+            "digest": "sha256:d2b4b5a1e4dbbd1e3087f2158629bdaaa8903bf758a29a7e0db98199c4640029"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "s-8",
+        "kind": "unassigned",
+        "statement": "Lee reports that drifts of this size are typical of uncalibrated thermistors~\\cite{lee2019}.",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=17-17",
+            "quote": "Lee reports that drifts of this size are typical of uncalibrated thermistors~\\cite{lee2019}.",
+            "digest": "sha256:9f826b85de84ba093fcff368b799b450383f8c3a7243266e8ec57e52779649cb"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "s-9",
+        "kind": "unassigned",
+        "statement": "These results suggest that the array needs recalibration every month.",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=18-18",
+            "quote": "These results suggest that the array needs recalibration every month.",
+            "digest": "sha256:d0eaa25f9bf537e2457f50e13dbae17e8747b2a8b84f6cc2603b411719c4fe1a"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "sentence",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      },
+      {
+        "id": "r-1",
+        "kind": "reference",
+        "statement": "C. Lee, Thermistor ageing in field arrays, J. Instr. Field Methods 7 (2019) 12.",
+        "sources": [
+          {
+            "document": "paper.tex",
+            "locator": "file=paper.tex;lines=20-20",
+            "quote": "C. Lee, Thermistor ageing in field arrays, J. Instr. Field Methods 7 (2019) 12.",
+            "digest": "sha256:3bfba22646784dc12996ccfe188b48e5fd3ab0d93b31a195267eb3c43220e8b1"
+          }
+        ],
+        "base": null,
+        "stated": null,
+        "attributes": {
+          "origin": "document",
+          "unit": "reference",
+          "key": "lee2019",
+          "extraction": {
+            "run": "20261026T132309Z-17d8de85",
+            "tool": "start_run"
+          }
+        }
+      }
+    ],
+    "relations": [
+      {
+        "id": "s-8-cites-r-1",
+        "type": "cites",
+        "source": "s-8",
+        "target": "r-1",
+        "strength": null,
+        "attributes": {}
+      }
+    ]
+  }
+}

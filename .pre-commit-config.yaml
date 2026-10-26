@@ -32,7 +32,7 @@ repos:
       hooks:
           - id: taplo-format
             # A recorded run's rubric.toml is a byte copy of the rubric it used.
-            exclude: ^tests/fixtures/(classify/|checks/)?run/
+            exclude: ^(tests/fixtures/(classify/|checks/)?run/|examples/end-to-end/run/)
 
     - repo: https://github.com/crate-ci/typos
       rev: v1.51.1
@@ -45,7 +45,7 @@ repos:
       hooks:
           - id: prettier
             # The recorded runs are byte-for-byte what the code wrote; replay compares against them.
-            exclude: ^tests/fixtures/(classify/|checks/)?run/
+            exclude: ^(tests/fixtures/(classify/|checks/)?run/|examples/end-to-end/run/)
 
     - repo: https://github.com/DavidAnson/markdownlint-cli2
       rev: v0.24.0

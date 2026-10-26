@@ -365,6 +365,16 @@ record. Every error exits 2 with one `error [<code>]: <message>` line on stderr:
 a run directory that is malformed or incomplete, a file that cannot be read or
 written, or a source or record that does not match the run.
 
+## Example
+
+`examples/end-to-end/` is a run an agent made through a harness on the tools, on
+an invented paper, committed with its run directory: every call, the records
+refused and corrected, the checks that ran (one catching a wrong number the
+paper reports), and the offline replay, `verify` and conditioning on the
+observations. The
+[documentation](https://isaac-cf-wong.github.io/credencegraph-extract/example/)
+walks through it.
+
 ## Development
 
 ```shell

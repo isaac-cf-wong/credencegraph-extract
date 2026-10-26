@@ -1,0 +1,62 @@
+{
+  "type": "rederive-maths",
+  "target": "e-2",
+  "artifact": {
+    "kind": "equation",
+    "nodes": [
+      "e-1",
+      "e-2"
+    ],
+    "labels": [
+      "eq:model",
+      "eq:drift"
+    ]
+  },
+  "inputs": {
+    "lhs": "(T_0 + alpha*(t + tau)) - (T_0 + alpha*t)",
+    "rhs": "alpha*tau",
+    "symbols": [
+      {
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          250,
+          350
+        ],
+        "name": "T_0"
+      },
+      {
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          -1,
+          1
+        ],
+        "name": "alpha"
+      },
+      {
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          0,
+          30
+        ],
+        "name": "t"
+      },
+      {
+        "assumptions": [
+          "real"
+        ],
+        "domain": [
+          0,
+          30
+        ],
+        "name": "tau"
+      }
+    ],
+    "assumption": "T(t) = T_0 + alpha t from eq:model, evaluated at t + tau and at t"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "coverage": {
+    "rubric": {
+      "name": "end-to-end-example",
+      "version": "1"
+    },
+    "nodes": 20,
+    "by_origin": {
+      "document": 12,
+      "analyst": 2,
+      "evidence": 6
+    },
+    "by_type": {
+      "method": {
+        "count": 2,
+        "share": 0.16666666666666666
+      },
+      "result": {
+        "count": 4,
+        "share": 0.3333333333333333
+      },
+      "context": {
+        "count": 2,
+        "share": 0.16666666666666666
+      },
+      "derivation": {
+        "count": 1,
+        "share": 0.08333333333333333
+      },
+      "literature_claim": {
+        "count": 1,
+        "share": 0.08333333333333333
+      },
+      "claim": {
+        "count": 1,
+        "share": 0.08333333333333333
+      },
+      "reference": {
+        "count": 1,
+        "share": 0.08333333333333333
+      }
+    },
+    "untyped": [],
+    "unexamined": [],
+    "not_assessed": {
+      "count": 1,
+      "reasons": {
+        "s-9": "no v1 check applies"
+      }
+    }
+  },
+  "untied_citations": [],
+  "uncalibrated": [
+    {
+      "check": "c-006",
+      "type": "citation-support",
+      "model": "claude-opus-5-5"
+    }
+  ]
+}
