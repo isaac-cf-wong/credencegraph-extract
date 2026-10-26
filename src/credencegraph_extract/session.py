@@ -246,7 +246,9 @@ def lock(run_dir: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
         while not _try_lock(handle):
             if time.monotonic() >= deadline:
                 holder = _owner(run_dir)
-                by = f" (process {holder['pid']}, since {holder['since']})" if holder else ""
+                by = (
+                    f" (process {holder.get('pid')}, since {holder.get('since')})" if holder and "pid" in holder else ""
+                )
                 raise RunError("run-busy", f"another tool call holds the lock of {run_dir.name!r}{by}")
             time.sleep(0.05)
         owner = run_dir / LOCK_OWNER

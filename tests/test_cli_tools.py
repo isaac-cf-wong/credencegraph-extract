@@ -241,6 +241,7 @@ def test_a_tool_name_that_is_not_a_string_is_refused(name: object) -> None:
         ({"name": "get_state", "arguments": []}, "invalid-argument"),
         ({"name": "get_state", "arguments": "run"}, "invalid-argument"),
         ({"name": "get_state", "arguments": 7}, "invalid-argument"),
+        ({"name": "get_state", "arguments": None}, "invalid-argument"),
         ({"name": ["get_state"], "arguments": {}}, "unknown-tool"),
         ({"arguments": {}}, "unknown-tool"),
     ],
@@ -275,3 +276,17 @@ def test_other_requests_and_well_formed_calls_pass_on() -> None:
     ):
         assert anyio.run(_refuse_invented, context, call_next) == "passed on"
     assert reached == ["tools/list", "tools/call", "tools/call"]
+
+
+@pytest.mark.parametrize("record", [{"pid": 4242}, {"since": "then"}, {"pid": 4242, "since": "then"}, {}])
+def test_a_busy_run_reports_whatever_owner_record_it_finds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], record: dict[str, Any]
+) -> None:
+    run = tmp_path / "run"
+    tool(capsys, "start_run", run, **START)
+    with session.lock(run):
+        (run / session.LOCK_OWNER).write_text(json.dumps(record), encoding="utf-8")
+        with pytest.raises(RunError) as busy, session.lock(run, timeout=0.1):
+            pass
+    assert busy.value.code == "run-busy"
+    assert ("process 4242" in str(busy.value)) is ("pid" in record)

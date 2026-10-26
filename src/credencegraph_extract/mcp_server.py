@@ -100,7 +100,7 @@ async def _refuse_invented(ctx: Any, call_next: Any) -> Any:
     if isinstance(params, Mapping):
         try:
             refuse_invented(name, arguments if isinstance(arguments, Mapping) else {})
-            if arguments is not None and not isinstance(arguments, Mapping):
+            if "arguments" in params and not isinstance(arguments, Mapping):
                 raise RunError("invalid-argument", f"the arguments of {name} must be an object of named arguments")
         except RunError as error:
             answer = _error(error.code, str(error))
