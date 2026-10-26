@@ -1,8 +1,8 @@
 ---
 title: Citation sources
 description:
-    Fetching a URL an agent names from public addresses only, connecting to the
-    address checked on every redirect hop.
+    Reading the source a citation check quotes, and deciding whether it is tied
+    to the reference.
 ---
 
 <!-- prettier-ignore-start -->

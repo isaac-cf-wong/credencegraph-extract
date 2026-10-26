@@ -528,16 +528,7 @@ def _recompute(graph: Graph, plan: _Plan) -> Result:
     # The reported value and its rounding as the text writes it; of several numerals exactly equal to it, the
     # coarsest. Values are compared as exact fractions of their decimal text, never as floats, which would let
     # 0.10000000000000001 stand for 0.1.
-    exact = Fraction(Decimal(expected))
-    reported, half = max(
-        (
-            (number, rounding)
-            for node in plan.nodes
-            for number, rounding in evaluate.text_numerals(node_text(graph, node))
-            if number == exact
-        ),
-        key=lambda pair: pair[1],
-    )
+    reported, half = _reported(graph, plan.nodes, expected)
     difference = abs(value - reported)
     result = PASSED if difference <= half else FAILED
     within = "within" if result == PASSED else "outside"
@@ -554,6 +545,23 @@ def _recompute(graph: Graph, plan: _Plan) -> Result:
             "rounding": _exact(half),
             "difference": _exact(difference),
         },
+    )
+
+
+def _reported(graph: Graph, nodes: Sequence[Node], expected: str) -> tuple[Fraction, Fraction]:
+    """The reported value and its rounding as the cited chunks write it: of several numerals equal to it, the coarsest.
+
+    ``_plan`` has checked that one of the chunks writes the expected value.
+    """
+    exact = Fraction(Decimal(expected))
+    return max(
+        (
+            (number, rounding)
+            for node in nodes
+            for number, rounding in evaluate.text_numerals(node_text(graph, node))
+            if number == exact
+        ),
+        key=lambda pair: pair[1],
     )
 
 
@@ -860,7 +868,7 @@ def _step_of(check_type: str, encoded: str) -> tuple[Any, ...] | None:
     try:
         if check_type == RECOMPUTE:
             value = evaluate.arithmetic(fields["expression"]).value
-            return (RECOMPUTE, value, Fraction(Decimal(fields["expected"])))
+            return (RECOMPUTE, value, Fraction(Decimal(fields["expected"])), fields["rounding"])
         if check_type in {REDERIVE, NUMERIC}:
             names = evaluate.symbols(fields["symbols"])
             sides = (evaluate.symbolic(fields["lhs"], names), evaluate.symbolic(fields["rhs"], names))
@@ -870,12 +878,13 @@ def _step_of(check_type: str, encoded: str) -> tuple[Any, ...] | None:
     return None
 
 
-def _step(check_type: str, fields: Mapping[str, Any]) -> tuple[Any, ...] | None:
+def _step(check_type: str, fields: Mapping[str, Any], rounding: Fraction | None = None) -> tuple[Any, ...] | None:
     """What a maths check decides, so that two encodings of one step count as one check.
 
-    ``recompute-numbers`` decides whether the exact value of its expression rounds to its expected
-    value, so two with the same value and expected value pass or fail together, however the expression
-    is written. ``rederive-maths``, and its numeric fallback, decides whether ``lhs`` equals ``rhs``, so
+    ``recompute-numbers`` decides whether the exact value of its expression is within the rounding of
+    its reported value, the rounding the cited chunks' numeral implies (``_reported``), so two with the
+    same value, expected value and ``rounding`` pass or fail together, however the expression is
+    written. ``rederive-maths``, and its numeric fallback, decides whether ``lhs`` equals ``rhs``, so
     two whose sides have the same canonical forms (``_canonical``), in either order, do: a true step's
     two sides share one form, so two true steps about the same expression are one step, however each
     writes it. ``None`` for a citation, whose target and reference are its identity, and for fields
@@ -884,8 +893,11 @@ def _step(check_type: str, fields: Mapping[str, Any]) -> tuple[Any, ...] | None:
     if check_type not in {RECOMPUTE, REDERIVE, NUMERIC}:
         return None
     keys = ("expression", "expected") if check_type == RECOMPUTE else ("lhs", "rhs", "symbols")
+    found = {key: fields.get(key) for key in keys}
+    if check_type == RECOMPUTE:
+        found["rounding"] = str(rounding)
     try:
-        encoded = json.dumps({key: fields.get(key) for key in keys}, sort_keys=True, default=plain)
+        encoded = json.dumps(found, sort_keys=True, default=plain)
     except (TypeError, ValueError):
         return None
     return _step_of(check_type, encoded)
@@ -896,15 +908,34 @@ def _proposed_type(check_type: Any) -> Any:
     return REDERIVE if check_type == NUMERIC else check_type
 
 
+def _rounding(graph: Graph, node_ids: Any, expected: Any) -> Fraction | None:
+    """The rounding of an arithmetic check's reported value, from the chunks it cites, or ``None`` when it has none."""
+    if not isinstance(node_ids, Sequence) or not isinstance(expected, str):
+        return None
+    nodes = [graph.nodes[node_id] for node_id in node_ids if isinstance(node_id, str) and node_id in graph]
+    try:
+        return _reported(graph, nodes, expected)[1]
+    except (ValueError, ArithmeticError):
+        return None
+
+
+def _plan_step(graph: Graph, plan: _Plan) -> tuple[Any, ...] | None:
+    """The step of an admitted plan."""
+    rounding = _rounding(graph, [node.id for node in plan.nodes], plan.record.get("expected"))
+    return _step(plan.type, plan.record, rounding)
+
+
 def _admitted(graph: Graph, plans: Sequence[_Plan]) -> list[tuple[str, str, tuple[Any, ...] | None]]:
     """The checks a new proposal may not repeat, as target, proposed type and step: those in the graph and the plans."""
     found = []
     for node in graph:
         check = node.attributes.get("check")
         if isinstance(check, Mapping) and isinstance(check.get("inputs"), Mapping):
-            check_type = check.get("type")
-            found.append((check.get("target"), _proposed_type(check_type), _step(check_type, check["inputs"])))
-    found.extend((plan.target.id, plan.type, _step(plan.type, plan.record)) for plan in plans)
+            check_type, inputs = check.get("type"), check["inputs"]
+            nodes = (check.get("artifact") or {}).get("nodes")
+            step = _step(check_type, inputs, _rounding(graph, nodes, inputs.get("expected")))
+            found.append((check.get("target"), _proposed_type(check_type), step))
+    found.extend((plan.target.id, plan.type, _plan_step(graph, plan)) for plan in plans)
     return found
 
 
@@ -930,7 +961,7 @@ def _admit(
             if any((plan.target.id, plan.type) == (other, other_type) for other, other_type, _ in admitted):
                 msg = f"{plan.target.id!r} has an earlier {plan.type} proposal: one check of a type per node"
                 raise _ProposalError(DUPLICATE_RECORD, msg)
-            step = _step(plan.type, plan.record)
+            step = _plan_step(graph, plan)
             earlier = [other for other, _, other_step in admitted if step is not None and other_step == step]
             if earlier:
                 msg = f"{earlier[0]!r} has a {plan.type} check of the same step: one step is one check"

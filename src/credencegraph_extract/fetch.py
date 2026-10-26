@@ -96,18 +96,15 @@ class Connection(Protocol):
 
     def peer(self) -> str:
         """Return the address the connection reached."""
-        ...
 
     def get(self, target: str, headers: Mapping[str, str]) -> tuple[int, Mapping[str, str], Callable[[int], bytes]]:
         """Send a GET request; return the status, the headers by lower-case name, and a reader of the body.
 
         The reader returns at most the bytes asked for, as soon as some have arrived, and ``b""`` at the end.
         """
-        ...
 
     def close(self) -> None:
         """Close the connection."""
-        ...
 
 
 # Resolves a host name and port to addresses.

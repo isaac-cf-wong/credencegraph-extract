@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import time
+from fractions import Fraction
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,7 @@ from checks_fixture import (
     RUN_ID,
     VERDICTS,
 )
-from credencegraph.core import Graph, loads
+from credencegraph.core import Graph, Node, loads
 from credencegraph.core.relation import OBSERVES
 from credencegraph.inference import conditional, marginal
 from credencegraph.rubric import Rubric, check_graph, load_rubric
@@ -501,6 +502,21 @@ def test_a_step_too_large_to_expand_is_keyed_quickly(lhs: str, names: list[str])
     started = time.monotonic()
     assert checks._step("rederive-maths", {"lhs": lhs, "rhs": "1", "symbols": symbols}) is not None
     assert time.monotonic() - started < 1
+
+
+def test_one_value_reported_with_another_rounding_is_another_step() -> None:
+    # Whether an arithmetic check passes depends on the rounding the cited numeral implies: 350 is 350 +- 0.5,
+    # 350.0 is 350 +- 0.05, so the same calculation checked against each is two steps, not one.
+    graph = Graph()
+    graph.add_node(Node("s-1", kind="result", statement="So 350 remain.", attributes={"origin": "document"}))
+    graph.add_node(Node("s-2", kind="result", statement="So 350.0 remain.", attributes={"origin": "document"}))
+    coarse, fine = checks._rounding(graph, ["s-1"], "350"), checks._rounding(graph, ["s-2"], "350")
+    assert (coarse, fine) == (Fraction(1, 2), Fraction(1, 20))
+    fields = {"expression": "400 - 50", "expected": "350"}
+    assert checks._step("recompute-numbers", fields, coarse) != checks._step("recompute-numbers", fields, fine)
+    assert checks._step("recompute-numbers", fields, coarse) == checks._step(
+        "recompute-numbers", {"expression": "7 * 50", "expected": "350"}, coarse
+    )
 
 
 def test_one_value_written_two_ways_for_two_targets_is_one_check(tmp_path: Path) -> None:
