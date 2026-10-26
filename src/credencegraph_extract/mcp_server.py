@@ -30,8 +30,9 @@ from credencegraph_extract.version import __version__
 NAME = "credencegraph-extract"
 
 INSTRUCTIONS = """\
-Build the credence graph of a LaTeX paper, one tool call at a time; every call is recorded in the run \
-directory, which holds the whole state.
+Build the credence graph of a LaTeX paper, one tool call at a time. The run directory holds the whole \
+state: every call that changes the run is recorded there, refused records included; a call refused as a \
+whole, such as one with an argument of the wrong type, changes nothing and is not recorded.
 
 1. start_run: ingest the paper. It lists the chunks with their ids, the document types (each with its \
 form fields and what it rests on), the hedge phrases and the check types.

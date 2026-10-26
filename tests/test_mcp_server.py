@@ -229,3 +229,60 @@ def test_the_command_serves_the_tools_over_stdio(tmp_path: Path) -> None:
     names, result = anyio.run(session)
     assert names == TOOLS
     assert error_of(result) == "missing-run"
+
+
+# Each tool's arguments, valid for a run of the check fixture; the sweep replaces one at a time.
+VALID = {
+    "start_run": {
+        "source": str(checks_fixture.PAPER),
+        "rubric": str(checks_fixture.RUBRIC),
+        "harness": "h",
+        "model": MODEL,
+    },
+    "get_state": {},
+    "classify": {"records": [], "model": MODEL},
+    "add_premises": {"records": [], "model": MODEL},
+    "run_checks": {"proposals": [], "model": MODEL},
+    "judge_citation": {
+        "target": "s-7",
+        "reference": "r-1",
+        "source": "smith2020.txt",
+        "passage": PASSAGE,
+        "supports": True,
+        "model": MODEL,
+    },
+    "finish_run": {"model": MODEL},
+}
+OPTIONAL = {
+    "start_run": {
+        "agent": "a",
+        "note": "n",
+        "document": "paper",
+        "cited": str(checks_fixture.CITED),
+        "store_source": False,
+    }
+}
+WRONG = [7, 1.5, True, None, [], ["x"], {}, {"x": 1}, ""]
+
+
+async def _sweep(run_dir: Path) -> list[str]:
+    """Call every tool with each argument replaced by each wrong JSON value; return the calls that were not JSON."""
+    failures = []
+    async with Client(server) as client:
+        for tool, valid in VALID.items():
+            args = {**valid, **OPTIONAL.get(tool, {}), "agent": "a", "note": "n"}
+            args["run"] = str(run_dir)
+            for name in args:
+                for i, wrong in enumerate(WRONG):
+                    if tool == "start_run" and name != "run":
+                        # A new directory each time, so a call that succeeds does not refuse the next as run-exists.
+                        args["run"] = str(run_dir.parent / f"fresh-{name}-{i}")
+                    result = await client.call_tool(tool, {**args, name: wrong})
+                    if result.is_error or not isinstance(result.structured_content, dict):
+                        failures.append(f"{tool}({name}={wrong!r})")
+    return failures
+
+
+def test_no_argument_of_any_wrong_type_makes_a_protocol_error(run_dir: Path, no_network: None) -> None:
+    # A model can send any JSON value for any argument; every one must come back as a JSON result.
+    assert anyio.run(_sweep, run_dir) == []
