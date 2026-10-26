@@ -261,10 +261,10 @@ fail together are one observation, not two. The refused proposals go back to the
 model once, each with its error and a `fix` (for an unfaithful numeral: cite
 every chunk whose numeral is used, and write the expression with the text's own
 numerals only, as `a - a * p` rather than `a * (1 - p)`; for a citation naming a
-bibliography key, the id of its entry); the corrections are checked the same way, and each rejection
-names its round, `initial` or `repair`. Each check that runs becomes an
-**evidence node** `c-NNN` (in document order of its target, then run order) of
-its check type, with a statement from a fixed template
+bibliography key, the id of its entry); the corrections are checked the same
+way, and each rejection names its round, `initial` or `repair`. Each check that
+runs becomes an **evidence node** `c-NNN` (in document order of its target, then
+run order) of its check type, with a statement from a fixed template
 (`recompute-numbers on s-3: passed`), and the check record in
 `attributes.check`: `type`, `target`, `artifact`, `inputs`, `result`, `detail`,
 `tool` (this package, Python and the libraries used), `model` (provider, model
@@ -323,6 +323,13 @@ the checks, runs the core's check at the `assessed` level with rubric credences,
 and writes `graph.json`, `rejections.json` and `report.json`; any later write
 removes them until the next `finish_run`. `verify` takes a finished run of
 either format.
+
+`run_checks` runs proposals of the maths check types (`recompute-numbers`,
+`rederive-maths` and its numeric fallback), checked as the check pass checks
+them, and adds a check node and its files under `checks/` for each. Checks are
+append-only: a check is never withdrawn, nor run again on its target, nor run on
+another target as another encoding of the same step, so a failed check stays
+observed. The versions of the code that ran a call's checks are logged with it.
 
 ## Verify
 

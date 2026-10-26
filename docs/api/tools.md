@@ -2,7 +2,7 @@
 title: Graph tools
 description:
     The tools an agent calls to build a graph, which classify chunks, add
-    premises and finish a run.
+    premises, run checks and finish a run.
 ---
 
 <!-- prettier-ignore-start -->

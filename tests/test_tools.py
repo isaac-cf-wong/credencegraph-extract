@@ -194,6 +194,14 @@ def test_records_must_be_a_list(run_dir: Path) -> None:
     assert calls(run_dir) == 1
 
 
+@pytest.mark.parametrize("records", ["s-1", {"node": "s-1"}])
+def test_records_that_are_not_a_list_are_refused_as_sent(run_dir: Path, records: Any) -> None:
+    for tool in (classify, add_premises):
+        with pytest.raises(RunError, match="records must be a list"):
+            tool(run_dir, records, model=MODEL)
+    assert calls(run_dir) == 1
+
+
 def test_every_call_is_logged_with_its_model_and_agent(run_dir: Path) -> None:
     classify(run_dir, FIRST[:2], model="m-a", agent="typist", note="first pass")
     finish_run(run_dir, model="m-b")

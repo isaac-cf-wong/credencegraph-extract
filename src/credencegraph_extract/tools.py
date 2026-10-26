@@ -10,6 +10,9 @@ change, and is kept in the run's rejections; the agent may simply call again.
   returns it to unassigned (``assemble``), but not once a check targets it: a failed check cannot be
   escaped by making its node a type no check applies to. A chunk already split cannot be split again.
 - ``add_premises`` adds the implicit premises of conclusions, as the premise records do.
+- ``run_checks`` checks and runs proposals of the maths check types, as the check pass does, and adds a
+  check node for each that runs, with its files in the run. A check is never withdrawn or run again on
+  its target, nor run again on another target as another encoding of the same step.
 - ``finish_run`` derives every assessed node's verdict from the checks that observe it, runs the core's
   check at the ``assessed`` level with rubric credences, and marks the run finished; the run's outputs
   are written then. Any later write marks it unfinished again.
@@ -37,23 +40,41 @@ from credencegraph_extract.assemble import (
     fixes,
     premises_rubric_problem,
 )
-from credencegraph_extract.checks import assess
+from credencegraph_extract.checks import assess, run_maths
+from credencegraph_extract.checks import fix as check_fix
 from credencegraph_extract.run import RunError
-from credencegraph_extract.session import FINISH, Context, State, operation, write
+from credencegraph_extract.session import FINISH, Context, State, operation, versions, write
 
 CLASSIFY = "classify"
 ADD_PREMISES = "add_premises"
+RUN_CHECKS = "run_checks"
 
 # The rejection code of a record on a node a check targets.
 CHECKED = "checked-node"
 
 
-def _records(args: Mapping[str, Any]) -> list[Any]:
+def _records(args: Mapping[str, Any], name: str = "records") -> list[Any]:
     """The list of records a tool call sends, or refuse the call."""
-    records = args.get("records")
+    records = args.get(name)
     if not isinstance(records, list):
-        raise RunError("invalid-argument", "records must be a list of records")
+        raise RunError("invalid-argument", f"{name} must be a list of records")
     return records
+
+
+def _sent(records: Any) -> Any:
+    """The records as a call logs them: a tuple as a list, anything else as given, for the operation to refuse.
+
+    A string or a mapping is not turned into a list of its characters or keys.
+    """
+    return list(records) if isinstance(records, tuple) else records
+
+
+def _versions(args: Mapping[str, Any]) -> dict[str, str]:
+    """The versions of the code that ran a call, as the tool records them in its arguments."""
+    found = args.get("versions")
+    if not isinstance(found, Mapping) or not all(isinstance(value, str) for value in found.values()):
+        raise RunError("invalid-argument", "versions must name the version of each piece of code that ran")
+    return dict(found)
 
 
 def _changed(before: Graph, after: Graph) -> list[str]:
@@ -88,6 +109,12 @@ def _premise_fix(context: Context, rejection: Mapping[str, Any]) -> list[str]:
     return _fallback(rejection)
 
 
+def _check_fix(rejection: Mapping[str, Any]) -> list[str]:
+    """What to change in a refused check proposal: what the refusal knew, else what its code says, else the fallback."""
+    found = rejection.get("fix") or check_fix(rejection["code"], rejection["record"])
+    return [found] if found else _fallback(rejection)
+
+
 def checked(graph: Graph) -> set[str]:
     """Return the nodes a check targets: the sources of ``observes`` relations.
 
@@ -119,7 +146,7 @@ def _classify(context: Context, state: State, args: Mapping[str, Any]) -> tuple[
     for rejection in assembly.rejections:
         found = fixes(assembly.graph, context.rubric, rejection["record"])
         refused.append({**rejection, "fix": found or _fallback(rejection)})
-    after = State(assembly.graph, (*state.rejections, *_kept(context, CLASSIFY, refused)), state.finished)
+    after = replace(state, graph=assembly.graph, rejections=(*state.rejections, *_kept(context, CLASSIFY, refused)))
     result = {
         "applied": _changed(state.graph, assembly.graph),
         "refused": refused,
@@ -136,13 +163,30 @@ def _add_premises(context: Context, state: State, args: Mapping[str, Any]) -> tu
         raise RunError("invalid-argument", f"no premises can be added: {problem}")
     assembly = assemble_premises(state.graph, context.rubric, _records(args))
     refused = [{**rejection, "fix": _premise_fix(context, rejection)} for rejection in assembly.rejections]
-    after = State(assembly.graph, (*state.rejections, *_kept(context, ADD_PREMISES, refused)), state.finished)
+    after = replace(state, graph=assembly.graph, rejections=(*state.rejections, *_kept(context, ADD_PREMISES, refused)))
     result = {
         "applied": _changed(state.graph, assembly.graph),
         "refused": refused,
         "overflow": assembly.overflow,
     }
     return after, result
+
+
+@operation(RUN_CHECKS)
+def _run_checks(context: Context, state: State, args: Mapping[str, Any]) -> tuple[State, dict[str, Any]]:
+    """Check and run maths proposals, adding a check node for each that runs."""
+    graph, files, checks, rejections = run_maths(
+        state.graph, context.rubric, _records(args, "proposals"), _versions(args)
+    )
+    refused = [{**rejection, "fix": _check_fix(rejection)} for rejection in rejections]
+    texts = {path: data.decode("utf-8") for path, data in files.items()}
+    after = replace(
+        state,
+        graph=graph,
+        rejections=(*state.rejections, *_kept(context, RUN_CHECKS, refused)),
+        files={**state.files, **texts},
+    )
+    return after, {"checks": checks, "refused": refused}
 
 
 @operation(FINISH)
@@ -180,7 +224,7 @@ def classify(
     Raises:
         RunError: If the call as a whole is refused (``records`` not a list, the run busy or malformed).
     """
-    return write(run, CLASSIFY, {"records": list(records)}, model=model, agent=agent, note=note)
+    return write(run, CLASSIFY, {"records": _sent(records)}, model=model, agent=agent, note=note)
 
 
 def add_premises(
@@ -202,7 +246,37 @@ def add_premises(
     Raises:
         RunError: If the rubric takes no premises, or the call as a whole is refused.
     """
-    return write(run, ADD_PREMISES, {"records": list(records)}, model=model, agent=agent, note=note)
+    return write(run, ADD_PREMISES, {"records": _sent(records)}, model=model, agent=agent, note=note)
+
+
+def run_checks(
+    run: Path, proposals: Sequence[Any], *, model: str, agent: str | None = None, note: str | None = None
+) -> dict[str, Any]:
+    """Check and run proposals of the maths check types: ``recompute-numbers`` and ``rederive-maths``.
+
+    A check, once run, is part of the run: it cannot be withdrawn or run again on the same target, nor
+    run again on another target in another encoding of the same step. The versions of the code that
+    runs the checks are recorded with the call.
+
+    Args:
+        run: The run directory.
+        proposals: Check proposals, each ``{"target", "type": "recompute-numbers", "nodes", "expression",
+            "expected"}`` or ``{"target", "type": "rederive-maths", "nodes", "lhs", "rhs", "symbols",
+            "assumption"}``.
+        model: The model making the call, as the harness reports it.
+        agent: A name for the agent.
+        note: Free text kept with the call.
+
+    Returns:
+        ``checks``, each check run with its id, type, target, result and detail (a ``rederive-maths``
+        that errs is followed by its numeric fallback when the rubric declares one); and ``refused``,
+        each refused proposal with its code, message and ``fix``.
+
+    Raises:
+        RunError: If the call as a whole is refused.
+    """
+    args = {"proposals": _sent(proposals), "versions": versions()}
+    return write(run, RUN_CHECKS, args, model=model, agent=agent, note=note)
 
 
 def finish_run(run: Path, *, model: str, agent: str | None = None, note: str | None = None) -> dict[str, Any]:

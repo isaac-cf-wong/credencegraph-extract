@@ -60,7 +60,7 @@ from credencegraph.rubric.validate import origin_of
 from credencegraph_extract.assemble import edge_rules_not_requires, premises_rubric_problem
 from credencegraph_extract.checks import IMPLEMENTED
 from credencegraph_extract.digest import bytes_digest
-from credencegraph_extract.run import RunError, new_run_id
+from credencegraph_extract.run import CHECKS, RunError, new_run_id
 from credencegraph_extract.version import __version__
 
 FORMAT = "credencegraph-extract-run"
@@ -95,11 +95,13 @@ class State:
         graph: The graph so far.
         rejections: Every refused record or proposal, with the call that sent it.
         finished: Whether the last write was ``finish_run``; any other write makes it ``False``.
+        files: The files of the checks run, by path in the run (``checks/c-NNN/<name>``), as text.
     """
 
     graph: Graph
     rejections: tuple[Mapping[str, Any], ...] = ()
     finished: bool = False
+    files: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -353,6 +355,7 @@ def _state_file(state: State, calls: int, log_digest: str) -> bytes:
             "log_digest": log_digest,
             "finished": state.finished,
             "rejections": [dict(item) for item in state.rejections],
+            "files": dict(sorted(state.files.items())),
             "graph": graph_to_dict(state.graph),
         }
     )
@@ -411,7 +414,10 @@ def _load(run_dir: Path, manifest: Mapping[str, Any], calls: list[dict[str, Any]
     if isinstance(saved, dict) and saved.get("calls") == len(calls) and saved.get("log_digest") == log_digest:
         try:
             state = State(
-                graph_from_dict(saved["graph"]), tuple(saved.get("rejections") or ()), bool(saved.get("finished"))
+                graph_from_dict(saved["graph"]),
+                tuple(saved.get("rejections") or ()),
+                bool(saved.get("finished")),
+                dict(saved.get("files") or {}),
             )
         except (KeyError, TypeError, ValueError):
             state = None
@@ -518,6 +524,7 @@ def write(  # noqa: PLR0913 - the call and who makes it
             os.fsync(log.fileno())
         temporary.replace(run_dir / STATE)
         _replace(run_dir / MANIFEST, _manifest(manifest, [*calls, json.loads(line)], after, log_digest))
+        _check_files(run_dir, after)
         _outputs(run_dir, rubric, after)
     return result
 
@@ -538,15 +545,17 @@ def _digests(state: State, result: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _state_digests(state: State) -> dict[str, Any]:
-    """What a log line records of the state a call left: its graph, its rejections and whether it is finished.
+    """What a log line records of the state a call left: its graph, its rejections, its check files and whether it is finished.
 
     A cached ``state.json`` is trusted only when these match the last line, so a derived file cannot
     stand in for what the log leads to.
     """
     rejections = json.dumps([dict(item) for item in state.rejections], ensure_ascii=False, sort_keys=True)
+    files = json.dumps(dict(state.files), ensure_ascii=False, sort_keys=True)
     return {
         "graph_digest": bytes_digest(_graph_text(state.graph)),
         "rejections_digest": bytes_digest(rejections.encode("utf-8")),
+        "files_digest": bytes_digest(files.encode("utf-8")),
         "finished": state.finished,
     }
 
@@ -591,6 +600,7 @@ def _reconcile(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls
         _replace(run_dir / STATE, _state_file(state, len(calls), log_digest))
     if manifest.get("log_digest") != log_digest or manifest.get("finished") != state.finished:
         _replace(run_dir / MANIFEST, _manifest(manifest, calls, state, log_digest))
+    _check_files(run_dir, state)
     _outputs(run_dir, rubric, state)
     return state
 
@@ -607,6 +617,22 @@ def reconcile(run_dir: Path) -> None:
     with lock(run_dir):
         manifest = read_manifest(run_dir)
         _reconcile(run_dir, manifest, _rubric(run_dir, manifest), read_calls(run_dir))
+
+
+def _check_files(run_dir: Path, state: State) -> None:
+    """Write the files of the checks run from the state, each that is missing or differs.
+
+    Checks are only ever added, so the files of a check, once written, stay; a file edited by hand is
+    written again from the state.
+    """
+    for path, text in state.files.items():
+        target = run_dir / path
+        if not path.startswith(f"{CHECKS}/") or ".." in Path(path).parts:
+            raise RunError("invalid-record", f"the check file {path!r} is not under {CHECKS}/")
+        data = text.encode("utf-8")
+        if not target.is_file() or target.read_bytes() != data:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            _replace(target, data)
 
 
 def _outputs(run_dir: Path, rubric: Rubric, state: State) -> None:

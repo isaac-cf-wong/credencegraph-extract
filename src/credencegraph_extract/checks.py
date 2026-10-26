@@ -596,6 +596,17 @@ def _numeric(plan: _Plan, artifact: Mapping[str, Any]) -> Result:
     return Result(NUMERIC, plan.target.id, artifact, inputs, result, detail, output, libraries=("sympy",))
 
 
+def _maths(graph: Graph, rubric: Rubric, plan: _Plan) -> list[Result]:
+    """Run a ``recompute-numbers`` or ``rederive-maths`` plan, and the numeric fallback when the symbolic check errs and the rubric declares it."""
+    if plan.type == RECOMPUTE:
+        return [_recompute(graph, plan)]
+    symbolic = _rederive(plan)
+    numeric = rubric.checks.get(NUMERIC)
+    if symbolic.result == ERROR and numeric is not None and plan.target.kind in numeric.targets:
+        return [symbolic, _numeric(plan, symbolic.artifact)]
+    return [symbolic]
+
+
 def _citation(graph: Graph, plan: _Plan, cited: Cited, ask: Ask) -> Result:
     """Run ``citation-support``: read the cited work, ask the model, and locate its passage."""
     reference = plan.reference
@@ -835,6 +846,117 @@ def _admit(
     return rejections
 
 
+def add_checks(
+    graph: Graph, rubric: Rubric, results: Sequence[Result], versions: Mapping[str, str]
+) -> tuple[Graph, dict[str, bytes], list[dict[str, Any]]]:
+    """Add each result to a graph as a check node with its check edge, numbered after the graph's checks.
+
+    A check node ``c-NNN`` takes the first number the graph does not have. Its ``attributes.check`` is
+    the check record, and ``attributes.observed`` is ``true`` for a pass and ``false`` for a fail; an
+    errored check has no ``observed``. The edge ``target --observes--> c-NNN`` carries the check type's
+    ``sensitivity`` and ``false_pass``. Verdicts are not set: ``assess`` derives them.
+
+    Args:
+        graph: The graph.
+        rubric: The rubric, which declares every result's check type.
+        results: The results, in the order they are numbered.
+        versions: The versions of the code that ran the checks, by name, as ``session.versions`` gives them.
+
+    Returns:
+        The graph with the checks; the files of each check's directory, by path in the run; and one
+        entry per check: its id, type, target and result.
+    """
+    fresh = (node_id for n in count(1) if (node_id := f"c-{n:03d}") not in graph)
+    nodes: list[Node] = []
+    relations: list[Relation] = []
+    files: dict[str, bytes] = {}
+    report = []
+    for result in results:
+        check_id = next(fresh)
+        check: Check = rubric.checks[result.type]
+        tool = {
+            "name": "credencegraph-extract",
+            "version": versions.get("credencegraph-extract"),
+            "python": versions.get("python"),
+            **{library: versions.get(library) for library in result.libraries},
+        }
+        record, check_files = _record(check_id, result, tool)
+        files.update({f"{CHECKS}/{check_id}/{name}": data for name, data in check_files.items()})
+        attributes: dict[str, Any] = {"origin": EVIDENCE, "check": record}
+        if result.result != ERROR:
+            attributes["observed"] = result.result == PASSED
+        nodes.append(
+            Node(
+                check_id,
+                kind=result.type,
+                statement=f"{result.type} on {result.target}: {result.result}",
+                sources=result.sources,
+                attributes=attributes,
+            )
+        )
+        relations.append(
+            Relation(
+                f"{result.target}-{OBSERVES}-{check_id}",
+                OBSERVES,
+                result.target,
+                check_id,
+                sensitivity=check.sensitivity,
+                false_pass=check.false_pass,
+            )
+        )
+        report.append({"id": check_id, "type": result.type, "target": result.target, "result": result.result})
+    out = Graph()
+    for node in (*graph, *nodes):
+        out.add_node(node)
+    for relation in (*graph.relations.values(), *relations):
+        out.add_relation(relation)
+    return out, files, report
+
+
+def run_maths(
+    graph: Graph, rubric: Rubric, proposals: Sequence[Any], versions: Mapping[str, str]
+) -> tuple[Graph, dict[str, bytes], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Check and run proposals of the maths check types, one tool call's worth, after the checks a graph has.
+
+    Each proposal is checked as the check pass checks it, in the order given, and is refused when it
+    repeats the target and type of a check the graph has or an earlier proposal, or the same step on
+    another target (``_admit``). A ``citation-support`` proposal is refused: the citation tool runs it.
+    The admitted ones run in the order given; a ``rederive-maths`` that errs is followed by its numeric
+    fallback when the rubric declares one. Verdicts are not set.
+
+    Args:
+        graph: The graph, with the checks already run.
+        rubric: The rubric.
+        proposals: The proposals.
+        versions: The versions of the code that runs them.
+
+    Returns:
+        The graph with the new checks; the files of their directories; each new check's id, type,
+        target, result and detail; and the refused proposals, each with its code, message and, where
+        the refusal knows what to change, a ``fix``.
+    """
+    plans: list[_Plan] = []
+    rejections: list[dict[str, Any]] = []
+    for record in proposals:
+        if isinstance(record, Mapping) and record.get("type") == CITATION:
+            target = record.get("target")
+            rejections.append(
+                {
+                    "node": target if isinstance(target, str) else None,
+                    "code": INVALID_RECORD,
+                    "message": f"a {CITATION} check is not run with the maths checks",
+                    "record": record,
+                    "fix": f"send a {CITATION} check to the citation tool, with the source and the passage",
+                }
+            )
+            continue
+        rejections.extend(_admit(graph, rubric, [record], plans))
+    results = [result for plan in plans for result in _maths(graph, rubric, plan)]
+    out, files, report = add_checks(graph, rubric, results, versions)
+    checks = [{**entry, "detail": result.detail} for entry, result in zip(report, results, strict=True)]
+    return out, files, checks, rejections
+
+
 def assess(graph: Graph, rubric: Rubric) -> Graph:
     """Set the verdict of every node the checks assess, from the checks that observe it.
 
@@ -945,14 +1067,8 @@ class CheckPass:
         results: list[Result] = []
         uncalibrated = []
         for plan in plans:
-            if plan.type == RECOMPUTE:
-                results.append(_recompute(graph, plan))
-            elif plan.type == REDERIVE:
-                symbolic = _rederive(plan)
-                results.append(symbolic)
-                numeric = rubric.checks.get(NUMERIC)
-                if symbolic.result == ERROR and numeric is not None and plan.target.kind in numeric.targets:
-                    results.append(_numeric(plan, symbolic.artifact))
+            if plan.type != CITATION:
+                results.extend(_maths(graph, rubric, plan))
             else:
                 check = rubric.checks[CITATION]
                 if check.models and model not in check.models:
@@ -976,53 +1092,7 @@ class CheckPass:
         uncalibrated: list[int],
     ) -> Outcome:
         """Assemble the check nodes, the check edges, the verdicts, the files and the report."""
-        versions = ask.versions
-        fresh = (node_id for n in count(1) if (node_id := f"c-{n:03d}") not in graph)
-        nodes: list[Node] = []
-        relations: list[Relation] = []
-        files: dict[str, bytes] = {}
-        report = []
-        by_target: dict[str, list[str]] = {}
-        for result in results:
-            check_id = next(fresh)
-            check: Check = rubric.checks[result.type]
-            tool = {
-                "name": "credencegraph-extract",
-                "version": versions.get("credencegraph-extract"),
-                "python": versions.get("python"),
-                **{library: versions.get(library) for library in result.libraries},
-            }
-            record, check_files = _record(check_id, result, tool)
-            files.update({f"{CHECKS}/{check_id}/{name}": data for name, data in check_files.items()})
-            attributes: dict[str, Any] = {"origin": EVIDENCE, "check": record}
-            if result.result != ERROR:
-                attributes["observed"] = result.result == PASSED
-            nodes.append(
-                Node(
-                    check_id,
-                    kind=result.type,
-                    statement=f"{result.type} on {result.target}: {result.result}",
-                    sources=result.sources,
-                    attributes=attributes,
-                )
-            )
-            relations.append(
-                Relation(
-                    f"{result.target}-{OBSERVES}-{check_id}",
-                    OBSERVES,
-                    result.target,
-                    check_id,
-                    sensitivity=check.sensitivity,
-                    false_pass=check.false_pass,
-                )
-            )
-            by_target.setdefault(result.target, []).append(result.result)
-            report.append({"id": check_id, "type": result.type, "target": result.target, "result": result.result})
-        out = Graph()
-        for node in (*graph, *nodes):
-            out.add_node(node)
-        for relation in (*graph.relations.values(), *relations):
-            out.add_relation(relation)
+        out, files, report = add_checks(graph, rubric, results, ask.versions)
         out = assess(out, rubric)
         uncalibrated_report = [
             {"check": report[i]["id"], "type": report[i]["type"], "model": results[i].model} for i in uncalibrated
