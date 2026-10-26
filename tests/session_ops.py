@@ -1,7 +1,7 @@
 """A write tool for the tests of the run machinery: it sets ``attributes.note`` on a node.
 
 It stands in for the real tools so the call log, the lock, crash recovery and replay can be tested
-on their own. Importing this module registers it.
+on their own. ``register`` registers it.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from credencegraph.core import Graph
 from credencegraph_extract.session import Context, State, operation
 
 
-@operation("note")
 def note(context: Context, state: State, args: Mapping[str, Any]) -> tuple[State, dict[str, Any]]:
     """Set a note on a node, or refuse a node the graph lacks."""
     node_id, text = args.get("node"), args.get("text")
@@ -33,3 +32,8 @@ def note(context: Context, state: State, args: Mapping[str, Any]) -> tuple[State
     for relation in state.graph.relations.values():
         graph.add_relation(relation)
     return replace(state, graph=graph), {"applied": [node_id], "refused": []}
+
+
+def register() -> None:
+    """Register the test tool with the run machinery."""
+    operation("note")(note)

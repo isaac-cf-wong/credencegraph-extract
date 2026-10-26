@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import session_ops  # noqa: F401 - registers the "note" tool
+import session_ops
 from checks_fixture import CITED, PAPER, RUBRIC
 from conftest import FIXTURES
 
@@ -20,6 +20,8 @@ from credencegraph_extract.cli import main
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.run import RunError
 from credencegraph_extract.session import get_state, lock, recorded_graph, replay, start_run, write
+
+session_ops.register()
 
 MODEL = "test-model-1"
 
@@ -325,6 +327,7 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import session_ops
 from credencegraph_extract.session import write
+session_ops.register()
 run, name = Path(sys.argv[2]), sys.argv[3]
 for i in range(15):
     write(run, "note", {"node": "s-%d" % (1 + i % 9), "text": "%s %d" % (name, i)}, model="m", agent=name)
