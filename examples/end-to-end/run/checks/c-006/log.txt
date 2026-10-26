@@ -1,0 +1,4 @@
+citation-support on s-8: passed
+the passage at chars=221-304 supports the statement
+tool: {"name": "credencegraph-extract", "python": "3.15.0", "version": "0.1.dev20+g4785bc2fb"}
+model: {"model": "claude-opus-5-5"}

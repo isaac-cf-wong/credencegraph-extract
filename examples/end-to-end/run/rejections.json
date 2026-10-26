@@ -1,0 +1,42 @@
+[
+  {
+    "call": 5,
+    "tool": "run_checks",
+    "node": "s-4",
+    "code": "invalid-record",
+    "message": "'1036800 - 1036800 * 5%' is not an expression: invalid syntax",
+    "record": {
+      "expected": "984460",
+      "expression": "1036800 - 1036800 * 5%",
+      "nodes": [
+        "s-3",
+        "s-4"
+      ],
+      "target": "s-4",
+      "type": "recompute-numbers"
+    },
+    "fix": [
+      "change the record so that this no longer holds: '1036800 - 1036800 * 5%' is not an expression: invalid syntax"
+    ]
+  },
+  {
+    "call": 6,
+    "tool": "run_checks",
+    "node": "s-4",
+    "code": "unfaithful-numeral",
+    "message": "no numeral of ['s-3', 's-4'] equals 100",
+    "record": {
+      "expected": "984460",
+      "expression": "1036800 - 1036800 * 5 / 100",
+      "nodes": [
+        "s-3",
+        "s-4"
+      ],
+      "target": "s-4",
+      "type": "recompute-numbers"
+    },
+    "fix": [
+      "write every number, the expected value included, exactly as a numeral the text of ['s-3', 's-4'] writes, and add to nodes any chunk whose numeral you use; a constant no cited chunk writes, such as the 1 of 1 - p or a 100, is not allowed: rewrite the expression without it, as a - a * p rather than a * (1 - p), where a and p are numerals the text writes"
+    ]
+  }
+]

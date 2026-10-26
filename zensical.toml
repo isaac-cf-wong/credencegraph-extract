@@ -46,6 +46,7 @@ Copyright &copy; 2026 Isaac C. F. Wong
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
   { "Get Started" = "index.md" },
+  { "End-to-end example" = "example.md" },
   { "API" = [
     { "Overview" = "api/index.md" },
     { "Earlier runs" = "api/run.md" },

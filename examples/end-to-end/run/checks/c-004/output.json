@@ -1,0 +1,8 @@
+{
+  "result": "failed",
+  "detail": "1036800 - 1036800 * 0.05 = 984960 (exact, Fraction); outside 984460 ± 0.5",
+  "value": "984960",
+  "reported": "984460",
+  "rounding": "0.5",
+  "difference": "500"
+}

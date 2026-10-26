@@ -1,0 +1,20 @@
+{
+  "type": "citation-support",
+  "target": "s-8",
+  "artifact": {
+    "kind": "citation",
+    "reference": "r-1",
+    "document": "lee2019.txt",
+    "source": {
+      "file": "lee2019.txt"
+    },
+    "tied": true,
+    "locator": "chars=221-304",
+    "quote": "Over a month, drifts between 0.3 K and 1 K were typical of uncalibrated thermistors",
+    "digest": "sha256:2b7f5c28756a573bb0bba8330be35215fdf2156322d8539ed016c691dbc027a1"
+  },
+  "inputs": {
+    "statement": "Lee reports that drifts of this size are typical of uncalibrated thermistors~\\cite{lee2019}.",
+    "source_digest": "sha256:2b7bddc05e4fa29ac0fd27f03256b464e1f5f7e501336474cd648da2be12dc39"
+  }
+}

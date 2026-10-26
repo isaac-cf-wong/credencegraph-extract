@@ -1,0 +1,872 @@
+{
+  "format": "credencegraph",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "s-1",
+      "kind": "method",
+      "statement": "We record an array of 24 thermometers once a minute, 1440 times a day, for 30 days.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=4-4",
+          "quote": "We record an array of 24 thermometers once a minute, 1440 times a day, for 30 days.",
+          "digest": "sha256:fccb70ffb989ff292f5f531a20172a20db0ec6aa772f67ba071ed4b70afa11a6"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "classify"
+        }
+      }
+    },
+    {
+      "id": "s-2",
+      "kind": "result",
+      "statement": "Each thermometer therefore yields 43200 readings.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=5-5",
+          "quote": "Each thermometer therefore yields 43200 readings.",
+          "digest": "sha256:a2eff2f23d54fdfae9465eae890106b1ce8afe19f9d08c9d011c9f02a295d60b"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "finish_run"
+        },
+        "form": {
+          "quantity": "readings"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-3",
+      "kind": "result",
+      "statement": "Across the array this gives 1036800 readings.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=6-6",
+          "quote": "Across the array this gives 1036800 readings.",
+          "digest": "sha256:9462264c70196cc007d48d4875ee75818ce93f317753cc12ec7acd51b8572c88"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "finish_run"
+        },
+        "form": {
+          "quantity": "readings"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-4",
+      "kind": "result",
+      "statement": "After removing 5\\% of the readings as outliers, 984460 readings remain.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=7-7",
+          "quote": "After removing 5\\% of the readings as outliers, 984460 readings remain.",
+          "digest": "sha256:0634e6a5e4b77cc287578a11efa7406fab0ba8057aab7854574143b33a6fdc19"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "finish_run"
+        },
+        "form": {
+          "quantity": "readings remain"
+        },
+        "assessment": {
+          "verdict": "fails"
+        }
+      }
+    },
+    {
+      "id": "s-5",
+      "kind": "context",
+      "statement": "We model the temperature reported by a drifting thermometer as",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=8-8",
+          "quote": "We model the temperature reported by a drifting thermometer as",
+          "digest": "sha256:dfda0ce5e69f815785e7886fa84a8daec92ab1b98fd469182bbed07eb8274adf"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "classify"
+        }
+      }
+    },
+    {
+      "id": "e-1",
+      "kind": "method",
+      "statement": "\\begin{equation} T(t) = T_0 + \\alpha t \\end{equation}",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=9-11",
+          "quote": "\\begin{equation} T(t) = T_0 + \\alpha t \\end{equation}",
+          "digest": "sha256:f3a340a167d1cb1c9f954251bb1e156d70be1e8d087f2f23bf3339c74609e80b"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "equation",
+        "label": "eq:model",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "classify"
+        }
+      }
+    },
+    {
+      "id": "s-6",
+      "kind": "context",
+      "statement": "so that over an interval $\\tau$ the reported temperature changes by",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=12-12",
+          "quote": "so that over an interval $\\tau$ the reported temperature changes by",
+          "digest": "sha256:e6912fed0d51c1e0f469cb15e0b42ec36dfc91f3cc2e195b48bec18c6a447f0c"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "classify"
+        }
+      }
+    },
+    {
+      "id": "e-2",
+      "kind": "derivation",
+      "statement": "\\begin{equation} T(t + \\tau) - T(t) = \\alpha \\tau \\end{equation}",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=13-15",
+          "quote": "\\begin{equation} T(t + \\tau) - T(t) = \\alpha \\tau \\end{equation}",
+          "digest": "sha256:cac82f217de00720f3cdd90ff7e137be571ae427cc41eb5c0058d064df420609"
+        }
+      ],
+      "base": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "equation",
+        "label": "eq:drift",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "finish_run"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-7",
+      "kind": "result",
+      "statement": "The mean fitted drift rate is 0.02 K per day, so the mean drift over the 30 days is 0.6 kelvin.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=16-16",
+          "quote": "The mean fitted drift rate is 0.02 K per day, so the mean drift over the 30 days is 0.6 kelvin.",
+          "digest": "sha256:d2b4b5a1e4dbbd1e3087f2158629bdaaa8903bf758a29a7e0db98199c4640029"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "finish_run"
+        },
+        "form": {
+          "quantity": "the mean drift over the 30 days"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-8",
+      "kind": "literature_claim",
+      "statement": "Lee reports that drifts of this size are typical of uncalibrated thermistors~\\cite{lee2019}.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=17-17",
+          "quote": "Lee reports that drifts of this size are typical of uncalibrated thermistors~\\cite{lee2019}.",
+          "digest": "sha256:9f826b85de84ba093fcff368b799b450383f8c3a7243266e8ec57e52779649cb"
+        }
+      ],
+      "base": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "finish_run"
+        },
+        "assessment": {
+          "verdict": "holds"
+        }
+      }
+    },
+    {
+      "id": "s-9",
+      "kind": "claim",
+      "statement": "These results suggest that the array needs recalibration every month.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=18-18",
+          "quote": "These results suggest that the array needs recalibration every month.",
+          "digest": "sha256:d0eaa25f9bf537e2457f50e13dbae17e8747b2a8b84f6cc2603b411719c4fe1a"
+        }
+      ],
+      "base": {
+        "alpha": 5.0,
+        "beta": 5.0
+      },
+      "stated": {
+        "alpha": 6.0,
+        "beta": 4.0
+      },
+      "attributes": {
+        "origin": "document",
+        "unit": "sentence",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "finish_run"
+        },
+        "assessment": {
+          "verdict": "not_assessed",
+          "reason": "no v1 check applies"
+        }
+      }
+    },
+    {
+      "id": "r-1",
+      "kind": "reference",
+      "statement": "C. Lee, Thermistor ageing in field arrays, J. Instr. Field Methods 7 (2019) 12.",
+      "sources": [
+        {
+          "document": "paper.tex",
+          "locator": "file=paper.tex;lines=20-20",
+          "quote": "C. Lee, Thermistor ageing in field arrays, J. Instr. Field Methods 7 (2019) 12.",
+          "digest": "sha256:3bfba22646784dc12996ccfe188b48e5fd3ab0d93b31a195267eb3c43220e8b1"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "document",
+        "unit": "reference",
+        "key": "lee2019",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "start_run"
+        }
+      }
+    },
+    {
+      "id": "a-1",
+      "kind": "assumption",
+      "statement": "A drift of 0.6 kelvin over a month exceeds the accuracy the array is required to keep.",
+      "sources": [],
+      "base": {
+        "alpha": 2.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "analyst",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "add_premises"
+        }
+      }
+    },
+    {
+      "id": "a-2",
+      "kind": "assumption",
+      "statement": "The drift continues linearly beyond the 30 days observed, as the model of eq:model assumes.",
+      "sources": [],
+      "base": {
+        "alpha": 2.0,
+        "beta": 2.0
+      },
+      "stated": null,
+      "attributes": {
+        "origin": "analyst",
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "add_premises"
+        }
+      }
+    },
+    {
+      "id": "c-001",
+      "kind": "recompute-numbers",
+      "statement": "recompute-numbers on s-2: passed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "recompute-numbers",
+          "target": "s-2",
+          "artifact": {
+            "kind": "numbers",
+            "nodes": [
+              "s-1",
+              "s-2"
+            ]
+          },
+          "inputs": {
+            "expression": "1440 * 30",
+            "expected": "43200"
+          },
+          "result": "passed",
+          "detail": "1440 * 30 = 43200 (exact, Fraction); within 43200 \u00b1 0.5",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev20+g4785bc2fb",
+            "python": "3.15.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-001/",
+            "digest": "sha256:1ef45eaf4d0e8e09e382cf5380d4e4d73bc83afeb02a22371530133c2b52da13"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "run_checks"
+        }
+      }
+    },
+    {
+      "id": "c-002",
+      "kind": "recompute-numbers",
+      "statement": "recompute-numbers on s-3: passed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "recompute-numbers",
+          "target": "s-3",
+          "artifact": {
+            "kind": "numbers",
+            "nodes": [
+              "s-1",
+              "s-2",
+              "s-3"
+            ]
+          },
+          "inputs": {
+            "expression": "43200 * 24",
+            "expected": "1036800"
+          },
+          "result": "passed",
+          "detail": "43200 * 24 = 1036800 (exact, Fraction); within 1036800 \u00b1 0.5",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev20+g4785bc2fb",
+            "python": "3.15.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-002/",
+            "digest": "sha256:cd10e8097427032ad0413619669dc43bd9c67ff0501aba1ae4f8f89391e473a1"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "run_checks"
+        }
+      }
+    },
+    {
+      "id": "c-003",
+      "kind": "recompute-numbers",
+      "statement": "recompute-numbers on s-7: passed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "recompute-numbers",
+          "target": "s-7",
+          "artifact": {
+            "kind": "numbers",
+            "nodes": [
+              "s-7"
+            ]
+          },
+          "inputs": {
+            "expression": "0.02 * 30",
+            "expected": "0.6"
+          },
+          "result": "passed",
+          "detail": "0.02 * 30 = 0.6 (exact, Fraction); within 0.6 \u00b1 0.05",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev20+g4785bc2fb",
+            "python": "3.15.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-003/",
+            "digest": "sha256:3db9f0b8118627d3f5f740e9af1a425bdbe161ddebca094b234b2a99054d0433"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "run_checks"
+        }
+      }
+    },
+    {
+      "id": "c-004",
+      "kind": "recompute-numbers",
+      "statement": "recompute-numbers on s-4: failed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "recompute-numbers",
+          "target": "s-4",
+          "artifact": {
+            "kind": "numbers",
+            "nodes": [
+              "s-3",
+              "s-4"
+            ]
+          },
+          "inputs": {
+            "expression": "1036800 - 1036800 * 0.05",
+            "expected": "984460"
+          },
+          "result": "failed",
+          "detail": "1036800 - 1036800 * 0.05 = 984960 (exact, Fraction); outside 984460 \u00b1 0.5",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev20+g4785bc2fb",
+            "python": "3.15.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-004/",
+            "digest": "sha256:5c468de41d7f1361814e0a8ea8fb869e51fcfb10d2c7735d2ac92bfcc2496d19"
+          }
+        },
+        "observed": false,
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "run_checks"
+        }
+      }
+    },
+    {
+      "id": "c-005",
+      "kind": "rederive-maths",
+      "statement": "rederive-maths on e-2: passed",
+      "sources": [],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "rederive-maths",
+          "target": "e-2",
+          "artifact": {
+            "kind": "equation",
+            "nodes": [
+              "e-1",
+              "e-2"
+            ],
+            "labels": [
+              "eq:model",
+              "eq:drift"
+            ]
+          },
+          "inputs": {
+            "lhs": "(T_0 + alpha*(t + tau)) - (T_0 + alpha*t)",
+            "rhs": "alpha*tau",
+            "symbols": [
+              {
+                "assumptions": [
+                  "real"
+                ],
+                "domain": [
+                  250,
+                  350
+                ],
+                "name": "T_0"
+              },
+              {
+                "assumptions": [
+                  "real"
+                ],
+                "domain": [
+                  -1,
+                  1
+                ],
+                "name": "alpha"
+              },
+              {
+                "assumptions": [
+                  "real"
+                ],
+                "domain": [
+                  0,
+                  30
+                ],
+                "name": "t"
+              },
+              {
+                "assumptions": [
+                  "real"
+                ],
+                "domain": [
+                  0,
+                  30
+                ],
+                "name": "tau"
+              }
+            ],
+            "assumption": "T(t) = T_0 + alpha t from eq:model, evaluated at t + tau and at t"
+          },
+          "result": "passed",
+          "detail": "the difference simplifies to 0",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev20+g4785bc2fb",
+            "python": "3.15.0",
+            "sympy": "1.14.0"
+          },
+          "model": null,
+          "log": {
+            "path": "checks/c-005/",
+            "digest": "sha256:0ee85dfc89116f8ee9146025c13c0d6cfc6b207edf5ee2514a3a00275888b791"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "run_checks"
+        }
+      }
+    },
+    {
+      "id": "c-006",
+      "kind": "citation-support",
+      "statement": "citation-support on s-8: passed",
+      "sources": [
+        {
+          "document": "lee2019.txt",
+          "locator": "chars=221-304",
+          "quote": "Over a month, drifts between 0.3 K and 1 K were typical of uncalibrated thermistors",
+          "digest": "sha256:2b7f5c28756a573bb0bba8330be35215fdf2156322d8539ed016c691dbc027a1"
+        }
+      ],
+      "base": null,
+      "stated": null,
+      "attributes": {
+        "origin": "evidence",
+        "check": {
+          "type": "citation-support",
+          "target": "s-8",
+          "artifact": {
+            "kind": "citation",
+            "reference": "r-1",
+            "document": "lee2019.txt",
+            "source": {
+              "file": "lee2019.txt"
+            },
+            "tied": true,
+            "locator": "chars=221-304",
+            "quote": "Over a month, drifts between 0.3 K and 1 K were typical of uncalibrated thermistors",
+            "digest": "sha256:2b7f5c28756a573bb0bba8330be35215fdf2156322d8539ed016c691dbc027a1"
+          },
+          "inputs": {
+            "statement": "Lee reports that drifts of this size are typical of uncalibrated thermistors~\\cite{lee2019}.",
+            "source_digest": "sha256:2b7bddc05e4fa29ac0fd27f03256b464e1f5f7e501336474cd648da2be12dc39"
+          },
+          "result": "passed",
+          "detail": "the passage at chars=221-304 supports the statement",
+          "tool": {
+            "name": "credencegraph-extract",
+            "version": "0.1.dev20+g4785bc2fb",
+            "python": "3.15.0"
+          },
+          "model": {
+            "model": "claude-opus-5-5"
+          },
+          "log": {
+            "path": "checks/c-006/",
+            "digest": "sha256:128696e218b84b864b9b1fea76c059c0e97077a71830fa96063299a6233abb05"
+          }
+        },
+        "observed": true,
+        "extraction": {
+          "run": "20261026T132309Z-17d8de85",
+          "tool": "judge_citation"
+        }
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "s-8-cites-r-1",
+      "type": "cites",
+      "source": "s-8",
+      "target": "r-1",
+      "strength": null,
+      "attributes": {}
+    },
+    {
+      "id": "s-7-requires-s-9",
+      "type": "requires",
+      "source": "s-7",
+      "target": "s-9",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "s-8-requires-s-9",
+      "type": "requires",
+      "source": "s-8",
+      "target": "s-9",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "e-2-requires-s-9",
+      "type": "requires",
+      "source": "e-2",
+      "target": "s-9",
+      "strength": {
+        "alpha": 9.0,
+        "beta": 1.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "a-1-requires-s-9",
+      "type": "requires",
+      "source": "a-1",
+      "target": "s-9",
+      "strength": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "a-2-requires-s-9",
+      "type": "requires",
+      "source": "a-2",
+      "target": "s-9",
+      "strength": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "attributes": {}
+    },
+    {
+      "id": "s-2-observes-c-001",
+      "type": "observes",
+      "source": "s-2",
+      "target": "c-001",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 9.0
+      }
+    },
+    {
+      "id": "s-3-observes-c-002",
+      "type": "observes",
+      "source": "s-3",
+      "target": "c-002",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 9.0
+      }
+    },
+    {
+      "id": "s-7-observes-c-003",
+      "type": "observes",
+      "source": "s-7",
+      "target": "c-003",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 9.0
+      }
+    },
+    {
+      "id": "s-4-observes-c-004",
+      "type": "observes",
+      "source": "s-4",
+      "target": "c-004",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 9.0
+      }
+    },
+    {
+      "id": "e-2-observes-c-005",
+      "type": "observes",
+      "source": "e-2",
+      "target": "c-005",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 19.0,
+        "beta": 1.0
+      },
+      "false_pass": {
+        "alpha": 1.0,
+        "beta": 19.0
+      }
+    },
+    {
+      "id": "s-8-observes-c-006",
+      "type": "observes",
+      "source": "s-8",
+      "target": "c-006",
+      "strength": null,
+      "attributes": {},
+      "sensitivity": {
+        "alpha": 8.0,
+        "beta": 2.0
+      },
+      "false_pass": {
+        "alpha": 2.0,
+        "beta": 8.0
+      }
+    }
+  ]
+}

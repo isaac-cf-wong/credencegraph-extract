@@ -1,0 +1,6 @@
+Thermistor ageing in field arrays (an invented work for the end-to-end example).
+
+We followed 60 uncalibrated thermistors deployed outdoors for two years. Their readings drifted
+steadily away from a reference thermometer. Over a month, drifts between 0.3 K and 1 K were typical
+of uncalibrated thermistors, and the drift rate did not depend on the season. Calibrated units
+drifted by less than 0.05 K over the same period.
