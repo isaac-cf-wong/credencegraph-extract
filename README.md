@@ -355,6 +355,16 @@ and of their text, and where the passage is), not the bytes, which are kept in
 not give, so a fetched source the run did not store is passed with
 `--sources DIR`, as files named by the hex of their digest.
 
+An agent harness reaches the tools over MCP: `credencegraph-extract mcp` serves
+them on stdio, one MCP tool each (`start_run`, `get_state`, `classify`,
+`add_premises`, `run_checks`, `judge_citation`, `finish_run`), with the rules
+the records must follow in each tool's description. Register it as a stdio
+server with the command `credencegraph-extract` and the argument `mcp`. The
+server keeps no state of its own: every tool takes the run directory. A mistake
+of the model's, such as an argument of the wrong type or a run that does not
+exist, comes back as a JSON result `{"error": {"code", "message"}}`, never as a
+protocol error.
+
 ## Verify
 
 ```shell

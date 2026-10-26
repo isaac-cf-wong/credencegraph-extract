@@ -6,7 +6,8 @@ recorded ``graph.json``. A run's citation checks read the cited works from ``--c
 needs the same directory, and re-runs every check that a run allowed, uncalibrated ones included.
 ``verify`` runs each run's deterministic checks again from their recorded inputs, reports every
 check whose record the re-run does not reproduce, and warns when the runs record one rubric name and
-version with different file digests. The exit status is 0 on success, 1 if a replayed graph or a
+version with different file digests. ``mcp`` serves the agent tools over MCP on stdio, for an agent
+harness to start (``mcp_server``). The exit status is 0 on success, 1 if a replayed graph or a
 verified check differs from the recorded one, and 2 on any error, reported as one line on stderr.
 """
 
@@ -79,6 +80,8 @@ def _parser() -> argparse.ArgumentParser:
         "verify", help="Run each run's deterministic checks again and compare them with their records."
     )
     check.add_argument("run_dirs", type=Path, nargs="+", metavar="run_dir", help="The run directories.")
+
+    commands.add_parser("mcp", help="Serve the agent tools over MCP on stdio, for an agent harness to start.")
     return parser
 
 
@@ -171,6 +174,14 @@ def _run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _mcp(args: argparse.Namespace) -> int:
+    """Serve the agent tools over MCP until the harness closes stdin."""
+    from credencegraph_extract.mcp_server import serve  # noqa: PLC0415 - only this command needs the MCP SDK
+
+    serve()
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command.
 
@@ -188,7 +199,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     args = _parser().parse_args(argv)
     try:
-        command = {"run": _run, "replay": _replay, "verify": _verify}[args.command]
+        command = {"run": _run, "replay": _replay, "verify": _verify, "mcp": _mcp}[args.command]
         return command(args)
     except RunError as error:
         code, message = error.code, str(error)

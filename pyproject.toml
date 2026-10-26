@@ -21,6 +21,7 @@ dynamic = ["version"]
 dependencies = [
   "anthropic>=2.3.0",
   "credencegraph[ingest]>=0.4,<0.5",
+  "mcp>=2.3",
   "sympy>=1.14",
 ]
 
@@ -174,8 +175,8 @@ lint.ignore = [
   "E501", # Line length (handled by formatter)
   "C901", # Disable overly strict complexity checks (optional, adjust as needed)
 ]
-fix = true # Enable autofix
 lint.unfixable = [] # List rules that should not be autofixed, if any
+fix = true # Enable autofix
 
 [tool.ruff.format]
 quote-style = "double"       # Use double quotes for strings
