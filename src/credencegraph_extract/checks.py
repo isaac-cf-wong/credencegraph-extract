@@ -46,6 +46,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from fractions import Fraction
+from functools import lru_cache
 from itertools import count
 from string import Template
 from typing import Any
@@ -768,15 +769,27 @@ def _corrected(refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
     return {unlabelled(target) or target for target in named}
 
 
-def _step(check_type: str, fields: Mapping[str, Any]) -> tuple[Any, ...] | None:
-    """What a maths check decides, so that two encodings of one step count as one check.
+# The largest integer exponent a side may have for ``_step`` to expand it; a larger one is compared as written.
+MAX_EXPAND = 32
 
-    ``recompute-numbers`` decides whether the exact value of its expression rounds to its expected
-    value, so two with the same value and expected value pass or fail together, however the expression
-    is written. ``rederive-maths``, and its numeric fallback, decides whether ``lhs`` equals ``rhs``, so
-    two whose sides are the same sympy expressions, in either order, do. ``None`` for a citation, whose
-    target and reference are its identity, and for fields that do not parse.
+
+def _canonical(side: sympy.Expr) -> str:
+    """A side of a maths step in a form two encodings of the same expression share: expanded, when that is cheap.
+
+    Expanding makes ``(x + 1)**2``, ``x**2 + 2*x + 1`` and ``x*(x + 2) + 1`` one form. A side with an
+    integer power above ``MAX_EXPAND`` is not expanded, since that could take arbitrarily long; it is
+    compared as sympy writes it.
     """
+    powers = [power.exp for power in side.atoms(sympy.Pow) if power.exp.is_Integer]
+    if any(abs(int(exponent)) > MAX_EXPAND for exponent in powers):
+        return sympy.srepr(side)
+    return sympy.srepr(sympy.expand(side))
+
+
+@lru_cache(maxsize=1024)
+def _step_of(check_type: str, encoded: str) -> tuple[Any, ...] | None:
+    """``_step`` of the fields as canonical JSON, so the steps of a run's checks are computed once."""
+    fields = json.loads(encoded)
     try:
         if check_type == RECOMPUTE:
             value = evaluate.arithmetic(fields["expression"]).value
@@ -784,10 +797,31 @@ def _step(check_type: str, fields: Mapping[str, Any]) -> tuple[Any, ...] | None:
         if check_type in {REDERIVE, NUMERIC}:
             names = evaluate.symbols(fields["symbols"])
             sides = (evaluate.symbolic(fields["lhs"], names), evaluate.symbolic(fields["rhs"], names))
-            return (REDERIVE, frozenset(sympy.srepr(side) for side in sides))
-    except (EvaluationError, KeyError, TypeError, ValueError, ArithmeticError):
+            return (REDERIVE, frozenset(_canonical(side) for side in sides))
+    except (EvaluationError, KeyError, TypeError, ValueError, ArithmeticError, AttributeError):
         return None
     return None
+
+
+def _step(check_type: str, fields: Mapping[str, Any]) -> tuple[Any, ...] | None:
+    """What a maths check decides, so that two encodings of one step count as one check.
+
+    ``recompute-numbers`` decides whether the exact value of its expression rounds to its expected
+    value, so two with the same value and expected value pass or fail together, however the expression
+    is written. ``rederive-maths``, and its numeric fallback, decides whether ``lhs`` equals ``rhs``, so
+    two whose sides have the same canonical forms (``_canonical``), in either order, do: a true step's
+    two sides share one form, so two true steps about the same expression are one step, however each
+    writes it. ``None`` for a citation, whose target and reference are its identity, and for fields
+    that do not parse.
+    """
+    if check_type not in {RECOMPUTE, REDERIVE, NUMERIC}:
+        return None
+    keys = ("expression", "expected") if check_type == RECOMPUTE else ("lhs", "rhs", "symbols")
+    try:
+        encoded = json.dumps({key: fields.get(key) for key in keys}, sort_keys=True, default=plain)
+    except (TypeError, ValueError):
+        return None
+    return _step_of(check_type, encoded)
 
 
 def _proposed_type(check_type: Any) -> Any:

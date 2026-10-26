@@ -14,7 +14,9 @@ metadata service. ``fetch`` therefore:
   address the connection reached before sending the request, so a name that resolves to a public
   address when checked and a private one when connected (DNS rebinding) cannot reach the private one;
 - follows redirects itself, applying all of the above to every hop, up to ``MAX_HOPS``;
-- gives up after ``TIMEOUT`` seconds per connection and refuses a body larger than ``MAX_BYTES``.
+- gives up when a connection or a read waits ``TIMEOUT`` seconds, when the whole fetch, redirects
+  and body included, takes ``MAX_SECONDS``, however slowly a server drips its body, and refuses a body
+  larger than ``MAX_BYTES``.
 
 A local file is never named by a URL: ``file:`` and every other scheme are refused.
 """
@@ -25,6 +27,7 @@ import http.client
 import ipaddress
 import socket
 import ssl
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -32,6 +35,9 @@ from urllib.parse import urljoin, urlsplit
 
 MAX_HOPS = 5
 TIMEOUT = 30.0
+MAX_SECONDS = 120.0
+# The most a body read asks for at once: each read returns what has arrived, so the deadline is checked between.
+CHUNK = 64 * 1024
 MAX_BYTES = 50 * 1024 * 1024
 USER_AGENT = "credencegraph-extract (citation check)"
 REDIRECTS = frozenset({301, 302, 303, 307, 308})
@@ -87,7 +93,10 @@ class Connection(Protocol):
         ...
 
     def get(self, target: str, headers: Mapping[str, str]) -> tuple[int, Mapping[str, str], Callable[[int], bytes]]:
-        """Send a GET request; return the status, the headers by lower-case name, and a reader of the body."""
+        """Send a GET request; return the status, the headers by lower-case name, and a reader of the body.
+
+        The reader returns at most the bytes asked for, as soon as some have arrived, and ``b""`` at the end.
+        """
         ...
 
     def close(self) -> None:
@@ -174,7 +183,7 @@ class _Socket:
             self._connection.putheader(name, value)
         self._connection.endheaders()
         response = self._connection.getresponse()
-        return response.status, {name.lower(): value for name, value in response.getheaders()}, response.read
+        return response.status, {name.lower(): value for name, value in response.getheaders()}, response.read1
 
     def close(self) -> None:
         self._connection.close()
@@ -186,7 +195,7 @@ def _connect(address: str, port: int, host: str, tls: bool, timeout: float) -> C
 
 
 def _split(url: str) -> tuple[str, str, int, str]:
-    """Check a URL's form; return its scheme, host, port and request target."""
+    """Check a URL's form; return its scheme, its host in ASCII (a name in IDNA form), its port and its request target."""
     try:
         parts = urlsplit(url)
         port = parts.port
@@ -198,8 +207,20 @@ def _split(url: str) -> tuple[str, str, int, str]:
         raise FetchError("refused-url", f"{url!r} carries a user name or password")
     if not parts.hostname:
         raise FetchError("refused-url", f"{url!r} names no host")
+    host = parts.hostname
+    if not _literal(host):
+        try:
+            host = host.encode("idna").decode("ascii")
+        except UnicodeError:
+            raise FetchError("refused-url", f"{url!r} names a host that is not a valid domain name") from None
     target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
-    return parts.scheme, parts.hostname, port or SCHEMES[parts.scheme], target
+    return parts.scheme, host, port or SCHEMES[parts.scheme], target
+
+
+def _authority(host: str, port: int, scheme: str) -> str:
+    """The ``Host`` header of a request: the host, an IPv6 address in brackets, and a port other than the scheme's."""
+    name = f"[{host}]" if ":" in host else host
+    return name if SCHEMES[scheme] == port else f"{name}:{port}"
 
 
 def _address(host: str, port: int, resolve: Resolve) -> str:
@@ -231,22 +252,37 @@ def _literal(host: str) -> bool:
     return True
 
 
-def _body(read: Callable[[int], bytes], max_bytes: int) -> bytes:
-    """Read a body, refusing one larger than ``max_bytes``."""
-    data = read(max_bytes + 1)
-    if len(data) > max_bytes:
-        raise FetchError("fetch-failed", f"the body is larger than {max_bytes} bytes")
-    return data
+def _left(deadline: float) -> float:
+    """The seconds left before the fetch's deadline, refusing to go on when none are."""
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise FetchError("fetch-failed", "the fetch took longer than its time limit")
+    return left
 
 
-def _hop(
-    url: str, resolve: Resolve, connect: Connect, timeout: float, max_bytes: int
+def _body(read: Callable[[int], bytes], max_bytes: int, deadline: float) -> bytes:
+    """Read a body in pieces as they arrive, refusing one larger than ``max_bytes`` or slower than the deadline."""
+    pieces: list[bytes] = []
+    size = 0
+    while True:
+        _left(deadline)
+        piece = read(min(CHUNK, max_bytes + 1 - size))
+        if not piece:
+            return b"".join(pieces)
+        pieces.append(piece)
+        size += len(piece)
+        if size > max_bytes:
+            raise FetchError("fetch-failed", f"the body is larger than {max_bytes} bytes")
+
+
+def _hop(  # noqa: PLR0913 - one request and the limits it is made under
+    url: str, resolve: Resolve, connect: Connect, *, timeout: float, max_bytes: int, deadline: float
 ) -> tuple[int, Mapping[str, str], bytes]:
     """Make one request under the policy: check, resolve, check, connect to the checked address, check the peer."""
     scheme, host, port, target = _split(url)
     address = _address(host, port, resolve)
     try:
-        connection = connect(address, port, host, scheme == "https", timeout)
+        connection = connect(address, port, host, scheme == "https", min(timeout, _left(deadline)))
     except (OSError, ssl.SSLError, http.client.HTTPException) as error:
         raise FetchError("fetch-failed", f"cannot connect to {host!r}: {error}") from None
     try:
@@ -256,10 +292,9 @@ def _hop(
             raise FetchError("refused-url", f"the connection to {host!r} reached {peer}: {reason}")
         if _ip(peer) != _ip(address):
             raise FetchError("refused-url", f"the connection to {host!r} reached {peer}, not the checked {address}")
-        default = SCHEMES[scheme] == port
-        headers = {"Host": host if default else f"{host}:{port}", "User-Agent": USER_AGENT, "Accept": "*/*"}
+        headers = {"Host": _authority(host, port, scheme), "User-Agent": USER_AGENT, "Accept": "*/*"}
         status, response_headers, read = connection.get(target, headers)
-        data = b"" if status in REDIRECTS else _body(read, max_bytes)
+        data = b"" if status in REDIRECTS else _body(read, max_bytes, deadline)
     except (OSError, ssl.SSLError, http.client.HTTPException) as error:
         raise FetchError("fetch-failed", f"cannot read {url!r}: {error}") from None
     finally:
@@ -274,6 +309,7 @@ def fetch(  # noqa: PLR0913 - the URL, the policy's limits, and the two seams fo
     connect: Connect = _connect,
     max_hops: int = MAX_HOPS,
     timeout: float = TIMEOUT,
+    max_seconds: float = MAX_SECONDS,
     max_bytes: int = MAX_BYTES,
 ) -> Fetched:
     """Fetch a URL under the policy of this module, following redirects.
@@ -283,7 +319,8 @@ def fetch(  # noqa: PLR0913 - the URL, the policy's limits, and the two seams fo
         resolve: Resolves a host name; the system resolver by default.
         connect: Opens a connection to an address; http.client by default.
         max_hops: The most requests made, the first included.
-        timeout: Seconds per connection.
+        timeout: Seconds a connection or a read may wait.
+        max_seconds: Seconds the whole fetch may take, redirects and bodies included.
         max_bytes: The largest body read.
 
     Returns:
@@ -291,13 +328,14 @@ def fetch(  # noqa: PLR0913 - the URL, the policy's limits, and the two seams fo
 
     Raises:
         FetchError: ``refused-url`` when the URL, a redirect or an address is refused; ``fetch-failed``
-            when the body cannot be read, is too large, or the final response is not 200.
+            when the body cannot be read, is too large or too slow, or the final response is not 200.
     """
+    deadline = time.monotonic() + max_seconds
     hops: list[str] = []
     current = url
     while True:
         hops.append(current)
-        status, headers, data = _hop(current, resolve, connect, timeout, max_bytes)
+        status, headers, data = _hop(current, resolve, connect, timeout=timeout, max_bytes=max_bytes, deadline=deadline)
         if status in REDIRECTS:
             location = headers.get("location")
             if not location:

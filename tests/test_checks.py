@@ -34,7 +34,7 @@ from credencegraph.rubric import Rubric, check_graph, load_rubric
 from credencegraph.semantics.compiler import compile_graph
 from notes_pass import MODEL, fake_client, message
 
-from credencegraph_extract import cited, evaluate, provider
+from credencegraph_extract import checks, cited, evaluate, provider
 from credencegraph_extract.checks import CheckPass, directory_digest, fix, output_schema, render
 from credencegraph_extract.cli import main
 from credencegraph_extract.digest import bytes_digest
@@ -456,6 +456,31 @@ def test_one_step_proposed_for_two_targets_is_one_check(tmp_path: Path, again: d
     assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["e-2"]
     prompt = (run_dir / "prompts" / "0003.txt").read_text(encoding="utf-8")
     assert "propose this check once, on the step's own target; 'e-2' already has it" in prompt
+
+
+X = [{"name": "x", "assumptions": ["real"], "domain": [-2, 2]}]
+
+
+@pytest.mark.parametrize(
+    ("one", "other", "same"),
+    [
+        # Two true steps about the same polynomial, each written differently, are one step.
+        (("(x + 1)**2", "x**2 + 2*x + 1"), ("x**2 + 2*x + 1", "x*(x + 2) + 1"), True),
+        (("(x + 1)**2", "x**2 + 2*x + 1"), ("x**2 + 2*x + 1", "(x + 1)**2"), True),
+        # A different claim about the same expression is a different step.
+        (("(x + 1)**2", "x**2 + 2*x + 1"), ("(x + 1)**2", "x**2 + 1"), False),
+        (("(x + 1)**2", "x**2 + 2*x + 1"), ("(x - 1)**2", "x**2 - 2*x + 1"), False),
+        # A large power is compared as written rather than expanded.
+        (("(x + 1)**40", "(x + 1)**40"), ("(1 + x)**40", "(x + 1)**40"), True),
+    ],
+)
+def test_a_maths_step_is_the_same_step_however_its_sides_are_written(
+    one: tuple[str, str], other: tuple[str, str], same: bool
+) -> None:
+    first = checks._step("rederive-maths", {"lhs": one[0], "rhs": one[1], "symbols": X})
+    second = checks._step("rederive-maths", {"lhs": other[0], "rhs": other[1], "symbols": X})
+    assert first is not None
+    assert (first == second) is same
 
 
 def test_one_value_written_two_ways_for_two_targets_is_one_check(tmp_path: Path) -> None:

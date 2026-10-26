@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -47,7 +49,7 @@ class Server:
             ) -> tuple[int, Mapping[str, str], Callable[[int], bytes]]:
                 server.requests.append((address, target, dict(headers)))
                 status, response, body = server.routes[(host, target)]
-                return status, response, lambda size: body[:size]
+                return status, response, io.BytesIO(body).read
 
             def close(self) -> None:
                 pass
@@ -260,3 +262,53 @@ def test_a_name_that_does_not_resolve_fails() -> None:
     with pytest.raises(FetchError, match="cannot resolve") as raised:
         fetch("http://nowhere.example/", resolve=fail)
     assert raised.value.code == "fetch-failed"
+
+
+def test_a_body_dripped_slowly_stops_at_the_time_limit() -> None:
+    # Each piece arrives within the per-read timeout, but the whole fetch may not take longer than its limit.
+    class Drip:
+        def peer(self) -> str:
+            return PUBLIC
+
+        def get(self, target: str, headers: Mapping[str, str]) -> tuple[int, Mapping[str, str], Callable[[int], bytes]]:
+            def read(size: int) -> bytes:
+                time.sleep(0.02)
+                return b"x"
+
+            return 200, {"content-type": "text/plain"}, read
+
+        def close(self) -> None:
+            pass
+
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="longer than its time limit") as raised:
+        fetch(
+            "http://slow.example/", resolve=lambda host, port: [PUBLIC], connect=lambda *args: Drip(), max_seconds=0.2
+        )
+    assert raised.value.code == "fetch-failed"
+    assert time.monotonic() - started < 1
+
+
+@pytest.mark.parametrize(
+    ("url", "host"),
+    [
+        ("http://[2606:4700::1111]/x", "[2606:4700::1111]"),
+        ("http://[2606:4700::1111]:8080/x", "[2606:4700::1111]:8080"),
+        ("https://例え.テスト/paper", "xn--r8jz45g.xn--zckzah"),
+        ("https://Papers.Example/paper", "papers.example"),
+    ],
+)
+def test_the_host_header_is_the_ascii_authority(url: str, host: str) -> None:
+    server = Server(names={"xn--r8jz45g.xn--zckzah": [PUBLIC], "papers.example": [PUBLIC]})
+    target = "/paper" if "paper" in url else "/x"
+    server.routes = {(name, target): ok() for name in ("xn--r8jz45g.xn--zckzah", "papers.example", "2606:4700::1111")}
+    server.fetch(url)
+    assert server.requests[0][2]["Host"] == host
+
+
+def test_a_host_that_is_not_a_domain_name_is_refused() -> None:
+    server = Server()
+    with pytest.raises(FetchError, match="not a valid domain name") as raised:
+        server.fetch("https://" + "a" * 64 + ".example/")
+    assert raised.value.code == "refused-url"
+    assert server.resolved == []
