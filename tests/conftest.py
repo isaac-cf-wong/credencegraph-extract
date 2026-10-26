@@ -67,10 +67,12 @@ def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
 
     # sendto(data, address) or sendto(data, flags, address); sendmsg(buffers, ancdata, flags, address).
     monkeypatch.setattr(socket.socket, "sendto", addressed(socket.socket.sendto, lambda args: args[-1]))
-    sendmsg_address = lambda args: args[3] if len(args) > 3 else None  # noqa: E731
-    monkeypatch.setattr(socket.socket, "sendmsg", addressed(socket.socket.sendmsg, sendmsg_address))
+    if hasattr(socket.socket, "sendmsg"):  # Unix only
+        sendmsg_address = lambda args: args[3] if len(args) > 3 else None  # noqa: E731
+        monkeypatch.setattr(socket.socket, "sendmsg", addressed(socket.socket.sendmsg, sendmsg_address))
     monkeypatch.setattr(socket, "create_connection", refuse)
-    monkeypatch.setattr(socket, "getaddrinfo", refuse)
+    for resolver in ("getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr", "getnameinfo"):
+        monkeypatch.setattr(socket, resolver, refuse)
     monkeypatch.setattr(anthropic, "Anthropic", refuse)
     monkeypatch.setattr(provider, "call", refuse)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
