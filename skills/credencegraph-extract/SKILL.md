@@ -84,9 +84,10 @@ credencegraph-extract tool classify --run runs/paper --args - < records.json
    credence for. Send corrected records for what was refused.
 3. **`add_premises`** for each conclusion of a type the rubric's premises apply
    to: the chunks that state what it rests on, and the premises the text leaves
-   unsaid. Read `overflow`: the unsaid premises not added because the conclusion
-   already has as many as the rubric allows. Keep the ones that matter most
-   rather than sending more.
+   unsaid. A chunk a `rests_on` of yours already names is linked; do not send it
+   again as `stated_at`. Read `overflow`: the unsaid premises not added because
+   the conclusion already has as many as the rubric allows. Keep the ones that
+   matter most rather than sending more.
 4. **`run_checks`** for arithmetic (`recompute-numbers`) and maths steps
    (`rederive-maths`), and **`judge_citation`** for citations. A few at a time:
    read each result before the next.
