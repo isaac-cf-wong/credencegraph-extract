@@ -6,8 +6,10 @@ one by one, from the run directory alone, without the source. Each ``recompute-n
 record holds, and any field of the record the re-run does not reproduce is reported: a result, a
 detail, the digest of the check's files. The files in ``checks/c-NNN/`` are compared with the digest
 the record holds, and every check record, citation checks included, with the ``inputs.json`` and
-``output.json`` its check wrote; a check of a type the runner does not have is reported. Citation checks are judged by a model, so they are not run again: ``replay``
-answers them from their recorded responses.
+``output.json`` its check wrote; a check of a type the runner does not have is reported. Citation
+checks rest on an agent's judgement, so they are not run again; for an agent-tool run, ``replay``
+reads each one's source again from its bytes. ``verify`` reads runs of either format: those the
+agent tools make, and those the earlier model-calling passes made.
 
 A rubric's ``version`` names its values, so two runs that record one rubric name and version with
 different file digests used values that changed without a new version. ``rubric_reuse`` reports

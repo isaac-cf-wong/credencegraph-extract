@@ -1,3 +1,0 @@
-Write one short note on this sentence of a paper.
-
-Sentence: We estimate the noise floor from 250 segments of data.

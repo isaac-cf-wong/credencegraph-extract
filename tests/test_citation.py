@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from credencegraph.core import Node
 
-from credencegraph_extract.citation import SourceError, entry_doi, read_url, text_of, tie, verify_observation
+from credencegraph_extract.citation import SourceError, arxiv_id, entry_doi, read_url, text_of, tie, verify_observation
 from credencegraph_extract.fetch import Fetched, FetchError
 
 PASSAGE = "the estimator is unbiased for every segment length"
@@ -52,6 +52,19 @@ DOI_WEB = web(
 )
 def test_the_doi_an_entry_names(statement: str, doi: str | None) -> None:
     assert entry_doi(entry(statement)) == doi
+
+
+@pytest.mark.parametrize(
+    ("statement", "expected"),
+    [
+        ("arXiv: 2101.01234", "2101.01234"),
+        ("A. Smith, Estimators, arXiv:2101.01234v2.", "2101.01234v2"),
+        ("arXiv:hep-th/9901001v1", "hep-th/9901001v1"),
+        ("J. Stat. 12", None),
+    ],
+)
+def test_the_arxiv_id_an_entry_names(statement: str, expected: str | None) -> None:
+    assert arxiv_id(entry(statement)) == expected
 
 
 def test_the_page_the_doi_of_the_entry_resolves_to_is_tied() -> None:

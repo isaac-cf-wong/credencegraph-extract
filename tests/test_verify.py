@@ -255,3 +255,58 @@ def test_the_command_reports_an_error_with_exit_2(run_dir: Path, capsys: pytest.
     (run_dir / "graph.json").write_text("{}", encoding="utf-8")
     assert main(["verify", str(run_dir)]) == 2
     assert capsys.readouterr().err.startswith("error [record-mismatch]: graph.json differs")
+
+
+def edit_manifest(run_dir: Path, change: Callable[[dict[str, Any]], None]) -> None:
+    path = run_dir / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    change(manifest)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("change", "code"),
+    [
+        (lambda m: m.update(format="something-else"), "not-a-run"),
+        (lambda m: m.update(version=9), "unsupported-version"),
+        (lambda m: m.pop("run"), "invalid-manifest"),
+        (lambda m: m.update(graph_digest=7), "invalid-manifest"),
+        (lambda m: m["versions"].update(python=3), "invalid-manifest"),
+        (lambda m: m["source"].update(file="../paper.tex"), "invalid-manifest"),
+        (lambda m: m["source"].update(stored="no"), "invalid-manifest"),
+        (lambda m: m["rubric"].pop("digest"), "invalid-manifest"),
+        (lambda m: m["passes"][0].pop("name"), "invalid-manifest"),
+        (lambda m: m["passes"][0]["calls"][0].update(raw="elsewhere.json"), "invalid-manifest"),
+    ],
+    ids=[
+        "another format",
+        "another version",
+        "no run id",
+        "graph digest not a string",
+        "a version not a string",
+        "source file a path",
+        "stored not a boolean",
+        "no rubric digest",
+        "a pass without a name",
+        "a call record outside raw",
+    ],
+)
+def test_a_malformed_manifest_of_an_earlier_run_is_refused(
+    run_dir: Path, change: Callable[[dict[str, Any]], None], code: str
+) -> None:
+    edit_manifest(run_dir, change)
+    with pytest.raises(RunError) as raised:
+        verify_run(run_dir)
+    assert raised.value.code == code
+
+
+@pytest.mark.parametrize(("content", "code"), [(None, "not-a-run"), ("{", "invalid-manifest")])
+def test_a_missing_or_unreadable_manifest_is_refused(run_dir: Path, content: str | None, code: str) -> None:
+    path = run_dir / "manifest.json"
+    if content is None:
+        path.unlink()
+    else:
+        path.write_text(content, encoding="utf-8")
+    with pytest.raises(RunError) as raised:
+        verify_run(run_dir)
+    assert raised.value.code == code

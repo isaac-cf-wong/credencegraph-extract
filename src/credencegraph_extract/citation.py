@@ -36,15 +36,18 @@ from credencegraph.ingest.latex import LatexError, read_latex
 from credencegraph.ingest.pdf import PdfError, read_pdf
 from credencegraph.rubric import normalise_text, text_digest
 
-from credencegraph_extract.cited import SUFFIXES, arxiv_id
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.fetch import Fetched, FetchError, describe, fetch
 
 CITED = "cited"
+# The suffixes a cited work may have, in the order they are looked for.
+SUFFIXES = (".txt", ".tex", ".pdf")
 ARXIV_ABS = "https://arxiv.org/abs/{}"
 ARXIV_PDF = "https://arxiv.org/pdf/{}"
 DOI_URL = "https://doi.org/{}"
 
+# An arXiv identifier in a bibliography entry, new style (2101.01234v2) or old (hep-th/9901001).
+_ARXIV = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)")
 # An arXiv URL: its identifier, without a version, and the version if it names one.
 _ARXIV_URL = re.compile(
     r"https?://(?:www\.|export\.)?arxiv\.org/(?:abs|pdf)/(?P<id>\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})"
@@ -77,6 +80,19 @@ class SourceError(Exception):
         """
         super().__init__(message)
         self.code = code
+
+
+def arxiv_id(reference: Node) -> str | None:
+    """Return the arXiv identifier a bibliography entry names, if it names one.
+
+    Args:
+        reference: The reference node.
+
+    Returns:
+        The first identifier in its statement, or ``None``.
+    """
+    found = _ARXIV.search(reference.statement or "")
+    return found[1] if found else None
 
 
 def entry_doi(reference: Node) -> str | None:
@@ -180,7 +196,7 @@ def text_of(data: bytes, kind: str) -> str:
 
 
 def key_file(reference: Node, names: Mapping[str, str] | set[str]) -> str | None:
-    """Return the file of the cited works that a reference's key names, as ``cited.directory`` finds it.
+    """Return the file of the cited works that a reference's key names: the first of its suffixes there.
 
     Args:
         reference: The reference node.

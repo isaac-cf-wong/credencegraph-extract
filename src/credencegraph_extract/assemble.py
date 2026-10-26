@@ -52,7 +52,6 @@ from credencegraph.rubric.validate import node_text, origin_of
 # Rejection codes of the assembler's own, beside the core's error codes.
 INVALID_RECORD = "invalid-record"
 DUPLICATE_RECORD = "duplicate-record"
-NOT_REJECTED = "not-rejected"
 ALREADY_SPLIT = "already-split"
 
 # The fields of a record that types one node, and of a record that splits a chunk into typed clauses.
@@ -260,14 +259,8 @@ Admit = Callable[[Node], None]
 Apply = Callable[[Graph, Mapping[str, Any]], tuple[Graph, list[dict[str, str]]]]
 
 
-def _apply_all(  # noqa: PLR0913 - the record kind is described by its key and its two steps
-    graph: Graph,
-    records: Sequence[Any],
-    key: str,
-    admit: Admit,
-    apply: Apply,
-    *,
-    only: Collection[str] | None,
+def _apply_all(
+    graph: Graph, records: Sequence[Any], key: str, admit: Admit, apply: Apply
 ) -> tuple[Graph, list[dict[str, Any]], list[dict[str, str]]]:
     """Apply records in document order, each as a whole or not at all.
 
@@ -288,8 +281,6 @@ def _apply_all(  # noqa: PLR0913 - the record kind is described by its key and i
             if node_id in seen:
                 raise _RecordError(DUPLICATE_RECORD, f"node {node_id!r} has an earlier record")
             seen.add(node_id)
-            if only is not None and node_id not in only:
-                raise _RecordError(NOT_REJECTED, f"node {node_id!r} had no rejected record to repair")
             graph, items = apply(graph, record)
         except _RecordError as refused:
             node = node_id if isinstance(node_id, str) else None
@@ -305,12 +296,12 @@ def _admit_chunk(node: Node) -> None:
         raise _RecordError(INVALID_RECORD, f"node {node.id!r} is not a chunk of the document")
 
 
-def assemble(graph: Graph, rubric: Rubric, records: Sequence[Any], *, only: Collection[str] | None = None) -> Assembly:
+def assemble(graph: Graph, rubric: Rubric, records: Sequence[Any]) -> Assembly:
     """Apply classify records in document order through the core's ``split`` and ``annotate``.
 
     Each record is applied as a whole or not at all. One is rejected, and its node left as it was,
     when it is malformed, names a node the graph lacks or one that is not a document chunk, repeats
-    the node of an earlier record, falls outside ``only``, or the core refuses one of its edits: an
+    the node of an earlier record, or the core refuses one of its edits: an
     unknown type, a form not found in the text, a clause that does not occur exactly once, a
     rests-on node of a type the edge rule does not allow. A hedge phrase that is not a substring of
     its node's text rejects the record too. One the text contains sets ``Node.stated`` to the
@@ -320,13 +311,12 @@ def assemble(graph: Graph, rubric: Rubric, records: Sequence[Any], *, only: Coll
         graph: The graph, left unchanged.
         rubric: The rubric.
         records: The records, as the model returned them.
-        only: The nodes records may name; any node by default.
 
     Returns:
         The graph, the rejections and the unmapped hedge phrases.
     """
     graph, rejections, unmapped = _apply_all(
-        graph, records, "node", _admit_chunk, lambda graph, record: _apply(graph, rubric, record), only=only
+        graph, records, "node", _admit_chunk, lambda graph, record: _apply(graph, rubric, record)
     )
     return Assembly(graph, rejections, unmapped)
 
@@ -348,7 +338,7 @@ def _rests_on_fixes(graph: Graph, spec: NodeType, label: str, rests_on: Sequence
     out = []
     for source in rests_on:
         if not isinstance(source, str) or source not in graph:
-            out.append(f"{source!r} in rests_on is not a node id: use ids listed under Chunks")
+            out.append(f"{source!r} in rests_on is not a node id: use node ids as start_run listed them")
         elif graph.nodes[source].kind not in allowed:
             out.append(
                 f"{source!r} in rests_on is of type {graph.nodes[source].kind!r}, and {label} rests only on "
@@ -430,12 +420,12 @@ def _part_fixes(graph: Graph, rubric: Rubric, part: Any, *, text: str, where: st
     return out
 
 
-# An id followed by the label a prompt lists it with, as in "s-2 (result)".
+# An id followed by the label a listing shows it with, as in "s-2 (result)".
 _LABELLED = re.compile(r"([^\s(]+)\s*\(.*\)")
 
 
 def unlabelled(value: Any) -> str | None:
-    """Return the id a model wrote with the label its prompt lists it with, as ``s-2`` of ``s-2 (result)``.
+    """Return the id a model wrote with the label a listing shows it with, as ``s-2`` of ``s-2 (result)``.
 
     Args:
         value: What the model wrote where an id belongs.
@@ -454,7 +444,7 @@ def _node_fix(graph: Graph, node_id: Any) -> str | None:
             return f"{node_id!r} is already split: send records for its clauses {node_id}a, {node_id}b, ... instead"
         if origin_of(graph.nodes[node_id]) == DOCUMENT:
             return None
-        return f"{node_id!r} is not a chunk of the document: send records only for the ids listed under Chunks"
+        return f"{node_id!r} is not a chunk of the document: send records only for the chunk ids start_run listed"
     bare = unlabelled(node_id)
     if bare is not None and bare in graph:
         return f"{node_id!r} is not a chunk id: write the id alone, {bare!r}, without the type in parentheses"
@@ -465,7 +455,7 @@ def _node_fix(graph: Graph, node_id: Any) -> str | None:
             f'{base!r} is applied. To type the clauses of {base!r}, send one record with "node": {base!r}, '
             f'"split" and "children"; to type {base!r} whole, send "node": {base!r}'
         )
-    return f"{node_id!r} is not a chunk id: use one of the ids listed under Chunks"
+    return f"{node_id!r} is not a chunk id: use one of the chunk ids start_run listed"
 
 
 def fixes(graph: Graph, rubric: Rubric, record: Any) -> list[str]:
@@ -607,14 +597,12 @@ def _apply_premises(graph: Graph, rubric: Rubric, record: Mapping[str, Any]) -> 
     return out, [{"conclusion": conclusion, "statement": statement} for statement in statements[room:]]
 
 
-def assemble_premises(
-    graph: Graph, rubric: Rubric, records: Sequence[Any], *, only: Collection[str] | None = None
-) -> PremiseAssembly:
+def assemble_premises(graph: Graph, rubric: Rubric, records: Sequence[Any]) -> PremiseAssembly:
     """Apply premise records in document order of their conclusions.
 
     Each record is applied as a whole or not at all. One is rejected, and its conclusion left as it
     was, when it is malformed, names a node the graph lacks or one that is not a document node of a
-    type in ``premises.for``, repeats the conclusion of an earlier record, falls outside ``only``, or
+    type in ``premises.for``, repeats the conclusion of an earlier record, or
     the core refuses a ``stated_at`` link: a node of a type the edge rule does not allow, a relation
     that already exists or would close a cycle. A conclusion takes at most
     ``premises.max_per_conclusion`` analyst premises; the statements beyond are returned as overflow,
@@ -624,7 +612,6 @@ def assemble_premises(
         graph: The graph, left unchanged.
         rubric: The rubric; it must pass ``premises_rubric_problem``.
         records: The records, as the model returned them.
-        only: The conclusions records may name; any by default.
 
     Returns:
         The graph, the rejections and the overflow.
@@ -643,6 +630,6 @@ def assemble_premises(
             raise _RecordError(INVALID_RECORD, msg)
 
     graph, rejections, overflow = _apply_all(
-        graph, records, "conclusion", admit, lambda graph, record: _apply_premises(graph, rubric, record), only=only
+        graph, records, "conclusion", admit, lambda graph, record: _apply_premises(graph, rubric, record)
     )
     return PremiseAssembly(graph, rejections, overflow)

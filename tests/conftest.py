@@ -1,27 +1,15 @@
-"""Shared fixtures: the recorded run, and a network that refuses every connection."""
+"""Shared fixtures: a network that refuses every connection."""
 
 from __future__ import annotations
 
 import ipaddress
-import shutil
 import socket
 from pathlib import Path
 from typing import Any
 
-import anthropic
 import pytest
 
-from credencegraph_extract import provider
-
 FIXTURES = Path(__file__).parent / "fixtures"
-
-
-@pytest.fixture
-def recorded_run(tmp_path: Path) -> Path:
-    """A copy of the recorded run, safe to modify."""
-    run_dir = tmp_path / "run"
-    shutil.copytree(FIXTURES / "run", run_dir)
-    return run_dir
 
 
 def _loopback(address: object) -> bool:
@@ -35,7 +23,7 @@ def _loopback(address: object) -> bool:
 
 @pytest.fixture
 def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make every network connection and every provider call fail, and remove the API key.
+    """Make every network connection and every name lookup fail.
 
     A connection to the loopback interface is let through: an event loop connects a socket pair there
     on Windows, where it has no native one, and it never leaves the machine.
@@ -73,6 +61,3 @@ def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket, "create_connection", refuse)
     for resolver in ("getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr", "getnameinfo"):
         monkeypatch.setattr(socket, resolver, refuse)
-    monkeypatch.setattr(anthropic, "Anthropic", refuse)
-    monkeypatch.setattr(provider, "call", refuse)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

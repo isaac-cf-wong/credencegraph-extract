@@ -1,3 +1,0 @@
-Write one short note on this sentence of a paper.
-
-Sentence: {text}
