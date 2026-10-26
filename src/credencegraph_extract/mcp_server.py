@@ -93,13 +93,15 @@ def refuse_invented(name: Any, arguments: Mapping[str, Any]) -> None:
 
 
 async def _refuse_invented(ctx: Any, call_next: Any) -> Any:
-    """Answer a call to a tool there is not, or with an argument the tool does not take, as a JSON error."""
+    """Answer a call to a tool there is not, with arguments that are not an object, or with an argument the tool does not take, as a JSON error."""
     params = ctx.params if ctx.method == "tools/call" else None
     name = params.get("name") if isinstance(params, Mapping) else None
     arguments = params.get("arguments") if isinstance(params, Mapping) else None
     if isinstance(params, Mapping):
         try:
             refuse_invented(name, arguments if isinstance(arguments, Mapping) else {})
+            if arguments is not None and not isinstance(arguments, Mapping):
+                raise RunError("invalid-argument", f"the arguments of {name} must be an object of named arguments")
         except RunError as error:
             answer = _error(error.code, str(error))
             text = types.TextContent(type="text", text=json.dumps(answer, indent=2))

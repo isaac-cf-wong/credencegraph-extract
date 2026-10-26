@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import anyio
@@ -16,7 +17,7 @@ from mcp.client.client import Client
 
 from credencegraph_extract import session
 from credencegraph_extract.cli import main
-from credencegraph_extract.mcp_server import refuse_invented, server
+from credencegraph_extract.mcp_server import _refuse_invented, refuse_invented, server
 from credencegraph_extract.run import RunError
 
 MODEL = "test-model-1"
@@ -232,3 +233,45 @@ def test_a_tool_name_that_is_not_a_string_is_refused(name: object) -> None:
     with pytest.raises(RunError) as raised:
         refuse_invented(name, {})
     assert raised.value.code == "unknown-tool"
+
+
+@pytest.mark.parametrize(
+    ("params", "code"),
+    [
+        ({"name": "get_state", "arguments": []}, "invalid-argument"),
+        ({"name": "get_state", "arguments": "run"}, "invalid-argument"),
+        ({"name": "get_state", "arguments": 7}, "invalid-argument"),
+        ({"name": ["get_state"], "arguments": {}}, "unknown-tool"),
+        ({"arguments": {}}, "unknown-tool"),
+    ],
+)
+def test_a_malformed_tool_call_is_answered_as_json_before_the_protocol_validates_it(
+    params: dict[str, Any], code: str
+) -> None:
+    # A client validates its own calls, so these reach a server only from a client that does not.
+    reached = []
+
+    async def call_next(ctx: Any) -> Any:
+        reached.append(ctx)
+
+    context = SimpleNamespace(method="tools/call", params=params)
+    result = anyio.run(_refuse_invented, context, call_next)
+    assert reached == []
+    assert result.is_error is False
+    assert result.structured_content["error"]["code"] == code
+
+
+def test_other_requests_and_well_formed_calls_pass_on() -> None:
+    reached = []
+
+    async def call_next(ctx: Any) -> Any:
+        reached.append(ctx.method)
+        return "passed on"
+
+    for context in (
+        SimpleNamespace(method="tools/list", params=None),
+        SimpleNamespace(method="tools/call", params={"name": "get_state", "arguments": {"run": "r"}}),
+        SimpleNamespace(method="tools/call", params={"name": "get_state"}),
+    ):
+        assert anyio.run(_refuse_invented, context, call_next) == "passed on"
+    assert reached == ["tools/list", "tools/call", "tools/call"]
