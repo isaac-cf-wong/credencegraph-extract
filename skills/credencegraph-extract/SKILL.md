@@ -78,11 +78,15 @@ credencegraph-extract tool classify --run runs/paper --args - < records.json
    document types with their form fields and what each rests on, the hedge
    phrases, and the check types with the types they target.
 2. **`classify`** every chunk. Split a chunk that makes several kinds of
-   statement into its clauses and type each clause. Send records in batches;
-   read `refused` and send corrected records.
+   statement into its clauses and type each clause (the shape is below). Send
+   records in batches; the result lists the nodes `applied`, the records
+   `refused` and the `unmapped_hedges`, hedge phrases the rubric gives no
+   credence for. Send corrected records for what was refused.
 3. **`add_premises`** for each conclusion of a type the rubric's premises apply
    to: the chunks that state what it rests on, and the premises the text leaves
-   unsaid.
+   unsaid. Read `overflow`: the unsaid premises not added because the conclusion
+   already has as many as the rubric allows. Keep the ones that matter most
+   rather than sending more.
 4. **`run_checks`** for arithmetic (`recompute-numbers`) and maths steps
    (`rederive-maths`), and **`judge_citation`** for citations. A few at a time:
    read each result before the next.
@@ -99,6 +103,34 @@ reasoning you want kept in `note`; it is recorded and never used in inference.
   record's `node` is a chunk id, or the id of a clause a split of yours has
   created (`s-2a` after you split `s-2`); a clause id before its split names
   nothing. A bibliography entry is named by its node id (`r-1`), not its key.
+- **A split copies its clauses verbatim** from the chunk, each occurring once in
+  it, with one child record per clause; the clauses become `s-2a`, `s-2b`, ...
+  in order, and a child may rest on an earlier one:
+
+    ```json
+    {
+        "node": "s-2",
+        "split": [
+            "The bias vanishes for long segments",
+            "the estimator is therefore consistent"
+        ],
+        "children": [
+            {
+                "type": "result",
+                "form": { "quantity": "The bias", "trend": "vanishes" }
+            },
+            {
+                "type": "claim",
+                "form": {
+                    "shape": "universal",
+                    "statement": "the estimator is therefore consistent"
+                },
+                "rests_on": ["s-2a"]
+            }
+        ]
+    }
+    ```
+
 - **A record has only what its type allows**: `form` with that type's fields and
   its required ones; `rests_on` only on a type that rests on something, and only
   naming nodes of the types it may rest on. A value of a form field is copied
@@ -108,10 +140,14 @@ reasoning you want kept in `note`; it is recorded and never used in inference.
   expression, the expected value included, is written in the chunks it cites. No
   constant the text does not write: `a - a * p`, not `a * (1 - p)`.
 - **A maths step** is two sides, `lhs` and `rhs`, over declared symbols with
-  their assumptions and a sampling domain; it passes when they are equal.
-- **Checks are final.** A check is never withdrawn or run again on its target,
-  and one step is one check however it is written; a failed check stays. Pick
-  the check that tests the claim, not the one likely to pass.
+  their assumptions and a sampling domain; it passes when sympy shows them equal
+  and fails when it shows them different. When sympy cannot decide, the check is
+  an `error`, and if the rubric has `rederive-maths-numeric` the tool also
+  compares the sides at sampled points of the domain.
+- **Checks are final.** A maths or arithmetic check is never withdrawn or run
+  again on its target, and one step is one check however it is written; a check
+  that passed or failed stays. Pick the check that tests the claim, not the one
+  likely to pass. (A citation check that erred may be tried again; see below.)
 - **A typed node may be typed again until a check targets it**; after that it
   stays.
 - **A refused record comes back with a `fix`.** Apply it and call again; do not
