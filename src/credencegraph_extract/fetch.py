@@ -23,10 +23,12 @@ A local file is never named by a URL: ``file:`` and every other scheme are refus
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import ipaddress
 import socket
 import ssl
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -106,8 +108,9 @@ class Connection(Protocol):
 
 # Resolves a host name and port to addresses.
 Resolve = Callable[[str, int], Sequence[str]]
-# Opens a connection to an address: (address, port, host name, TLS?, timeout).
-Connect = Callable[[str, int, str, bool, float], Connection]
+# Opens a connection to an address: (address, port, host name, TLS?, timeout, deadline). The timeout bounds
+# each wait; the deadline, a ``time.monotonic`` instant, is when the connection must give up whatever it waits for.
+Connect = Callable[[str, int, str, bool, float, float], Connection]
 
 
 def forbidden(address: str) -> str | None:
@@ -143,6 +146,14 @@ def _resolve(host: str, port: int) -> list[str]:
     return list(dict.fromkeys(str(info[4][0]) for info in infos))
 
 
+def _shut(connection: http.client.HTTPConnection) -> None:
+    """Shut a connection's socket down, ending any operation blocked on it."""
+    sock = connection.sock
+    if sock is not None:
+        with contextlib.suppress(OSError):
+            sock.shutdown(socket.SHUT_RDWR)
+
+
 class _HTTPConnection(http.client.HTTPConnection):
     """An HTTP connection to a fixed address, with the host name only in the request."""
 
@@ -164,13 +175,24 @@ class _HTTPSConnection(http.client.HTTPSConnection):
 
 
 class _Socket:
-    """The connection ``fetch`` uses by default: http.client to a fixed address."""
+    """The connection ``fetch`` uses by default: http.client to a fixed address.
 
-    def __init__(self, address: str, port: int, host: str, tls: bool, timeout: float) -> None:
+    A watchdog shuts the socket down at the deadline, so no wait (connecting, the TLS handshake, the
+    headers, a read of the body) outlives it, however a peer paces its bytes within each timeout.
+    """
+
+    def __init__(self, address: str, port: int, host: str, tls: bool, timeout: float, deadline: float) -> None:  # noqa: PLR0913, PLR0917 - Connect's shape
         self._connection: http.client.HTTPConnection = (
             _HTTPSConnection(address, port, host, timeout) if tls else _HTTPConnection(address, port, timeout)
         )
-        self._connection.connect()
+        self._watchdog = threading.Timer(max(deadline - time.monotonic(), 0.0), _shut, (self._connection,))
+        self._watchdog.daemon = True
+        self._watchdog.start()
+        try:
+            self._connection.connect()
+        except BaseException:
+            self.close()
+            raise
 
     def peer(self) -> str:
         sock = self._connection.sock
@@ -186,12 +208,13 @@ class _Socket:
         return response.status, {name.lower(): value for name, value in response.getheaders()}, response.read1
 
     def close(self) -> None:
+        self._watchdog.cancel()
         self._connection.close()
 
 
-def _connect(address: str, port: int, host: str, tls: bool, timeout: float) -> Connection:
+def _connect(address: str, port: int, host: str, tls: bool, timeout: float, deadline: float) -> Connection:  # noqa: PLR0913, PLR0917 - Connect's shape
     """Open the default connection."""
-    return _Socket(address, port, host, tls, timeout)
+    return _Socket(address, port, host, tls, timeout, deadline)
 
 
 def _split(url: str) -> tuple[str, str, int, str]:
@@ -267,6 +290,7 @@ def _body(read: Callable[[int], bytes], max_bytes: int, deadline: float) -> byte
     while True:
         _left(deadline)
         piece = read(min(CHUNK, max_bytes + 1 - size))
+        _left(deadline)
         if not piece:
             return b"".join(pieces)
         pieces.append(piece)
@@ -282,8 +306,9 @@ def _hop(  # noqa: PLR0913 - one request and the limits it is made under
     scheme, host, port, target = _split(url)
     address = _address(host, port, resolve)
     try:
-        connection = connect(address, port, host, scheme == "https", min(timeout, _left(deadline)))
+        connection = connect(address, port, host, scheme == "https", min(timeout, _left(deadline)), deadline)
     except (OSError, ssl.SSLError, http.client.HTTPException) as error:
+        _left(deadline)
         raise FetchError("fetch-failed", f"cannot connect to {host!r}: {error}") from None
     try:
         peer = connection.peer()
@@ -294,8 +319,11 @@ def _hop(  # noqa: PLR0913 - one request and the limits it is made under
             raise FetchError("refused-url", f"the connection to {host!r} reached {peer}, not the checked {address}")
         headers = {"Host": _authority(host, port, scheme), "User-Agent": USER_AGENT, "Accept": "*/*"}
         status, response_headers, read = connection.get(target, headers)
+        _left(deadline)
         data = b"" if status in REDIRECTS else _body(read, max_bytes, deadline)
     except (OSError, ssl.SSLError, http.client.HTTPException) as error:
+        # A wait the watchdog ended at the deadline is reported as the time limit, not as a broken read.
+        _left(deadline)
         raise FetchError("fetch-failed", f"cannot read {url!r}: {error}") from None
     finally:
         connection.close()

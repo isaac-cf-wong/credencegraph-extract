@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
+import http.client
 import io
+import socket
+import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -10,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from credencegraph_extract import fetch as fetch_module
 from credencegraph_extract.fetch import FetchError, fetch, forbidden
 
 PUBLIC = "93.184.216.34"
@@ -35,7 +40,7 @@ class Server:
             return [self.rebinding[host].pop(0)]
         return list(self.names[host])
 
-    def connect(self, address: str, port: int, host: str, tls: bool, timeout: float) -> Any:
+    def connect(self, address: str, port: int, host: str, tls: bool, timeout: float, deadline: float) -> Any:  # noqa: PLR0913, PLR0917 - Connect's shape
         """Open a fake connection to an address, answering from the routes of the host name."""
         self.connected.append((address, port, host, tls))
         server = self
@@ -312,3 +317,67 @@ def test_a_host_that_is_not_a_domain_name_is_refused() -> None:
         server.fetch("https://" + "a" * 64 + ".example/")
     assert raised.value.code == "refused-url"
     assert server.resolved == []
+
+
+class Stall:
+    """A connection to a public address whose response, or the end of its body, comes only after a pause."""
+
+    def __init__(self, pause_headers: float = 0.0, pause_end: float = 0.0) -> None:
+        """Pause this long before the headers and before the end of the body."""
+        self.pause_headers, self.pause_end = pause_headers, pause_end
+
+    def peer(self) -> str:
+        """Report the checked address."""
+        return PUBLIC
+
+    def get(self, target: str, headers: Mapping[str, str]) -> tuple[int, Mapping[str, str], Callable[[int], bytes]]:
+        """Answer after a pause, with a one-byte body whose end comes after another."""
+        time.sleep(self.pause_headers)
+        pieces = [b"x", b""]
+
+        def read(size: int) -> bytes:
+            if len(pieces) == 1:
+                time.sleep(self.pause_end)
+            return pieces.pop(0)
+
+        return 200, {"content-type": "text/plain"}, read
+
+    def close(self) -> None:
+        """Nothing to close."""
+
+
+@pytest.mark.parametrize("stall", [Stall(pause_headers=0.3), Stall(pause_end=0.3)], ids=["headers", "end of body"])
+def test_a_response_that_ends_after_the_time_limit_is_refused(stall: Stall) -> None:
+    with pytest.raises(FetchError, match="longer than its time limit") as raised:
+        fetch("http://slow.example/", resolve=lambda host, port: [PUBLIC], connect=lambda *args: stall, max_seconds=0.2)
+    assert raised.value.code == "fetch-failed"
+
+
+def test_the_default_connection_is_cut_at_the_deadline_however_the_peer_paces_its_bytes() -> None:
+    # A local server that sends its status line and then one header byte every 50 ms, each within the
+    # 1 s timeout per read, for 5 s: the watchdog shuts the socket at the deadline, so the wait ends there
+    # (with an error, or with the truncated response, which fetch refuses as past its deadline).
+    listener = socket.create_server(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+
+    def serve() -> None:
+        peer, _ = listener.accept()
+        with peer:
+            peer.recv(4096)
+            peer.sendall(b"HTTP/1.1 200 OK\r\nX-Slow: ")
+            with contextlib.suppress(OSError):
+                for _ in range(100):
+                    time.sleep(0.05)
+                    peer.sendall(b"a")
+
+    server = threading.Thread(target=serve, daemon=True)
+    server.start()
+    started = time.monotonic()
+    connection = fetch_module._Socket("127.0.0.1", port, "local.test", False, 1.0, started + 0.3)
+    try:
+        with contextlib.suppress(OSError, http.client.HTTPException):
+            connection.get("/", {"Host": "local.test"})
+    finally:
+        connection.close()
+        listener.close()
+    assert time.monotonic() - started < 1.0

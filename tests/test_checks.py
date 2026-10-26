@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -481,6 +482,25 @@ def test_a_maths_step_is_the_same_step_however_its_sides_are_written(
     second = checks._step("rederive-maths", {"lhs": other[0], "rhs": other[1], "symbols": X})
     assert first is not None
     assert (first == second) is same
+
+
+@pytest.mark.parametrize(
+    ("lhs", "names"),
+    [
+        ("*".join(f"(x{i} + 1)" for i in range(28)), [f"x{i}" for i in range(28)]),
+        ("(a + b + c + d + e + f + g + h)**32", list("abcdefgh")),
+        ("((x + 1)**16 + 1)**16", ["x"]),
+        ("sin((x + 1)**400)", ["x"]),
+        ("1/(x + 1)**400", ["x"]),
+    ],
+    ids=["28 binomials", "power of a sum", "nested powers", "inside a function", "negative power"],
+)
+def test_a_step_too_large_to_expand_is_keyed_quickly(lhs: str, names: list[str]) -> None:
+    # Expanding any of these takes minutes or more; its key must not.
+    symbols = [{"name": name, "assumptions": ["real"], "domain": [-1, 1]} for name in names]
+    started = time.monotonic()
+    assert checks._step("rederive-maths", {"lhs": lhs, "rhs": "1", "symbols": symbols}) is not None
+    assert time.monotonic() - started < 1
 
 
 def test_one_value_written_two_ways_for_two_targets_is_one_check(tmp_path: Path) -> None:

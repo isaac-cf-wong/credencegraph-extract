@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -425,3 +426,18 @@ def test_a_finished_run_with_citation_checks_verifies(run_dir: Path, no_network:
     finish_run(run_dir, model=MODEL)
     found = verify_run(run_dir)
     assert (found.rerun, found.not_rerun, found.differences) == (("c-002",), ("c-001",), ())
+
+
+def test_a_step_too_large_to_simplify_is_decided_numerically(run_dir: Path) -> None:
+    # Simplifying this takes minutes or more; the symbolic check errs at once and the numeric one decides.
+    factors = [f"(x + {k})" for k in range(1, 17)]
+    large = {**PHASE, "lhs": " * ".join(factors), "rhs": " * ".join(reversed(factors))}
+    large["symbols"] = [{"name": "x", "assumptions": ["positive"], "domain": [0.01, 1]}]
+    started = time.monotonic()
+    result = run_checks(run_dir, [large], model=MODEL)
+    assert time.monotonic() - started < 10
+    assert [(item["type"], item["result"]) for item in result["checks"]] == [
+        ("rederive-maths", "error"),
+        ("rederive-maths-numeric", "passed"),
+    ]
+    assert result["checks"][0]["detail"] == "a side could expand to more than 256 terms, too many to simplify"

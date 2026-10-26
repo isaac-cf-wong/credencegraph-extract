@@ -42,6 +42,7 @@ model: ``fails`` if any failed, else ``holds`` if any passed, else ``undetermine
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
@@ -570,7 +571,12 @@ def _rederive(plan: _Plan) -> Result:
     names = evaluate.symbols(encoding["symbols"])
     lhs, rhs = evaluate.symbolic(encoding["lhs"], names), evaluate.symbolic(encoding["rhs"], names)
     try:
-        result, detail = evaluate.identity(lhs, rhs)
+        if max(_terms(lhs), _terms(rhs)) > MAX_TERMS:
+            # Simplifying a side whose expansion could have this many terms can take arbitrarily long; the
+            # numeric fallback, where the rubric declares it, decides the step instead.
+            result, detail = ERROR, f"a side could expand to more than {MAX_TERMS} terms, too many to simplify"
+        else:
+            result, detail = evaluate.identity(lhs, rhs)
     except (ArithmeticError, TypeError, ValueError, AttributeError, NotImplementedError, RecursionError) as error:
         result, detail = ERROR, f"sympy failed: {type(error).__name__}: {error}"
     return Result(
@@ -769,19 +775,39 @@ def _corrected(refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
     return {unlabelled(target) or target for target in named}
 
 
-# The largest integer exponent a side may have for ``_step`` to expand it; a larger one is compared as written.
-MAX_EXPAND = 32
+# The most terms a side's expansion may have, by ``_terms``'s bound, for ``_step`` to expand it.
+MAX_TERMS = 256
+
+
+def _terms(expression: sympy.Expr) -> int:
+    """An upper bound on the number of terms ``sympy.expand`` gives, from the expression's tree alone.
+
+    A sum has at most the sum of its terms' counts, a product at most their product, and a power of a
+    sum of ``k`` terms to an integer ``n`` at most ``C(|n| + k - 1, k - 1)`` (a negative power's base is
+    expanded too). ``sympy.expand`` also expands inside a function's arguments and a power's base and
+    exponent, so any other node counts as one term when everything inside it is small, and as the largest
+    count inside it otherwise. The bound is computed in one pass over the tree, so deciding not to expand
+    costs little whatever the expansion would.
+    """
+    if isinstance(expression, sympy.Add):
+        return sum(_terms(argument) for argument in expression.args)
+    if isinstance(expression, sympy.Mul):
+        return math.prod(_terms(argument) for argument in expression.args)
+    if isinstance(expression, sympy.Pow) and expression.exp.is_Integer:
+        inner = _terms(expression.base)
+        return math.comb(abs(int(expression.exp)) + inner - 1, inner - 1)
+    inside = max((_terms(argument) for argument in expression.args), default=1)
+    return 1 if inside <= MAX_TERMS else inside
 
 
 def _canonical(side: sympy.Expr) -> str:
     """A side of a maths step in a form two encodings of the same expression share: expanded, when that is cheap.
 
-    Expanding makes ``(x + 1)**2``, ``x**2 + 2*x + 1`` and ``x*(x + 2) + 1`` one form. A side with an
-    integer power above ``MAX_EXPAND`` is not expanded, since that could take arbitrarily long; it is
-    compared as sympy writes it.
+    Expanding makes ``(x + 1)**2``, ``x**2 + 2*x + 1`` and ``x*(x + 2) + 1`` one form. A side whose
+    expansion could have more than ``MAX_TERMS`` terms (``_terms``) is not expanded, since that could
+    take arbitrarily long; it is compared as sympy writes it.
     """
-    powers = [power.exp for power in side.atoms(sympy.Pow) if power.exp.is_Integer]
-    if any(abs(int(exponent)) > MAX_EXPAND for exponent in powers):
+    if _terms(side) > MAX_TERMS:
         return sympy.srepr(side)
     return sympy.srepr(sympy.expand(side))
 
