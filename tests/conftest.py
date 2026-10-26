@@ -55,6 +55,20 @@ def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(socket.socket, "connect", guarded(socket.socket.connect))
     monkeypatch.setattr(socket.socket, "connect_ex", guarded(socket.socket.connect_ex))
+
+    def addressed(original: Any, address_of: Any) -> Any:
+        def send(sock: socket.socket, *args: object) -> Any:
+            address = address_of(args)
+            if address is not None and not _loopback(address):
+                refuse()
+            return original(sock, *args)
+
+        return send
+
+    # sendto(data, address) or sendto(data, flags, address); sendmsg(buffers, ancdata, flags, address).
+    monkeypatch.setattr(socket.socket, "sendto", addressed(socket.socket.sendto, lambda args: args[-1]))
+    sendmsg_address = lambda args: args[3] if len(args) > 3 else None  # noqa: E731
+    monkeypatch.setattr(socket.socket, "sendmsg", addressed(socket.socket.sendmsg, sendmsg_address))
     monkeypatch.setattr(socket, "create_connection", refuse)
     monkeypatch.setattr(socket, "getaddrinfo", refuse)
     monkeypatch.setattr(anthropic, "Anthropic", refuse)
