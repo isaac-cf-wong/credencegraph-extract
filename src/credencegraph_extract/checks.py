@@ -957,6 +957,128 @@ def run_maths(
     return out, files, checks, rejections
 
 
+def citation_refusal(graph: Graph, rubric: Rubric, target: Any, reference: Any) -> dict[str, Any] | None:
+    """Refuse a citation check the check pass would refuse, or one on a target whose citation check already passed or failed.
+
+    The target must be a node the rubric runs ``citation-support`` on, and it, or a node it is part of,
+    must cite the reference, a bibliography entry of the document. A citation check that passed or
+    failed stays: another on the same target is refused. One that erred moved no credence, so another
+    may follow it.
+
+    Args:
+        graph: The graph.
+        rubric: The rubric.
+        target: The node the check bears on.
+        reference: The id of the bibliography entry.
+
+    Returns:
+        The rejection, with its code, message, record and, where the refusal knows what to change, a
+        ``fix``; or ``None`` when the check may run.
+    """
+    record = {"target": target, "type": CITATION, "reference": reference}
+    try:
+        _plan(graph, rubric, record)
+        settled = [
+            node.id
+            for node in graph
+            if isinstance(check := node.attributes.get("check"), Mapping)
+            and check.get("type") == CITATION
+            and check.get("target") == target
+            and check.get("result") != ERROR
+        ]
+        if settled:
+            msg = f"{target!r} has the citation check {settled[0]}, which passed or failed: it stays"
+            raise _ProposalError(
+                DUPLICATE_RECORD, msg, f"leave {target!r}: a citation check runs again only after one that errs"
+            )
+    except _ProposalError as refused:
+        rejection = {"node": target if isinstance(target, str) else None, "code": refused.code, "message": str(refused)}
+        rejection["record"] = record
+        if refused.fix is not None:
+            rejection["fix"] = refused.fix
+        return rejection
+    return None
+
+
+def _document(observation: Mapping[str, Any]) -> str:
+    """The id of a citation's source document: its arXiv id and version, its DOI, its cited file, or its final URL."""
+    found = observation.get("tie")
+    if isinstance(found, Mapping) and found.get("by") == "arxiv":
+        return f"arXiv:{found.get('id')}{found.get('version')}"
+    if (
+        isinstance(found, Mapping)
+        and found.get("by") == "doi"
+        and observation.get("final_url") == found.get("final_url")
+    ):
+        return f"doi:{found.get('doi')}"
+    return str(observation.get("file") if observation.get("kind") == "cited" else observation.get("final_url"))
+
+
+def judged(  # noqa: PLR0913 - the check, what was read, what the agent said, and how it is tied
+    graph: Graph,
+    target: str,
+    reference: str,
+    observation: Mapping[str, Any],
+    *,
+    passage: str,
+    supports: bool,
+    untied: str | None,
+    model: str | None,
+) -> Result:
+    """Return the result of a citation check from what the tool read and what the agent judged.
+
+    The check is an ``error`` when the quoted passage is not in the source's text, or when the source
+    is not tied to the reference (``untied`` says why): an errored check moves no credence. Otherwise
+    it passes when the agent judged that the passage supports the target, and fails when not.
+
+    Args:
+        graph: The graph.
+        target: The citing node.
+        reference: The bibliography entry.
+        observation: What the tool read: ``citation.read_cited`` or ``citation.read_url``.
+        passage: The passage the agent quoted.
+        supports: The agent's judgement.
+        untied: Why the source is not tied to the reference, or ``None``.
+        model: The model the call reported.
+
+    Returns:
+        The result.
+    """
+    document = _document(observation)
+    source = (
+        {"file": observation.get("file")}
+        if observation.get("kind") == "cited"
+        else {
+            "url": observation.get("url"),
+            "final_url": observation.get("final_url"),
+        }
+    )
+    artifact: dict[str, Any] = {
+        "kind": "citation",
+        "reference": reference,
+        "document": document,
+        "source": source,
+        "tied": untied is None,
+    }
+    inputs = {"statement": node_text(graph, graph.nodes[target]), "source_digest": observation.get("text_digest")}
+    output = {"passage": passage, "supports": supports, "read": dict(observation)}
+    reported = {"model": model}
+    found = observation.get("found")
+    if not isinstance(found, list):
+        detail = "the quoted passage is not in the text of the source"
+        return Result(CITATION, target, artifact, inputs, ERROR, detail, output, model=reported)
+    quote = normalise_text(passage)
+    locator = f"chars={found[0]}-{found[1]}"
+    artifact.update(locator=locator, quote=quote, digest=text_digest(quote))
+    if untied is not None:
+        detail = f"source not tied to the reference: {untied}"
+        return Result(CITATION, target, artifact, inputs, ERROR, detail, output, model=reported)
+    anchor = SourceAnchor(document, locator, quote, text_digest(quote))
+    result = PASSED if supports else FAILED
+    detail = f"the passage at {locator} {'supports' if supports else 'does not support'} the statement"
+    return Result(CITATION, target, artifact, inputs, result, detail, output, (anchor,), model=reported)
+
+
 def assess(graph: Graph, rubric: Rubric) -> Graph:
     """Set the verdict of every node the checks assess, from the checks that observe it.
 

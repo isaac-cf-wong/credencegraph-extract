@@ -331,6 +331,27 @@ append-only: a check is never withdrawn, nor run again on its target, nor run on
 another target as another encoding of the same step, so a failed check stays
 observed. The versions of the code that ran a call's checks are logged with it.
 
+`judge_citation` takes the citing node, the bibliography entry's id, a source,
+the passage the agent found and whether it supports the node. The tool reads the
+source itself, never text the agent pastes: a file of the run's copy of the
+cited works, or an `http` or `https` URL, fetched from public addresses only (it
+connects to the address it checked, on every redirect hop, so a URL cannot reach
+the machine's own network). The check passes or fails, as the agent judged, only
+when the passage is in the source and the source is **tied to the reference**:
+the cited copy the entry's key names, unchanged since `start_run`; the arXiv
+paper the entry names, fetched by the tool at the entry's version or the current
+one; or the page the entry's DOI resolves to. Any other source, such as a page
+the agent wrote, gives an `error`, which moves no credence, and `report.json`
+lists it. A citation check that passed or failed stays; one that erred may be
+followed by another.
+
+What the tool read is logged with the call (the URLs, the digests of the bytes
+and of their text, and where the passage is), not the bytes, which are kept in
+`sources/` only with `store_source`. Rebuilding a run reads nothing again;
+`replay` reads every source again from its bytes and refuses a reading they do
+not give, so a fetched source the run did not store is passed with
+`--sources DIR`, as files named by the hex of their digest.
+
 ## Verify
 
 ```shell

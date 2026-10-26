@@ -13,6 +13,9 @@ change, and is kept in the run's rejections; the agent may simply call again.
 - ``run_checks`` checks and runs proposals of the maths check types, as the check pass does, and adds a
   check node for each that runs, with its files in the run. A check is never withdrawn or run again on
   its target, nor run again on another target as another encoding of the same step.
+- ``judge_citation`` reads a citation's source itself, finds the agent's passage in it, and records a
+  check that passes or fails as the agent judged only when the source is tied to the reference
+  (``citation``); any other source gives an ``error``, which moves no credence.
 - ``finish_run`` derives every assessed node's verdict from the checks that observe it, runs the core's
   check at the ``assessed`` level with rubric credences, and marks the run finished; the run's outputs
   are written then. Any later write marks it unfinished again.
@@ -22,7 +25,7 @@ change, and is kept in the run's rejections; the agent may simply call again.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -40,14 +43,29 @@ from credencegraph_extract.assemble import (
     fixes,
     premises_rubric_problem,
 )
-from credencegraph_extract.checks import assess, run_maths
+from credencegraph_extract.checks import CITATION, add_checks, assess, citation_refusal, judged, run_maths
 from credencegraph_extract.checks import fix as check_fix
+from credencegraph_extract.citation import SourceError, read_cited, read_url, tie, verify_observation
+from credencegraph_extract.digest import bytes_digest
+from credencegraph_extract.fetch import fetch
 from credencegraph_extract.run import RunError
-from credencegraph_extract.session import FINISH, Context, State, operation, versions, write
+from credencegraph_extract.session import (
+    FINISH,
+    SOURCES,
+    Context,
+    State,
+    current_state,
+    lock,
+    operation,
+    read_calls,
+    versions,
+    write,
+)
 
 CLASSIFY = "classify"
 ADD_PREMISES = "add_premises"
 RUN_CHECKS = "run_checks"
+JUDGE_CITATION = "judge_citation"
 
 # The rejection code of a record on a node a check targets.
 CHECKED = "checked-node"
@@ -189,6 +207,78 @@ def _run_checks(context: Context, state: State, args: Mapping[str, Any]) -> tupl
     return after, {"checks": checks, "refused": refused}
 
 
+def _judge_arguments(args: Mapping[str, Any]) -> None:
+    """Refuse a citation call whose arguments are not of their types."""
+    for name in ("target", "reference", "source", "passage"):
+        if not isinstance(args.get(name), str) or not args[name].strip():
+            raise RunError("invalid-argument", f"{name} must be a non-empty string")
+    if not isinstance(args.get("supports"), bool):
+        raise RunError("invalid-argument", "supports must be true or false")
+    observation = args.get("read")
+    if observation is not None and not isinstance(observation, Mapping):
+        raise RunError("invalid-argument", "read must be what the tool read")
+
+
+def _source_bytes(context: Context, observation: Mapping[str, Any]) -> bytes:
+    """The bytes a replayed citation call read, found by their digest: in the cited copy, the run's sources, or ``--sources``."""
+    digest = str(observation.get("digest"))
+    name = digest.removeprefix("sha256:")
+    places = [context.run_dir / SOURCES / name]
+    if observation.get("kind") == "cited":
+        places.insert(0, context.run_dir / "cited" / str(observation.get("file")))
+    if context.sources is not None:
+        places.append(context.sources / name)
+    for place in places:
+        if place.is_file() and bytes_digest(data := place.read_bytes()) == digest:
+            return data
+    what = observation.get("file") if observation.get("kind") == "cited" else observation.get("url")
+    msg = f"call {context.call} read {what!r} ({digest}), whose bytes the run did not store: pass them with --sources"
+    raise RunError("missing-source", msg)
+
+
+@operation(JUDGE_CITATION)
+def _judge_citation(context: Context, state: State, args: Mapping[str, Any]) -> tuple[State, dict[str, Any]]:
+    """Record a citation check from what the tool read: tied to the reference, or an error."""
+    _judge_arguments(args)
+    target, reference = args["target"], args["reference"]
+    observation = args.get("read")
+    refusal = citation_refusal(state.graph, context.rubric, target, reference)
+    if refusal is None and not isinstance(observation, Mapping):
+        raise RunError("invalid-argument", "the call records nothing read")
+    if refusal is None and "error" in observation:
+        refusal = {"node": target, "code": observation.get("code"), "message": observation["error"]}
+        refusal["record"] = {"target": target, "type": CITATION, "reference": reference, "source": args["source"]}
+        refusal["fix"] = (
+            "give a public http or https URL, or the name of a file of the run's cited works"
+            if observation.get("code") == "refused-url"
+            else "give a source that can be read: a text, LaTeX, PDF or HTML file of the cited work"
+        )
+    if refusal is not None:
+        refused = [{**refusal, "fix": _check_fix(refusal)}]
+        after = replace(state, rejections=(*state.rejections, *_kept(context, JUDGE_CITATION, refused)))
+        return after, {"check": None, "refused": refused}
+    if context.replaying:
+        differ = verify_observation(observation, _source_bytes(context, observation), args["passage"])
+        if differ:
+            msg = f"call {context.call} recorded a reading of its source that its bytes do not give: {differ}"
+            raise RunError("record-mismatch", msg)
+    untied = tie(state.graph.nodes[reference], context.cited, observation)
+    result = judged(
+        state.graph,
+        target,
+        reference,
+        observation,
+        passage=args["passage"],
+        supports=args["supports"],
+        untied=untied,
+        model=context.model,
+    )
+    graph, files, [entry] = add_checks(state.graph, context.rubric, [result], _versions(args))
+    texts = {path: data.decode("utf-8") for path, data in files.items()}
+    after = replace(state, graph=graph, files={**state.files, **texts})
+    return after, {"check": entry["id"], "result": result.result, "tied": untied is None, "detail": result.detail}
+
+
 @operation(FINISH)
 def _finish(context: Context, state: State, args: Mapping[str, Any]) -> tuple[State, dict[str, Any]]:
     """Derive the verdicts, run the core's check, and mark the run finished."""
@@ -277,6 +367,94 @@ def run_checks(
     """
     args = {"proposals": _sent(proposals), "versions": versions()}
     return write(run, RUN_CHECKS, args, model=model, agent=agent, note=note)
+
+
+def _is_url(source: str) -> bool:
+    """Whether a source is given as a URL, of any scheme, rather than as a path."""
+    return "://" in source or source.split(":", 1)[0].lower() in {"http", "https", "file"}
+
+
+def _observe(
+    run: Path, reference: Any, source: Any, passage: Any, fetcher: Callable[[str], Any]
+) -> dict[str, Any] | None:
+    """Read a citation's source, as the call records it; ``None`` when the arguments name nothing to read."""
+    if not all(isinstance(value, str) and value.strip() for value in (reference, source, passage)):
+        return None
+    with lock(run):
+        node = current_state(run).graph.nodes.get(reference)
+        stored = bool(read_calls(run)[0]["args"]["source"].get("stored"))
+    if node is None or node.attributes.get("unit") != "reference":
+        return None
+    try:
+        if _is_url(source):
+            observation, data = read_url(node, source, passage, fetcher)
+        else:
+            observation, data = read_cited(run, source, passage)
+    except SourceError as error:
+        return {"error": str(error), "code": error.code}
+    if stored and observation["kind"] == "url":
+        path = run / SOURCES / observation["digest"].removeprefix("sha256:")
+        path.parent.mkdir(exist_ok=True)
+        if not path.is_file():
+            temporary = path.with_suffix(".tmp")
+            temporary.write_bytes(data)
+            temporary.replace(path)
+    return observation
+
+
+def judge_citation(  # noqa: PLR0913 - the check, what the agent judged, and who makes the call
+    run: Path,
+    target: str,
+    reference: str,
+    source: str,
+    passage: str,
+    *,
+    supports: bool,
+    model: str,
+    agent: str | None = None,
+    note: str | None = None,
+    fetcher: Callable[[str], Any] = fetch,
+) -> dict[str, Any]:
+    """Record a citation check: read the source, find the passage, and decide whether the source is tied to the reference.
+
+    The tool reads the source itself; it never takes the text from the agent. A local source is a file
+    of the run's copy of the cited works; a URL is fetched under the fetch policy (``fetch``). What was
+    read (the file or URLs, the digests of the bytes and of their text, where the passage is, and what
+    ties the source to the reference) is logged with the call, not the bytes, which are kept in
+    ``sources/`` only when the run stores its sources. The check passes or fails, as the agent judged,
+    only when the passage is in the source and the source is tied to the reference
+    (``citation.tie``); otherwise it is an ``error``, which moves no credence. A target whose citation
+    check passed or failed takes no other; one whose checks erred may be checked again.
+
+    Args:
+        run: The run directory.
+        target: The citing node.
+        reference: The id of the bibliography entry (``r-N``), not its key.
+        source: A file of the run's cited works, by name or path, or an ``http`` or ``https`` URL.
+        passage: The passage of the source the target rests on, verbatim.
+        supports: Whether the passage supports the target.
+        model: The model making the call, as the harness reports it.
+        agent: A name for the agent.
+        note: Free text kept with the call.
+        fetcher: Fetches a URL under the fetch policy; ``fetch.fetch`` by default.
+
+    Returns:
+        ``check``, the id of the check, ``result``, ``tied`` and ``detail``; or ``check`` ``None`` and
+        ``refused``, with the refusal's code, message and ``fix``.
+
+    Raises:
+        RunError: If an argument is not of its type, or the call as a whole is refused.
+    """
+    args = {
+        "target": target,
+        "reference": reference,
+        "source": source,
+        "passage": passage,
+        "supports": supports,
+        "read": _observe(run, reference, source, passage, fetcher),
+        "versions": versions(),
+    }
+    return write(run, JUDGE_CITATION, args, model=model, agent=agent, note=note)
 
 
 def finish_run(run: Path, *, model: str, agent: str | None = None, note: str | None = None) -> dict[str, Any]:
