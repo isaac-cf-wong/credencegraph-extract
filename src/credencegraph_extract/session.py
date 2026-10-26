@@ -78,6 +78,8 @@ CITED = "cited"
 SOURCE = "source"
 SOURCES = "sources"
 LOCK = ".lock"
+# Who holds the lock: the process id and since when, written while it is held, for ``lock_holder``.
+LOCK_OWNER = ".lock.owner"
 GRAPH = "graph.json"
 REJECTIONS = "rejections.json"
 REPORT = "report.json"
@@ -243,12 +245,62 @@ def lock(run_dir: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
         deadline = time.monotonic() + timeout
         while not _try_lock(handle):
             if time.monotonic() >= deadline:
-                raise RunError("run-busy", f"another tool call holds the lock of {run_dir.name!r}")
+                holder = _owner(run_dir)
+                by = (
+                    f" (process {holder.get('pid')}, since {holder.get('since')})" if holder and "pid" in holder else ""
+                )
+                raise RunError("run-busy", f"another tool call holds the lock of {run_dir.name!r}{by}")
             time.sleep(0.05)
+        owner = run_dir / LOCK_OWNER
         try:
+            owner.write_text(json.dumps({"pid": os.getpid(), "since": _now()}), encoding="utf-8")
             yield
         finally:
+            owner.unlink(missing_ok=True)
             _unlock(handle)
+
+
+def _owner(run_dir: Path) -> dict[str, Any] | None:
+    """The record of the process holding a run's lock, if one was written and can be read."""
+    try:
+        found = json.loads((run_dir / LOCK_OWNER).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return found if isinstance(found, dict) else None
+
+
+def lock_holder(run_dir: Path) -> dict[str, Any] | None:
+    """Return who holds a run's lock, or ``None`` when no tool call does.
+
+    The lock is the operating system's: it is released when its process exits, so a crashed agent
+    leaves none behind, and only a live process (a hung one, say) can hold it. A free lock's leftover
+    owner record, from a process that died holding it, is removed.
+
+    Args:
+        run_dir: The run directory.
+
+    Returns:
+        ``{"pid", "since"}`` of the holding process (either may be missing when it wrote no record yet),
+        or ``None``.
+
+    Raises:
+        RunError: If the directory is not a run.
+    """
+    if not (run_dir / CALLS).is_file():
+        raise RunError("missing-run", f"{run_dir.name!r} is not a run directory")
+    with (run_dir / LOCK).open("a+b") as handle:
+        if handle.seek(0, os.SEEK_END) == 0:
+            handle.write(b"\0")
+            handle.flush()
+        if _try_lock(handle):
+            # A record left by a process that died holding the lock; removed while the lock is held, so a
+            # call that takes it next cannot have its own record removed.
+            try:
+                (run_dir / LOCK_OWNER).unlink(missing_ok=True)
+            finally:
+                _unlock(handle)
+            return None
+    return _owner(run_dir) or {}
 
 
 if sys.platform == "win32":  # pragma: no cover - the lock of the platform the tests do not run on

@@ -11,15 +11,19 @@ type, a run that does not exist, a call the run refuses, each comes back as a JS
 ``{"error": {"code", "message"}}``, and a refused record comes back in the tool's ``refused`` list
 with what to change, as the tools return it. Arguments are therefore accepted as any JSON value, every
 one optional to the protocol, and checked by the tools rather than by the protocol's schema, which
-would answer a mistake with a validation error instead; the descriptions say which are required.
+would answer a mistake with a validation error instead; the descriptions say which are required. An
+argument a tool does not take, which the protocol would drop silently, is refused the same way.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import inspect
+import json
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Annotated, Any
 
+import mcp_types as types
 from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 
@@ -54,7 +58,58 @@ Model = Annotated[Any, Field(description="The id of the model making this call, 
 Agent = Annotated[Any, Field(description="A name for the agent making the call, when several share the run.")]
 Note = Annotated[Any, Field(description="Free text kept with the call (reasoning, if any); never used in inference.")]
 
-server = MCPServer(NAME, instructions=INSTRUCTIONS, version=__version__)
+
+def taken(name: str) -> list[str]:
+    """The arguments a tool takes, besides the run directory, in order.
+
+    Args:
+        name: The tool.
+
+    Returns:
+        Their names.
+    """
+    return [parameter for parameter in inspect.signature(TOOLS[name]).parameters if parameter != "run"]
+
+
+def refuse_invented(name: Any, arguments: Mapping[str, Any]) -> None:
+    """Refuse a call to a tool there is not, or one that sends an argument the tool does not take.
+
+    The protocol would answer an unknown tool with an error of its own and drop an unknown argument
+    silently, so a model's typo would go unnoticed; the server and the ``tool`` command both refuse
+    them instead, naming the tools there are or the arguments the tool takes.
+
+    Args:
+        name: The tool.
+        arguments: The call's arguments.
+
+    Raises:
+        RunError: If there is no such tool, or an argument is one the tool does not take.
+    """
+    if not isinstance(name, str) or name not in TOOLS:
+        raise RunError("unknown-tool", f"there is no tool {name!r}; the tools are {list(TOOLS)}")
+    invented = sorted(set(arguments) - {"run", *taken(name)})
+    if invented:
+        raise RunError("invalid-argument", f"{name} takes no {invented}; it takes {['run', *taken(name)]}")
+
+
+async def _refuse_invented(ctx: Any, call_next: Any) -> Any:
+    """Answer a call to a tool there is not, with arguments that are not an object, or with an argument the tool does not take, as a JSON error."""
+    params = ctx.params if ctx.method == "tools/call" else None
+    name = params.get("name") if isinstance(params, Mapping) else None
+    arguments = params.get("arguments") if isinstance(params, Mapping) else None
+    if isinstance(params, Mapping):
+        try:
+            refuse_invented(name, arguments if isinstance(arguments, Mapping) else {})
+            if "arguments" in params and not isinstance(arguments, Mapping):
+                raise RunError("invalid-argument", f"the arguments of {name} must be an object of named arguments")
+        except RunError as error:
+            answer = _error(error.code, str(error))
+            text = types.TextContent(type="text", text=json.dumps(answer, indent=2))
+            return types.CallToolResult(content=[text], structured_content=answer, is_error=False)
+    return await call_next(ctx)
+
+
+server = MCPServer(NAME, instructions=INSTRUCTIONS, version=__version__, middleware=[_refuse_invented])
 
 
 def _error(code: str, message: str) -> dict[str, Any]:
@@ -267,6 +322,18 @@ def judge_citation(  # noqa: PLR0913, PLR0917 - the tool's arguments, each a sep
 def finish_run(run: Run = None, model: Model = None, agent: Agent = None, note: Note = None) -> dict[str, Any]:
     """Finish the run."""
     return _answer(lambda: tools.finish_run(_run(run), model=model, agent=agent, note=note))
+
+
+# The tools by name, as the MCP server and the ``tool`` command call them.
+TOOLS: dict[str, Callable[..., dict[str, Any]]] = {
+    "start_run": start_run,
+    "get_state": get_state,
+    "classify": classify,
+    "add_premises": add_premises,
+    "run_checks": run_checks,
+    "judge_citation": judge_citation,
+    "finish_run": finish_run,
+}
 
 
 def serve() -> None:
