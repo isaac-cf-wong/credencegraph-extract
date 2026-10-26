@@ -932,7 +932,8 @@ def _admitted(graph: Graph, plans: Sequence[_Plan]) -> list[tuple[str, str, tupl
         check = node.attributes.get("check")
         if isinstance(check, Mapping) and isinstance(check.get("inputs"), Mapping):
             check_type, inputs = check.get("type"), check["inputs"]
-            nodes = (check.get("artifact") or {}).get("nodes")
+            artifact = check.get("artifact")
+            nodes = artifact.get("nodes") if isinstance(artifact, Mapping) else None
             step = _step(check_type, inputs, _rounding(graph, nodes, inputs.get("expected")))
             found.append((check.get("target"), _proposed_type(check_type), step))
     found.extend((plan.target.id, plan.type, _plan_step(graph, plan)) for plan in plans)

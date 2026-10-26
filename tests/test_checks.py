@@ -519,6 +519,20 @@ def test_one_value_reported_with_another_rounding_is_another_step() -> None:
     )
 
 
+@pytest.mark.parametrize("artifact", ["malformed", None, ["s-1"], {"nodes": "s-1"}])
+def test_a_recorded_check_of_another_shape_does_not_stop_admission(artifact: object) -> None:
+    graph = Graph()
+    graph.add_node(Node("s-1", kind="result", statement="So 350 remain.", attributes={"origin": "document"}))
+    record = {"type": "recompute-numbers", "target": "s-1", "inputs": {"expression": "1 + 1", "expected": "2"}}
+    graph.add_node(
+        Node(
+            "c-1", kind="recompute-numbers", statement="a check", attributes={"check": {**record, "artifact": artifact}}
+        )
+    )
+    [(target, check_type, _)] = checks._admitted(graph, [])
+    assert (target, check_type) == ("s-1", "recompute-numbers")
+
+
 def test_one_value_written_two_ways_for_two_targets_is_one_check(tmp_path: Path) -> None:
     rewritten = {**RECOMPUTE, "target": "s-2", "expression": "400 - 0.125 * 400", "expected": "350"}
     run_dir = tmp_path / "run"
