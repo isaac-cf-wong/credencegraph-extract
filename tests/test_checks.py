@@ -438,6 +438,47 @@ def test_a_correction_of_a_proposal_that_named_no_target_may_be_on_any_target(tm
     assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3"]
 
 
+@pytest.mark.parametrize(
+    "again",
+    [
+        {**PRODUCT, "target": "e-1"},
+        {**PRODUCT, "target": "e-1", "lhs": "c", "rhs": "N * c / N"},
+    ],
+    ids=["same encoding", "sides swapped and rewritten"],
+)
+def test_one_step_proposed_for_two_targets_is_one_check(tmp_path: Path, again: dict[str, Any]) -> None:
+    # Checks that pass or fail together are one piece of evidence, not one per target.
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([PRODUCT, again], repair=[]))
+    assert [(item["round"], item["node"], item["code"]) for item in check_rejections(run_dir)] == [
+        ("initial", "e-1", "duplicate-record")
+    ]
+    assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["e-2"]
+    prompt = (run_dir / "prompts" / "0003.txt").read_text(encoding="utf-8")
+    assert "propose this check once, on the step's own target; 'e-2' already has it" in prompt
+
+
+def test_one_value_written_two_ways_for_two_targets_is_one_check(tmp_path: Path) -> None:
+    rewritten = {**RECOMPUTE, "target": "s-2", "expression": "400 - 0.125 * 400", "expected": "350"}
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([{**RECOMPUTE, "expected": "350"}, rewritten], repair=[]))
+    assert [(item["node"], item["code"]) for item in check_rejections(run_dir)] == [("s-2", "duplicate-record")]
+    assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3"]
+
+
+def test_a_citation_naming_the_key_is_told_the_id_and_its_correction_runs(tmp_path: Path) -> None:
+    keyed = {"target": "s-7", "type": "citation-support", "reference": "smith2020"}
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([keyed], JUDGEMENT, repair=[{**keyed, "reference": "r-1"}]))
+    assert [(item["round"], item["node"], item["code"]) for item in check_rejections(run_dir)] == [
+        ("initial", "s-7", "invalid-record")
+    ]
+    prompt = (run_dir / "prompts" / "0003.txt").read_text(encoding="utf-8")
+    # The prompt sends the fix as JSON, so its quotes are escaped there.
+    assert json.dumps('\'smith2020\' is the key of r-1: give "reference": "r-1"')[1:-1] in prompt
+    assert [node.attributes["check"]["result"] for node in checks_of(read_graph(run_dir)).values()] == ["passed"]
+
+
 def test_no_repair_call_is_made_when_every_proposal_is_admitted(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     make_run(run_dir, bodies_with([{**RECOMPUTE, "expected": "350"}]))

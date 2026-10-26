@@ -253,12 +253,15 @@ lists the node's type in its `targets`:
   `--allow-uncalibrated` is given, and then `report.json` lists each such check
   under `passes.checks.uncalibrated`.
 
-A proposal that cannot be run, or a second of its type on one node (the two
-would pass or fail together), is rejected with a code in `rejections.json`. The
-refused proposals go back to the model once, each with its error and a `fix`
-(for an unfaithful numeral: cite every chunk whose numeral is used, and write
-the expression with the text's own numerals only, as `a - a * p` rather than
-`a * (1 - p)`); the corrections are checked the same way, and each rejection
+A proposal that cannot be run, a second of its type on one node, or the same
+step as another proposal on another target (the same expected value and exact
+value of the expression, or the same two sides of a maths step however they are
+written) is rejected with a code in `rejections.json`: checks that would pass or
+fail together are one observation, not two. The refused proposals go back to the
+model once, each with its error and a `fix` (for an unfaithful numeral: cite
+every chunk whose numeral is used, and write the expression with the text's own
+numerals only, as `a - a * p` rather than `a * (1 - p)`; for a citation naming a
+bibliography key, the id of its entry); the corrections are checked the same way, and each rejection
 names its round, `initial` or `repair`. Each check that runs becomes an
 **evidence node** `c-NNN` (in document order of its target, then run order) of
 its check type, with a statement from a fixed template

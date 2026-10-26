@@ -22,10 +22,11 @@ document, and the model proposes checks, each of a type the runner implements:
   and reports every check run that way.
 
 A proposal the runner cannot run, being malformed, of an unknown type, on a node the type does not
-target, with a numeral the cited chunks do not contain, or a second of its type on one node, is
-rejected, with the code and record, and sent back to the model once with the error and what to change
-in it; what it still gets wrong stays rejected. Two checks of one type on one node would fail or pass together,
-so they must not count as two observations.
+target, with a numeral the cited chunks do not contain, a second of its type on one node, or the same
+step as another check on another target, is rejected, with the code and record, and sent back to the
+model once with the error and what to change in it; what it still gets wrong stays rejected. Two
+checks of one type on one node, or of one step however it is written, would fail or pass together, so
+they must not count as two observations.
 
 Each check run becomes an evidence node ``c-NNN`` of its check type, numbered in document order of
 the targets and then in run order, joined to its target by the check edge ``target --observes-->
@@ -49,6 +50,7 @@ from itertools import count
 from string import Template
 from typing import Any
 
+import sympy
 from credencegraph.core import Graph, Node, SourceAnchor
 from credencegraph.core.relation import OBSERVES, Relation
 from credencegraph.ingest.chunks import EQUATION, REFERENCE
@@ -156,11 +158,12 @@ _ALLOWED = {
 
 
 class _ProposalError(Exception):
-    """A proposal is not run, with the code and message of a rejection."""
+    """A proposal is not run, with the code and message of a rejection, and what to change where only the refusal knows it."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, fix: str | None = None) -> None:
         super().__init__(message)
         self.code = code
+        self.fix = fix
 
 
 @dataclass(frozen=True)
@@ -285,7 +288,7 @@ def render(graph: Graph, rubric: Rubric, rejected: Sequence[Mapping[str, Any]] =
     repair = []
     for rejection in rejected:
         item = {key: rejection[key] for key in ("record", "code", "message")}
-        found = fix(rejection["code"], rejection["record"])
+        found = rejection.get("fix") or fix(rejection["code"], rejection["record"])
         if found:
             item["fix"] = found
         repair.append(item)
@@ -428,6 +431,11 @@ def _target(graph: Graph, rubric: Rubric, record: Any) -> tuple[Node, str]:
     return node, check_type
 
 
+def _entries(graph: Graph) -> list[Node]:
+    """The document's bibliography entries."""
+    return [node for node in graph if origin_of(node) == DOCUMENT and node.attributes.get("unit") == REFERENCE]
+
+
 @dataclass(frozen=True)
 class _Plan:
     """A proposal that passed every check before running."""
@@ -451,7 +459,10 @@ def _plan(graph: Graph, rubric: Rubric, record: Any) -> _Plan:
         _strings(record, "reference")
         reference = graph.nodes.get(record["reference"])
         if reference is None or origin_of(reference) != DOCUMENT or reference.attributes.get("unit") != REFERENCE:
-            raise _ProposalError(INVALID_RECORD, f"{record['reference']!r} is not a bibliography entry of the document")
+            named = record["reference"]
+            keyed = [node.id for node in _entries(graph) if node.attributes.get("key") == named]
+            hint = f'{named!r} is the key of {keyed[0]}: give "reference": "{keyed[0]}"' if keyed else None
+            raise _ProposalError(INVALID_RECORD, f"{named!r} is not a bibliography entry of the document", hint)
         parents = {target.id} | {
             relation.target
             for relation in graph.relations.values()
@@ -746,13 +757,55 @@ def _corrected(refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
     return {unlabelled(target) or target for target in named}
 
 
+def _step(check_type: str, fields: Mapping[str, Any]) -> tuple[Any, ...] | None:
+    """What a maths check decides, so that two encodings of one step count as one check.
+
+    ``recompute-numbers`` decides whether the exact value of its expression rounds to its expected
+    value, so two with the same value and expected value pass or fail together, however the expression
+    is written. ``rederive-maths``, and its numeric fallback, decides whether ``lhs`` equals ``rhs``, so
+    two whose sides are the same sympy expressions, in either order, do. ``None`` for a citation, whose
+    target and reference are its identity, and for fields that do not parse.
+    """
+    try:
+        if check_type == RECOMPUTE:
+            value = evaluate.arithmetic(fields["expression"]).value
+            return (RECOMPUTE, value, Fraction(Decimal(fields["expected"])))
+        if check_type in {REDERIVE, NUMERIC}:
+            names = evaluate.symbols(fields["symbols"])
+            sides = (evaluate.symbolic(fields["lhs"], names), evaluate.symbolic(fields["rhs"], names))
+            return (REDERIVE, frozenset(sympy.srepr(side) for side in sides))
+    except (EvaluationError, KeyError, TypeError, ValueError, ArithmeticError):
+        return None
+    return None
+
+
+def _proposed_type(check_type: Any) -> Any:
+    """The type a check was proposed as: the numeric fallback is a ``rederive-maths`` proposal."""
+    return REDERIVE if check_type == NUMERIC else check_type
+
+
+def _admitted(graph: Graph, plans: Sequence[_Plan]) -> list[tuple[str, str, tuple[Any, ...] | None]]:
+    """The checks a new proposal may not repeat, as target, proposed type and step: those in the graph and the plans."""
+    found = []
+    for node in graph:
+        check = node.attributes.get("check")
+        if isinstance(check, Mapping) and isinstance(check.get("inputs"), Mapping):
+            check_type = check.get("type")
+            found.append((check.get("target"), _proposed_type(check_type), _step(check_type, check["inputs"])))
+    found.extend((plan.target.id, plan.type, _step(plan.type, plan.record)) for plan in plans)
+    return found
+
+
 def _admit(
     graph: Graph, rubric: Rubric, proposals: Sequence[Any], plans: list[_Plan], *, only: Collection[str] | None = None
 ) -> list[dict[str, Any]]:
     """Check each proposal and add those that pass to ``plans``; return the refused ones as rejections.
 
-    A proposal is refused as ``_plan`` refuses it, when it repeats the target and type of a plan already
-    admitted, and, with ``only``, when its target is not one of those.
+    A proposal is refused as ``_plan`` refuses it; when it repeats the target and type of a check the
+    graph has or a plan already admitted; when it is the same step as one of those, on another target
+    (``_step``), since checks that pass or fail together are one piece of evidence; and, with ``only``,
+    when its target is not one of those. A rejection carries a ``fix`` where only the refusal knows what
+    to change.
     """
     rejections = []
     for record in proposals:
@@ -761,14 +814,24 @@ def _admit(
             if only is not None and not (isinstance(target, str) and target in only):
                 raise _ProposalError(NOT_REJECTED, f"{target!r} had no refused proposal to correct")
             plan = _plan(graph, rubric, record)
-            if any((plan.target.id, plan.type) == (other.target.id, other.type) for other in plans):
+            admitted = _admitted(graph, plans)
+            if any((plan.target.id, plan.type) == (other, other_type) for other, other_type, _ in admitted):
                 msg = f"{plan.target.id!r} has an earlier {plan.type} proposal: one check of a type per node"
                 raise _ProposalError(DUPLICATE_RECORD, msg)
+            step = _step(plan.type, plan.record)
+            earlier = [other for other, _, other_step in admitted if step is not None and other_step == step]
+            if earlier:
+                msg = f"{earlier[0]!r} has a {plan.type} check of the same step: one step is one check"
+                hint = f"propose this check once, on the step's own target; {earlier[0]!r} already has it"
+                raise _ProposalError(DUPLICATE_RECORD, msg, hint)
             plans.append(plan)
         except _ProposalError as refused:
             node = record.get("target") if isinstance(record, Mapping) else None
             node = node if isinstance(node, str) else None
-            rejections.append({"node": node, "code": refused.code, "message": str(refused), "record": record})
+            rejection = {"node": node, "code": refused.code, "message": str(refused), "record": record}
+            if refused.fix is not None:
+                rejection["fix"] = refused.fix
+            rejections.append(rejection)
     return rejections
 
 
