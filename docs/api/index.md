@@ -26,6 +26,8 @@ This section documents the public API of credencegraph-extract.
 - **[Graph tools](tools)** – Classifying chunks, adding premises, running checks
   and finishing a run, through the assembler and the check runners.
 - **[Fetch](fetch)** – Fetching a URL an agent names from public addresses only.
+- **[MCP server](mcp_server)** – The agent tools over MCP on stdio, for an agent
+  harness to call.
 - **[Citation sources](citation)** – Reading a citation's source, and deciding
   whether it is tied to the reference.
 - **[Verify](verify)** – Running the deterministic checks of a run again, and

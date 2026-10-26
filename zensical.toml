@@ -61,6 +61,7 @@ nav = [
     { "Graph tools" = "api/tools.md" },
     { "Fetch" = "api/fetch.md" },
     { "Citation sources" = "api/citation.md" },
+    { "MCP server" = "api/mcp_server.md" },
   ] },
   { "Contributing" = "contributing.md" },
   { "Security" = "security.md" },

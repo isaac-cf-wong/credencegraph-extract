@@ -925,6 +925,8 @@ def start_run(  # noqa: PLR0913 - each argument is a separate choice of the call
     if run.exists() and any(run.iterdir()):
         raise RunError("run-exists", f"{run.name!r} exists and is not empty")
     read = _read_start(source, rubric, cited)
+    if document is not None and not isinstance(document, str):
+        raise RunError("invalid-argument", "document must be an id for the document, a string")
     if document is not None and (
         not document.strip() or any(sep in document for sep in ("/", "\\")) or PureWindowsPath(document).drive
     ):
