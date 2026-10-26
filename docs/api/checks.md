@@ -1,7 +1,7 @@
 ---
-title: Check pass
+title: Checks
 description:
-    The check pass, covering proposals, the four check types, check nodes and
+    What a check proposal must be, the four check types, check nodes and
     verdicts.
 ---
 

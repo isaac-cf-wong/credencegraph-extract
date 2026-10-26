@@ -8,27 +8,22 @@ This section documents the public API of credencegraph-extract.
 
 ## Main Sections
 
-- **[Provider](provider)** – The one module that calls a model provider.
-- **[Runs](run)** – Extraction runs, the run directory and replay.
-- **[Classify pass](classify)** – Typing, splitting and linking the chunks of a
-  document.
-- **[Premise pass](premises)** – Linking the premises a conclusion's text states
-  and adding those it leaves unsaid.
-- **[Assembler](assemble)** – Applying classify and premise records through the
-  core's edits.
-- **[Check pass](checks)** – Proposing checks of the assessed nodes, running
-  them, and recording each as an observed evidence node.
-- **[Evaluators](evaluate)** – Exact arithmetic, symbolic identity and numeric
-  sampling, over whitelisted expressions.
-- **[Cited works](cited)** – Reading the texts of cited works.
-- **[Agent-tool runs](session)** – The run directory an agent's tool calls
-  build: the call log, the lock, crash recovery and replay.
-- **[Graph tools](tools)** – Classifying chunks, adding premises, running checks
-  and finishing a run, through the assembler and the check runners.
-- **[Fetch](fetch)** – Fetching a URL an agent names from public addresses only.
 - **[MCP server](mcp_server)** – The agent tools over MCP on stdio, for an agent
   harness to call.
+- **[Graph tools](tools)** – Classifying chunks, adding premises, running checks
+  and finishing a run, through the assembler and the check runners.
+- **[Agent-tool runs](session)** – The run directory an agent's tool calls
+  build: the call log, the lock, crash recovery and replay.
+- **[Assembler](assemble)** – Applying classify and premise records through the
+  core's edits.
+- **[Checks](checks)** – What a check proposal must be, the four check types,
+  check nodes and verdicts.
+- **[Evaluators](evaluate)** – Exact arithmetic, symbolic identity and numeric
+  sampling, over whitelisted expressions.
 - **[Citation sources](citation)** – Reading a citation's source, and deciding
   whether it is tied to the reference.
+- **[Fetch](fetch)** – Fetching a URL an agent names from public addresses only.
 - **[Verify](verify)** – Running the deterministic checks of a run again, and
   reporting rubric versions reused with different values.
+- **[Earlier runs](run)** – Reading the runs of format 1 that earlier versions
+  made by calling a model, for `verify`.
