@@ -55,7 +55,7 @@ kelvin over a month exceeds the accuracy the array is required to keep.") and
 **`run_checks`** and **`judge_citation`** ran six checks. Two proposals for
 `s-4` were refused first and are kept in `rejections.json`: `5%` is not an
 expression, and `5 / 100` uses a 100 the text does not write. The third,
-`1036800 * 0.05`, was admitted.
+`1036800 - 1036800 * 0.05`, was admitted.
 
 | Check                     | Target | Inputs                                                    | Result              |
 | ------------------------- | ------ | --------------------------------------------------------- | ------------------- |

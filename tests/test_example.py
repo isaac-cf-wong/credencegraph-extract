@@ -8,7 +8,6 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 import pytest
 from credencegraph.core import Graph, loads
@@ -91,20 +90,31 @@ def test_diagnose_observed_names_the_failed_check_as_the_crux_of_the_planted_err
     assert cruxes[0]["id"] == "crux:sensitivity:s-4-observes-c-004"
 
 
-def _strings(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        return [text for item in value.values() for text in _strings(item)]
-    if isinstance(value, list):
-        return [text for item in value for text in _strings(item)]
-    return []
+# An absolute path (POSIX, home-relative or Windows), a URL, or a user@host address.
+ADDRESS = re.compile(r"https?://|(?<![\w.~-])(?:~|[A-Za-z]:)?[\\/](?:[\w.-]+[\\/])+[\w.-]*|[\w.-]+@[\w-]+\.[\w.-]+")
+
+
+@pytest.mark.parametrize(
+    ("text", "found"),
+    [
+        ('"file": "/home/someone/paper.tex"', True),
+        ('"cited": "~/papers/cited"', True),
+        ('"file": "C:\\Users\\someone\\paper.tex"', True),
+        # The same path as JSON writes it, each backslash escaped.
+        ('"file": "C:\\\\Users\\\\someone\\\\paper.tex"', True),
+        ("read from https://example.org/paper", True),
+        ("by someone@machine.example", True),
+        ('"path": "checks/c-001/", "file": "lee2019.txt"', False),
+        ('"digest": "sha256:99b53d117dd30e01"', False),
+    ],
+)
+def test_the_address_pattern_finds_paths_urls_and_hosts(text: str, found: bool) -> None:
+    assert bool(ADDRESS.search(text)) is found
 
 
 def test_the_example_names_no_path_or_address_of_the_machine_it_ran_on() -> None:
-    documents = [json.loads(path.read_text(encoding="utf-8")) for path in RUN.rglob("*.json")]
-    documents += [json.loads(line) for line in (RUN / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
-    texts = [text for document in documents for text in _strings(document)]
-    assert texts
-    assert not [text for text in texts if re.match(r"(/|~|[A-Za-z]:[\\/]|\\\\)", text)]
-    assert not [text for text in texts if re.search(r"https?://", text)]
+    files = {path: path.read_text(encoding="utf-8") for path in RUN.rglob("*") if path.is_file()}
+    assert {path.suffix for path in files} == {".json", ".jsonl", ".toml", ".txt"}
+    assert {
+        str(path.relative_to(RUN)): ADDRESS.findall(text) for path, text in files.items() if ADDRESS.search(text)
+    } == {}
