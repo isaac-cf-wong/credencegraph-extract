@@ -71,32 +71,35 @@ def taken(name: str) -> list[str]:
     return [parameter for parameter in inspect.signature(TOOLS[name]).parameters if parameter != "run"]
 
 
-def refuse_invented(name: str, arguments: Mapping[str, Any]) -> None:
-    """Refuse a call that sends an argument the tool does not take, naming the ones it does.
+def refuse_invented(name: Any, arguments: Mapping[str, Any]) -> None:
+    """Refuse a call to a tool there is not, or one that sends an argument the tool does not take.
 
-    The protocol's own validation would drop such an argument silently, so a model's typo would go
-    unnoticed; the server and the ``tool`` command both refuse it instead.
+    The protocol would answer an unknown tool with an error of its own and drop an unknown argument
+    silently, so a model's typo would go unnoticed; the server and the ``tool`` command both refuse
+    them instead, naming the tools there are or the arguments the tool takes.
 
     Args:
         name: The tool.
         arguments: The call's arguments.
 
     Raises:
-        RunError: If an argument is one the tool does not take.
+        RunError: If there is no such tool, or an argument is one the tool does not take.
     """
+    if not isinstance(name, str) or name not in TOOLS:
+        raise RunError("unknown-tool", f"there is no tool {name!r}; the tools are {list(TOOLS)}")
     invented = sorted(set(arguments) - {"run", *taken(name)})
     if invented:
         raise RunError("invalid-argument", f"{name} takes no {invented}; it takes {['run', *taken(name)]}")
 
 
 async def _refuse_invented(ctx: Any, call_next: Any) -> Any:
-    """Answer a tool call with an argument the tool does not take as a JSON error, before the protocol drops it."""
+    """Answer a call to a tool there is not, or with an argument the tool does not take, as a JSON error."""
     params = ctx.params if ctx.method == "tools/call" else None
     name = params.get("name") if isinstance(params, Mapping) else None
     arguments = params.get("arguments") if isinstance(params, Mapping) else None
-    if name in TOOLS and isinstance(arguments, Mapping):
+    if isinstance(params, Mapping):
         try:
-            refuse_invented(name, arguments)
+            refuse_invented(name, arguments if isinstance(arguments, Mapping) else {})
         except RunError as error:
             answer = _error(error.code, str(error))
             text = types.TextContent(type="text", text=json.dumps(answer, indent=2))

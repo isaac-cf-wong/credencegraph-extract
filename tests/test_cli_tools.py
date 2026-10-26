@@ -16,7 +16,7 @@ from mcp.client.client import Client
 
 from credencegraph_extract import session
 from credencegraph_extract.cli import main
-from credencegraph_extract.mcp_server import server
+from credencegraph_extract.mcp_server import refuse_invented, server
 from credencegraph_extract.run import RunError
 
 MODEL = "test-model-1"
@@ -208,3 +208,27 @@ def test_unlock_removes_a_leftover_record_while_it_holds_the_lock(
     monkeypatch.setattr(session, "_unlock", unlock)
     assert session.lock_holder(run) is None
     assert seen == [False]
+
+
+async def _call_over_mcp(name: str, arguments: dict[str, Any]) -> Any:
+    async with Client(server) as client:
+        result = await client.call_tool(name, arguments)
+    assert not result.is_error
+    return result.structured_content
+
+
+def test_a_tool_there_is_not_is_refused_alike_over_mcp_and_the_cli(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    over_mcp = anyio.run(_call_over_mcp, "no_such_tool", {})
+    assert over_mcp["error"]["code"] == "unknown-tool"
+    line = refused(capsys, ["tool", "no_such_tool", "--run", str(tmp_path)])
+    assert line == f"error [unknown-tool]: {over_mcp['error']['message']}"
+    assert "the tools are ['start_run', 'get_state'" in line
+
+
+@pytest.mark.parametrize("name", [["get_state"], {"name": "get_state"}, None, 7])
+def test_a_tool_name_that_is_not_a_string_is_refused(name: object) -> None:
+    with pytest.raises(RunError) as raised:
+        refuse_invented(name, {})
+    assert raised.value.code == "unknown-tool"

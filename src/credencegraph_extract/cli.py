@@ -97,7 +97,7 @@ def _parser() -> argparse.ArgumentParser:
             "stdout; a call the run refuses is one 'error [<code>]: <message>' line on stderr, with status 2."
         ),
     )
-    tool.add_argument("name", choices=TOOL_NAMES, help="The tool.")
+    tool.add_argument("name", metavar="name", help=f"The tool: one of {', '.join(TOOL_NAMES)}.")
     tool.add_argument("--run", required=True, help="The run directory (for start_run, the one to create).")
     tool.add_argument(
         "--args",
@@ -206,6 +206,7 @@ def _tool(args: argparse.Namespace) -> int:
     """Make one agent-tool call through the same binding as the MCP server, and print its result."""
     from credencegraph_extract.mcp_server import TOOLS, refuse_invented  # noqa: PLC0415 - only this command needs the SDK
 
+    refuse_invented(args.name, {})
     text = sys.stdin.read() if args.args == "-" else args.args
     try:
         arguments = json.loads(text)
