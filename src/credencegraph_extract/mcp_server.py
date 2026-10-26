@@ -269,6 +269,18 @@ def finish_run(run: Run = None, model: Model = None, agent: Agent = None, note: 
     return _answer(lambda: tools.finish_run(_run(run), model=model, agent=agent, note=note))
 
 
+# The tools by name, as the MCP server and the ``tool`` command call them.
+TOOLS: dict[str, Callable[..., dict[str, Any]]] = {
+    "start_run": start_run,
+    "get_state": get_state,
+    "classify": classify,
+    "add_premises": add_premises,
+    "run_checks": run_checks,
+    "judge_citation": judge_citation,
+    "finish_run": finish_run,
+}
+
+
 def serve() -> None:
     """Serve the tools over stdio until the harness closes the connection."""
     server.run("stdio")

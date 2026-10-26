@@ -7,13 +7,16 @@ needs the same directory, and re-runs every check that a run allowed, uncalibrat
 ``verify`` runs each run's deterministic checks again from their recorded inputs, reports every
 check whose record the re-run does not reproduce, and warns when the runs record one rubric name and
 version with different file digests. ``mcp`` serves the agent tools over MCP on stdio, for an agent
-harness to start (``mcp_server``). The exit status is 0 on success, 1 if a replayed graph or a
+harness to start (``mcp_server``). ``tool`` makes one of those calls from the command line, for a
+harness without MCP, and prints its JSON result; ``unlock`` reports whether a tool call holds a run's
+lock, and which process. The exit status is 0 on success, 1 if a replayed graph or a
 verified check differs from the recorded one, and 2 on any error, reported as one line on stderr.
 """
 
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import sys
 from collections.abc import Mapping, Sequence
@@ -35,6 +38,10 @@ DEFAULT_MAX_TOKENS = 16000
 def _no_model(prompt: str, schema: Mapping[str, Any]) -> dict[str, Any]:
     """Refuse a model call when no ``--model`` was given."""
     raise RunError("missing-model", "a pass needs the model: pass --model with the exact dated model id")
+
+
+# The agent tools, as ``tool`` takes them; the same as the MCP server's.
+TOOL_NAMES = ("start_run", "get_state", "classify", "add_premises", "run_checks", "judge_citation", "finish_run")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -82,6 +89,28 @@ def _parser() -> argparse.ArgumentParser:
     check.add_argument("run_dirs", type=Path, nargs="+", metavar="run_dir", help="The run directories.")
 
     commands.add_parser("mcp", help="Serve the agent tools over MCP on stdio, for an agent harness to start.")
+
+    tool = commands.add_parser(
+        "tool",
+        help="Make one agent-tool call on a run, as the MCP server would, and print its JSON result.",
+        description=(
+            "Make one agent-tool call on a run, for a harness without MCP. The result is printed as JSON on "
+            "stdout; a call the run refuses is one 'error [<code>]: <message>' line on stderr, with status 2."
+        ),
+    )
+    tool.add_argument("name", choices=TOOL_NAMES, help="The tool.")
+    tool.add_argument("--run", required=True, help="The run directory (for start_run, the one to create).")
+    tool.add_argument(
+        "--args",
+        default="{}",
+        help="The tool's other arguments as one JSON object, or '-' to read it from stdin.",
+    )
+
+    unlock = commands.add_parser(
+        "unlock",
+        help="Report whether a tool call holds a run's lock, and which process; a free lock's leftover record is removed.",
+    )
+    unlock.add_argument("run_dir", type=Path, help="The run directory.")
     return parser
 
 
@@ -174,6 +203,53 @@ def _run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _tool(args: argparse.Namespace) -> int:
+    """Make one agent-tool call through the same binding as the MCP server, and print its result."""
+    from credencegraph_extract.mcp_server import TOOLS  # noqa: PLC0415 - only the tool commands need the MCP SDK
+
+    text = sys.stdin.read() if args.args == "-" else args.args
+    try:
+        arguments = json.loads(text)
+    except ValueError as error:
+        raise RunError("invalid-argument", f"--args is not JSON: {error}") from None
+    if not isinstance(arguments, dict):
+        raise RunError("invalid-argument", "--args must be a JSON object of the tool's arguments")
+    if "run" in arguments:
+        raise RunError("invalid-argument", "give the run directory with --run, not in --args")
+    _refuse_unknown(args.name, arguments)
+    result = TOOLS[args.name](run=args.run, **arguments)
+    if isinstance(result, dict) and set(result) == {"error"}:
+        raise RunError(result["error"]["code"], result["error"]["message"])
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _refuse_unknown(name: str, arguments: Mapping[str, Any]) -> None:
+    """Refuse an argument the tool does not take, naming the ones it does."""
+    from credencegraph_extract.mcp_server import TOOLS  # noqa: PLC0415
+
+    taken = [parameter for parameter in inspect.signature(TOOLS[name]).parameters if parameter != "run"]
+    unknown = sorted(set(arguments) - set(taken))
+    if unknown:
+        raise RunError("invalid-argument", f"{name} takes no {unknown}; it takes {taken}")
+
+
+def _unlock(args: argparse.Namespace) -> int:
+    """Report who holds a run's lock."""
+    holder = session.lock_holder(args.run_dir)
+    if holder is None:
+        print(f"{args.run_dir}: no tool call holds the lock")
+        return 0
+    who = (
+        f"process {holder['pid']}, since {holder.get('since')}" if "pid" in holder else "a process that wrote no record"
+    )
+    print(
+        f"{args.run_dir}: the lock is held by {who}; the operating system releases it when that process "
+        "exits, so stop it if it is hung"
+    )
+    return 1
+
+
 def _mcp(args: argparse.Namespace) -> int:
     """Serve the agent tools over MCP until the harness closes stdin."""
     from credencegraph_extract.mcp_server import serve  # noqa: PLC0415 - only this command needs the MCP SDK
@@ -199,7 +275,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     args = _parser().parse_args(argv)
     try:
-        command = {"run": _run, "replay": _replay, "verify": _verify, "mcp": _mcp}[args.command]
+        commands = {"run": _run, "replay": _replay, "verify": _verify, "mcp": _mcp, "tool": _tool, "unlock": _unlock}
+        command = commands[args.command]
         return command(args)
     except RunError as error:
         code, message = error.code, str(error)

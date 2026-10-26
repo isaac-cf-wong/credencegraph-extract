@@ -365,6 +365,20 @@ of the model's, such as an argument of the wrong type or a run that does not
 exist, comes back as a JSON result `{"error": {"code", "message"}}`, never as a
 protocol error.
 
+A harness without MCP makes the same calls from the command line:
+
+```shell
+credencegraph-extract tool classify --run runs/paper \
+  --args '{"records": [{"node": "s-1", "type": "method"}], "model": "<model id>"}'
+```
+
+prints the tool's JSON result, and a call the run refuses is one
+`error [<code>]: <message>` line on stderr, with status 2 (`--args -` reads the
+arguments from stdin). `credencegraph-extract unlock runs/paper` reports whether
+a tool call holds the run's lock, and which process. The lock is the operating
+system's, released when its process exits, so a crashed agent never leaves one
+behind; a hung one holds it until it is stopped.
+
 ## Verify
 
 ```shell
