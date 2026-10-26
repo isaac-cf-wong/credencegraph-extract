@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "credencegraph-extract"
 authors = [{ name = "Isaac C. F. Wong" }]
-description = "An automated analyst for credencegraph: provider calls recorded in run directories, replayed byte-identically"
+description = "Tools an agent uses to build a credencegraph graph of a paper: every call recorded, replayable and checkable"
 readme = "README.md"
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -18,12 +18,7 @@ classifiers = [
 ]
 requires-python = ">=3.13"
 dynamic = ["version"]
-dependencies = [
-  "anthropic>=2.3.0",
-  "credencegraph[ingest]>=0.4,<0.5",
-  "mcp>=2.3",
-  "sympy>=1.14",
-]
+dependencies = ["credencegraph[ingest]>=0.4,<0.5", "mcp>=2.3", "sympy>=1.14"]
 
 [dependency-groups]
 dev = [
@@ -74,7 +69,7 @@ fail_under = 0
 
 [tool.pytest.ini_options]
 addopts = "--cov-report xml:coverage.xml --cov src --cov-append -m 'not integration' --cov-report=term-missing"
-# `tests` is on the path for the test-only pass and offline client in tests/notes_pass.py.
+# `tests` is on the path for the shared test fixtures and helpers (tests/checks_fixture.py, tests/session_ops.py).
 pythonpath = ["src", "scripts", "tests"]
 testpaths = "tests"
 junit_family = "xunit2"
@@ -137,7 +132,7 @@ pytest_add_cli_args = [
   # `src` is therefore left off and `mutants/src` stays the only source of the package. `scripts`
   # is not mutated, so it can stay on the path for tests that import from it (e.g.
   # tests/test_release_version.py); pytest resolves it against the `mutants/` rootdir. `tests` stays
-  # on the path too, for tests/notes_pass.py.
+  # on the path too, for the shared test fixtures and helpers.
   "--override-ini=pythonpath=scripts tests",
   "-m",
   "not integration and not gpu and not spark and not slow",

@@ -1,12 +1,11 @@
-"""The check pass: the model proposes checks of the assessed nodes, and the runner runs them.
+"""The checks an agent runs on the assessed nodes: what they accept, how they run, and what they record.
 
-The pass runs last. Its targets are the document and analyst nodes of a type with ``assess = true``.
-For those a rubric check type may be run on, it sends one prompt listing them with the chunks of the
-document, and the model proposes checks, each of a type the runner implements:
+The targets are the document and analyst nodes of a type with ``assess = true``. An agent proposes
+checks of the types the runner implements (``tools.run_checks`` and ``tools.judge_citation``):
 
 - ``recompute-numbers``: an arithmetic expression over numerals of the cited chunks, and the
   reported result. Every numeral, the result included, must be one the cited chunks' text contains,
-  compared exactly as the decimal each writes, so the model cannot supply a number the document does
+  compared exactly as the decimal each writes, so the agent cannot supply a number the document does
   not, not even one a float cannot tell apart from a number it does. The expression is evaluated exactly;
   it passes when it falls within the rounding the reported result's own digits imply.
 - ``rederive-maths``: a step between equation chunks encoded as two sympy expressions over declared
@@ -15,41 +14,36 @@ document, and the model proposes checks, each of a type the runner implements:
 - ``rederive-maths-numeric``: run, as a check of its own, only when ``rederive-maths`` errs and the
   rubric declares it: the same encoding compared at 32 points drawn in the symbols' domains, from a
   generator seeded by the encoding. The seed and the points are recorded with the check.
-- ``citation-support``: a cited work's text is read, the model quotes the passage of it the citing
-  node rests on and judges whether it supports the node. The passage must be found in the work's
-  normalised text, or the check is an ``error``. A rubric check type that lists ``models`` was fitted
-  with those models; the pass refuses to run it with another unless ``allow_uncalibrated`` is set,
-  and reports every check run that way.
+- ``citation-support``: the tool reads the cited source, finds the passage the agent quotes, and
+  records the agent's judgement of whether it supports the node (``judged``); see ``citation``.
 
 A proposal the runner cannot run, being malformed, of an unknown type, on a node the type does not
 target, with a numeral the cited chunks do not contain, a second of its type on one node, or the same
-step as another check on another target, is rejected, with the code and record, and sent back to the
-model once with the error and what to change in it; what it still gets wrong stays rejected. Two
-checks of one type on one node, or of one step however it is written, would fail or pass together, so
-they must not count as two observations.
+step as another check on another target, is refused with a code and, where it can say, what to change
+(``fix``). Two checks of one type on one node, or of one step however it is written, would fail or
+pass together, so they must not count as two observations.
 
-Each check run becomes an evidence node ``c-NNN`` of its check type, numbered in document order of
-the targets and then in run order, joined to its target by the check edge ``target --observes-->
-c-NNN`` with the check type's ``sensitivity`` and ``false_pass``. Its statement comes from a fixed
-template, never from the model. ``attributes.check`` is the check record and ``attributes.observed``
-is ``true`` for a pass and ``false`` for a fail; an errored check has no ``observed``, so it is
-recorded but changes no credence. The run writes each check's inputs, the tool's output and a log
-into ``checks/c-NNN/``. The verdict on each target is derived from its checks, never asked of the
-model: ``fails`` if any failed, else ``holds`` if any passed, else ``undetermined`` if any ran, else
-``not_assessed``, because no check type the runner implements may run on the node, or none was run.
+Each check run becomes an evidence node ``c-NNN`` of its check type, numbered in the order run,
+joined to its target by the check edge ``target --observes--> c-NNN`` with the check type's
+``sensitivity`` and ``false_pass``. Its statement comes from a fixed template, never from the agent.
+``attributes.check`` is the check record and ``attributes.observed`` is ``true`` for a pass and
+``false`` for a fail; an errored check has no ``observed``, so it is recorded but changes no credence.
+Each check's inputs, the tool's output and a log are written into ``checks/c-NNN/``. The verdict on
+each target is derived from its checks, never asked of the agent (``assess``): ``fails`` if any
+failed, else ``holds`` if any passed, else ``undetermined`` if any ran, else ``not_assessed``,
+because no check type the runner implements may run on the node, or none was run.
 """
 
 from __future__ import annotations
 
 import json
 import math
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from fractions import Fraction
 from functools import lru_cache
 from itertools import count
-from string import Template
 from typing import Any
 
 import sympy
@@ -62,18 +56,15 @@ from credencegraph.rubric.validate import CITES, FAILS, HOLDS, NOT_ASSESSED, PAR
 
 from credencegraph_extract import evaluate
 from credencegraph_extract.assemble import unlabelled
-from credencegraph_extract.cited import Cited, CitedError, no_sources
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.evaluate import ERROR, FAILED, PASSED, EvaluationError
-from credencegraph_extract.run import CHECKS, Ask, Outcome, RunError
-
-NAME = "checks"
+from credencegraph_extract.run import CHECKS
 
 RECOMPUTE = "recompute-numbers"
 REDERIVE = "rederive-maths"
 NUMERIC = "rederive-maths-numeric"
 CITATION = "citation-support"
-# The check types the model may propose; the numeric check is run only as the fallback of the symbolic one.
+# The check types an agent may propose; the numeric check is run only as the fallback of the symbolic one.
 PROPOSED = (RECOMPUTE, REDERIVE, CITATION)
 IMPLEMENTED = (*PROPOSED, NUMERIC)
 # The check types decided by code alone, which ``rerun`` runs again; a citation check needs a model.
@@ -83,75 +74,18 @@ DETERMINISTIC = (RECOMPUTE, REDERIVE, NUMERIC)
 NO_CHECK = "no v1 check applies"
 NOT_SELECTED = "not selected"
 
-# Rejection codes of the check pass.
+# Rejection codes of a refused proposal.
 INVALID_RECORD = "invalid-record"
 DUPLICATE_RECORD = "duplicate-record"
 UNFAITHFUL = "unfaithful-numeral"
 NOT_A_TARGET = "not-a-target"
 UNKNOWN_NODE = "unknown-node"
-NOT_REJECTED = "not-rejected"
-
-# The rounds of the plan: the first answer, and the one correcting its refused proposals.
-INITIAL = "initial"
-REPAIR = "repair"
 
 # The files of a check's directory.
 INPUTS = "inputs.json"
 OUTPUT = "output.json"
 LOG = "log.txt"
 
-PLAN_TEMPLATE = """\
-You are planning checks of the statements of a document. Each target below is a statement whose
-truth is to be assessed, with the check types that may be run on it. Propose the checks that can be
-run on each target from the document itself, at most one of each type per target, and none where
-no check fits. Do not judge whether any statement is true: the checks decide.
-
-Check types:
-- recompute-numbers: the target reports a number that follows from other numbers the document
-  reports. Give "nodes", the ids of the chunks whose numerals you use (the target's own included),
-  "expression", an arithmetic expression of those numerals with + - * / ** and parentheses, and
-  "expected", the reported result. Write every number exactly as a plain decimal numeral that occurs
-  in the text of one of "nodes" (a percentage such as 12.5% may be written 0.125); write no other
-  number, not even 100 or 2.
-- rederive-maths: the target rests on a step of mathematics from one equation to another. Give
-  "nodes", the ids of the equation chunks the step goes between, "lhs" and "rhs", two expressions the
-  step claims are equal for all values of the symbols, "symbols", each symbol with its sympy
-  assumptions (real, positive, negative, nonnegative, nonpositive, nonzero, integer) and a finite
-  domain [low, high] to sample it from, and "assumption", the step's assumptions in words. Use only
-  the declared symbols, numerals, + - * / ** and the functions sqrt, exp, log, sin, cos, tan, asin,
-  acos, atan, sinh, cosh, tanh, Abs and the constants pi, E and I.
-- citation-support: the target states what a cited work found. Give "reference", the id of the
-  bibliography entry it cites.
-
-Targets, as id (type): text, then the check types that may be run on it:
-$targets
-
-Chunks of the document, in document order, as id (type): text
-$chunks
-
-Proposals from your previous answer that were refused, each with the error it got and what to change
-("fix"). If this list is not empty, return corrected proposals for these targets only, and nothing
-else:
-$rejected
-"""
-
-JUDGE_TEMPLATE = """\
-A statement of a document cites the work below. Decide whether the work supports the statement.
-
-First copy, word for word, the one passage of the work that the decision rests on: "passage" must be
-an exact substring of the work's text. Then set "supports" to true if the passage supports the
-statement as written and false if it does not.
-
-Statement:
-$statement
-
-Text of the cited work:
-$source
-"""
-
-TEMPLATE = PLAN_TEMPLATE + "\n" + JUDGE_TEMPLATE
-
-_STRING = {"type": "string"}
 _ALLOWED = {
     RECOMPUTE: frozenset({"target", "type", "nodes", "expression", "expected"}),
     REDERIVE: frozenset({"target", "type", "nodes", "lhs", "rhs", "symbols", "assumption"}),
@@ -182,7 +116,7 @@ class Result:
         output: The tool's output, written to the check's directory.
         sources: Anchors of the external works checked against.
         libraries: The libraries the method used, named as in the run's versions.
-        model: The provider, model and request id of the model that took part, or ``None``.
+        model: The model that took part, as the call reported it, or ``None``.
     """
 
     type: str
@@ -198,7 +132,7 @@ class Result:
 
 
 def targets(graph: Graph, rubric: Rubric) -> list[str]:
-    """Return the nodes the pass assesses: document and analyst nodes of a type with ``assess = true``.
+    """Return the nodes the checks assess: document and analyst nodes of a type with ``assess = true``.
 
     Args:
         graph: The graph.
@@ -229,15 +163,14 @@ def applicable(rubric: Rubric, kind: str) -> list[str]:
 
 # What to change in a refused proposal, by rejection code, where the code alone says it.
 _FIXES = {
-    NOT_A_TARGET: "propose a check only on a target listed under Targets, of a check type listed for it",
-    UNKNOWN_NODE: "use only chunk ids listed under Chunks",
+    NOT_A_TARGET: "propose a check only on a node of a type the rubric checks, of a check type that targets it",
+    UNKNOWN_NODE: "use only chunk ids as start_run listed them",
     DUPLICATE_RECORD: "propose at most one check of each type on a target",
-    NOT_REJECTED: "while correcting, send proposals only for the targets listed below",
 }
 
 
 def _label_fix(code: str, record: Any) -> str | None:
-    """What to change in a proposal that wrote an id with the label its prompt lists it with, as ``s-2 (result)``."""
+    """What to change in a proposal that wrote an id with the label a listing shows it with, as ``s-2 (result)``."""
     if not isinstance(record, Mapping):
         return None
     target, nodes = record.get("target"), record.get("nodes")
@@ -273,118 +206,6 @@ def fix(code: str, record: Any) -> str | None:
             "a * (1 - p), where a and p are numerals the text writes"
         )
     return _FIXES.get(code)
-
-
-def render(graph: Graph, rubric: Rubric, rejected: Sequence[Mapping[str, Any]] = ()) -> str:
-    """Render the plan prompt.
-
-    Args:
-        graph: The graph.
-        rubric: The rubric.
-        rejected: The refused proposals to correct; none for the first call. Each is sent with its
-            code, error and, where ``fix`` gives one, what to change.
-
-    Returns:
-        The prompt.
-    """
-    repair = []
-    for rejection in rejected:
-        item = {key: rejection[key] for key in ("record", "code", "message")}
-        found = rejection.get("fix") or fix(rejection["code"], rejection["record"])
-        if found:
-            item["fix"] = found
-        repair.append(item)
-    lines = []
-    for node_id in targets(graph, rubric):
-        node = graph.nodes[node_id]
-        if applicable(rubric, node.kind):
-            lines.append(f"{node_id} ({node.kind}): {node_text(graph, node)}")
-            lines.append(f"  checks: {', '.join(applicable(rubric, node.kind))}")
-    chunks = []
-    for node in graph:
-        if origin_of(node) != DOCUMENT or not node.statement:
-            continue
-        label = node.attributes.get("label")
-        key = node.attributes.get("key")
-        extra = f" [label {label}]" if label else f" [key {key}]" if key else ""
-        chunks.append(f"{node.id} ({node.kind}){extra}: {node.statement}")
-    return Template(PLAN_TEMPLATE).substitute(
-        targets="\n".join(lines), chunks="\n".join(chunks), rejected=json.dumps(repair, indent=2, ensure_ascii=False)
-    )
-
-
-def output_schema(rubric: Rubric) -> dict[str, Any]:
-    """Return the output schema of the plan: one branch per proposed check type the rubric declares.
-
-    Args:
-        rubric: The rubric.
-
-    Returns:
-        The JSON Schema. No proposal has a field for a credence or a result.
-    """
-    nodes = {"type": "array", "items": dict(_STRING)}
-    symbol = {
-        "type": "object",
-        "properties": {
-            "name": dict(_STRING),
-            "assumptions": {"type": "array", "items": {"type": "string", "enum": list(evaluate.ASSUMPTIONS)}},
-            "domain": {"type": "array", "items": {"type": "number"}},
-        },
-        "required": ["name", "assumptions", "domain"],
-        "additionalProperties": False,
-    }
-    fields: dict[str, dict[str, Any]] = {
-        RECOMPUTE: {"nodes": nodes, "expression": dict(_STRING), "expected": dict(_STRING)},
-        REDERIVE: {
-            "nodes": nodes,
-            "lhs": dict(_STRING),
-            "rhs": dict(_STRING),
-            "symbols": {"type": "array", "items": symbol},
-            "assumption": dict(_STRING),
-        },
-        CITATION: {"reference": dict(_STRING)},
-    }
-    branches = [
-        {
-            "type": "object",
-            "properties": {"target": dict(_STRING), "type": {"type": "string", "enum": [name]}, **fields[name]},
-            "required": ["target", "type", *fields[name]],
-            "additionalProperties": False,
-        }
-        for name in PROPOSED
-        if name in rubric.checks
-    ]
-    return {
-        "type": "object",
-        "properties": {"checks": {"type": "array", "items": {"anyOf": branches}}},
-        "required": ["checks"],
-        "additionalProperties": False,
-    }
-
-
-def judge_schema() -> dict[str, Any]:
-    """Return the output schema of a citation judgement.
-
-    Returns:
-        The JSON Schema: the quoted passage and whether it supports the statement.
-    """
-    return {
-        "type": "object",
-        "properties": {"passage": dict(_STRING), "supports": {"type": "boolean"}},
-        "required": ["passage", "supports"],
-        "additionalProperties": False,
-    }
-
-
-def _proposals(output: Any) -> list[Any]:
-    """Return the proposals of the model's answer.
-
-    Raises:
-        RunError: If the answer is not an object with a list of checks.
-    """
-    if not isinstance(output, dict) or not isinstance(output.get("checks"), list):
-        raise RunError("invalid-record", "the check plan is not an object with a list of checks")
-    return output["checks"]
 
 
 def _string_list(record: Mapping[str, Any], key: str) -> list[str]:
@@ -630,42 +451,6 @@ def _maths(graph: Graph, rubric: Rubric, plan: _Plan) -> list[Result]:
     return [symbolic]
 
 
-def _citation(graph: Graph, plan: _Plan, cited: Cited, ask: Ask) -> Result:
-    """Run ``citation-support``: read the cited work, ask the model, and locate its passage."""
-    reference = plan.reference
-    assert reference is not None  # noqa: S101 - _plan sets it for a citation
-    artifact: dict[str, Any] = {"kind": "citation", "reference": reference.id}
-    statement = node_text(graph, plan.target)
-    try:
-        source = cited(reference)
-    except CitedError as error:
-        return Result(CITATION, plan.target.id, artifact, {"statement": statement}, ERROR, str(error))
-    artifact["document"] = source.document
-    inputs: dict[str, Any] = {"statement": statement, "source_digest": text_digest(source.text)}
-    prompt = Template(JUDGE_TEMPLATE).substitute(statement=statement, source=source.text)
-    answer, request = ask.answer(prompt, judge_schema())
-    model = {key: request.get(key) for key in ("provider", "model", "request_id")}
-    passage = answer.get("passage") if isinstance(answer, dict) else None
-    supports = answer.get("supports") if isinstance(answer, dict) else None
-    if not isinstance(passage, str) or not isinstance(supports, bool):
-        detail = "the judgement is not a passage and a true or false"
-        return Result(CITATION, plan.target.id, artifact, inputs, ERROR, detail, {"answer": answer}, model=model)
-    quote = normalise_text(passage)
-    start = source.text.find(quote) if quote else -1
-    if start < 0:
-        detail = "the quoted passage is not in the text of the cited work"
-        output = {"answer": answer}
-        return Result(CITATION, plan.target.id, artifact, inputs, ERROR, detail, output, model=model)
-    locator = f"chars={start}-{start + len(quote)}"
-    artifact.update(locator=locator, quote=quote, digest=text_digest(quote))
-    anchor = SourceAnchor(source.document, locator, quote, text_digest(quote))
-    result = PASSED if supports else FAILED
-    detail = f"the passage at {locator} {'supports' if supports else 'does not support'} the statement"
-    return Result(
-        CITATION, plan.target.id, artifact, inputs, result, detail, {"answer": answer}, (anchor,), model=model
-    )
-
-
 def _json(value: Any) -> bytes:
     """Encode a value as the indented JSON the run writes."""
     return (json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
@@ -775,20 +560,6 @@ def directory_digest(files: Mapping[str, bytes]) -> str:
     """
     listing = "".join(f"{name} {bytes_digest(files[name])}\n" for name in sorted(files))
     return bytes_digest(listing.encode("utf-8"))
-
-
-def _corrected(refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
-    """The targets a repair answer may propose checks on: those of the refused proposals.
-
-    A target written with its label, as ``s-2 (result)``, counts as the id it names, so its correction is
-    admitted. When a refused proposal names no target at all (its target is missing or not a string), its
-    correction may be on any target: there is no id to hold it to. Returns ``None`` then, for no restriction; duplicates are still refused.
-    """
-    named = [rejection["node"] for rejection in refused]
-    if not all(isinstance(target, str) for target in named):
-        return None
-    # An unknown name stays in the set as written: it matches no correction, so it opens nothing.
-    return {unlabelled(target) or target for target in named}
 
 
 # The most terms a side's expansion may have, by ``_terms``'s bound, for ``_step`` to expand it.
@@ -956,23 +727,17 @@ def _admitted(graph: Graph, plans: Sequence[_Plan]) -> list[tuple[str, str, tupl
     return found
 
 
-def _admit(
-    graph: Graph, rubric: Rubric, proposals: Sequence[Any], plans: list[_Plan], *, only: Collection[str] | None = None
-) -> list[dict[str, Any]]:
+def _admit(graph: Graph, rubric: Rubric, proposals: Sequence[Any], plans: list[_Plan]) -> list[dict[str, Any]]:
     """Check each proposal and add those that pass to ``plans``; return the refused ones as rejections.
 
     A proposal is refused as ``_plan`` refuses it; when it repeats the target and type of a check the
     graph has or a plan already admitted; when it is the same step as one of those, on another target
-    (``_step``), since checks that pass or fail together are one piece of evidence; and, with ``only``,
-    when its target is not one of those. A rejection carries a ``fix`` where only the refusal knows what
-    to change.
+    (``_step``), since checks that pass or fail together are one piece of evidence. A rejection carries
+    a ``fix`` where only the refusal knows what to change.
     """
     rejections = []
     for record in proposals:
         try:
-            target = record.get("target") if isinstance(record, Mapping) else None
-            if only is not None and not (isinstance(target, str) and target in only):
-                raise _ProposalError(NOT_REJECTED, f"{target!r} had no refused proposal to correct")
             plan = _plan(graph, rubric, record)
             admitted = _admitted(graph, plans)
             if any((plan.target.id, plan.type) == (other, other_type) for other, other_type, _ in admitted):
@@ -1067,7 +832,7 @@ def run_maths(
 ) -> tuple[Graph, dict[str, bytes], list[dict[str, Any]], list[dict[str, Any]]]:
     """Check and run proposals of the maths check types, one tool call's worth, after the checks a graph has.
 
-    Each proposal is checked as the check pass checks it, in the order given, and is refused when it
+    Each proposal is checked (``_plan``), in the order given, and is refused when it
     repeats the target and type of a check the graph has or an earlier proposal, or the same step on
     another target (``_admit``). A ``citation-support`` proposal is refused: the citation tool runs it.
     The admitted ones run in the order given; a ``rederive-maths`` that errs is followed by its numeric
@@ -1278,94 +1043,3 @@ def verdict(results: Sequence[str]) -> str | None:
     if FAILED in results:
         return FAILS
     return HOLDS if PASSED in results else UNDETERMINED
-
-
-@dataclass
-class CheckPass:
-    """Propose checks of the assessed nodes, run them, and record each as an observed evidence node.
-
-    Attributes:
-        cited: Reads the text of a cited work; none can be read by default.
-        allow_uncalibrated: Run a check type that lists ``models`` with a model it does not list.
-        name: ``checks``.
-        template: The prompt templates as shipped: the plan's, then the citation judgement's.
-    """
-
-    cited: Cited = no_sources
-    allow_uncalibrated: bool = False
-    name: str = NAME
-    template: str = TEMPLATE
-
-    def run(self, graph: Graph, rubric: Rubric, ask: Ask) -> Outcome:
-        """Apply the pass: one plan call, one repair call if any proposal was refused, then one judgement call per citation check.
-
-        A graph with no node to assess needs no call and is returned unchanged; nor does one whose
-        nodes no implemented check type of the rubric may run on, whose nodes are then marked
-        ``not_assessed``.
-
-        Args:
-            graph: The graph after the earlier passes.
-            rubric: The run's rubric.
-            ask: Sends a prompt to the model.
-
-        Returns:
-            The graph with the check nodes, their check edges and the verdicts; the rejected
-            proposals of both rounds, each marked with its round; the files of each check's directory; and the report, whose ``checks`` lists
-            each check's id, type, target and result and whose ``uncalibrated`` lists every check
-            run with a model its check type does not list.
-
-        Raises:
-            RunError: If the plan is not a list of checks, or a citation check would be run with a
-                model its check type does not list and ``allow_uncalibrated`` is not set.
-        """
-        assessed = targets(graph, rubric)
-        if not assessed:
-            return Outcome(graph)
-        model: str | None = None
-        plans: list[_Plan] = []
-        rejections: list[dict[str, Any]] = []
-        if any(applicable(rubric, graph.nodes[node_id].kind) for node_id in assessed):
-            output, request = ask.answer(render(graph, rubric), output_schema(rubric))
-            model = request.get("model")
-            refused = _admit(graph, rubric, _proposals(output), plans)
-            rejections = [{"round": INITIAL, **rejection} for rejection in refused]
-            if refused:
-                answer = ask(render(graph, rubric, refused), output_schema(rubric))
-                again = _admit(graph, rubric, _proposals(answer), plans, only=_corrected(refused))
-                rejections.extend({"round": REPAIR, **rejection} for rejection in again)
-        order = {node_id: i for i, node_id in enumerate(graph.nodes)}
-        plans.sort(key=lambda plan: order[plan.target.id])
-        results: list[Result] = []
-        uncalibrated = []
-        for plan in plans:
-            if plan.type != CITATION:
-                results.extend(_maths(graph, rubric, plan))
-            else:
-                check = rubric.checks[CITATION]
-                if check.models and model not in check.models:
-                    if not self.allow_uncalibrated:
-                        msg = (
-                            f"check type {CITATION!r} was fitted with {list(check.models)}, not {model!r}: "
-                            "pass --allow-uncalibrated to run it anyway"
-                        )
-                        raise RunError("uncalibrated-model", msg)
-                    uncalibrated.append(len(results))
-                results.append(_citation(graph, plan, self.cited, ask))
-        return self._outcome(graph, rubric, ask, results, rejections, uncalibrated)
-
-    def _outcome(  # noqa: PLR0913, PLR0917 - the parts the outcome is assembled from
-        self,
-        graph: Graph,
-        rubric: Rubric,
-        ask: Ask,
-        results: list[Result],
-        rejections: list[dict[str, Any]],
-        uncalibrated: list[int],
-    ) -> Outcome:
-        """Assemble the check nodes, the check edges, the verdicts, the files and the report."""
-        out, files, report = add_checks(graph, rubric, results, ask.versions)
-        out = assess(out, rubric)
-        uncalibrated_report = [
-            {"check": report[i]["id"], "type": report[i]["type"], "model": results[i].model} for i in uncalibrated
-        ]
-        return Outcome(out, rejections, {"checks": report, "uncalibrated": uncalibrated_report}, files)

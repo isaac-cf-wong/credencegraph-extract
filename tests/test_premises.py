@@ -1,27 +1,13 @@
-"""The premise pass on the invented fixture paper: links, analyst nodes, the cap, merging, ids and credences."""
+"""Premises on the invented fixture paper: links, analyst nodes, the cap, merging, ids and credences."""
 
 from __future__ import annotations
 
 import json
-import shutil
-from functools import partial
 from pathlib import Path
 from typing import Any
 
 import pytest
-from classify_fixture import (
-    BODIES,
-    CLASSIFY_BODIES,
-    FIRST,
-    PAPER,
-    PREMISES_FIRST,
-    PREMISES_REPAIR,
-    REPAIR,
-    RUBRIC,
-    RUN,
-    RUN_ID,
-    STATIONARY,
-)
+from classify_fixture import FIRST, PAPER, PREMISES_FIRST, PREMISES_REPAIR, REPAIR, RUBRIC, STATIONARY
 from credencegraph.core import Graph, loads
 from credencegraph.core.relation import REQUIRES
 from credencegraph.diagnostics import unanchored
@@ -30,15 +16,12 @@ from credencegraph.ingest.chunks import chunks_to_graph
 from credencegraph.ingest.latex import read_latex
 from credencegraph.rubric import Rubric, check_graph, load_rubric, loads_rubric
 from credencegraph.semantics.compiler import compile_graph
-from notes_pass import MODEL, fake_client, message
 
-from credencegraph_extract import provider
+from credencegraph_extract import session
 from credencegraph_extract.assemble import assemble, assemble_premises
-from credencegraph_extract.checks import CheckPass
-from credencegraph_extract.classify import ClassifyPass
-from credencegraph_extract.pipeline import PASSES
-from credencegraph_extract.premises import PremisePass, output_schema, render
-from credencegraph_extract.run import RunError, replay, run_extraction
+from credencegraph_extract.tools import add_premises, classify, finish_run
+
+MODEL = "test-model-1"
 
 ANALYSTS = {
     "a-1": "The segments are long compared with the noise correlation time.",
@@ -57,40 +40,35 @@ def classified(rubric: Rubric) -> Graph:
     """The fixture paper after the classify pass, both rounds."""
     graph = chunks_to_graph(read_latex(PAPER), "paper.tex", rubric.initial)[0]
     graph = assemble(graph, rubric, FIRST).graph
-    return assemble(graph, rubric, REPAIR, only={"s-4", "s-5"}).graph
+    return assemble(graph, rubric, REPAIR).graph
+
+
+def make_run(run_dir: Path) -> dict[str, Any]:
+    """Classify the fixture paper and add its premises through the tools; return the first premise call's result."""
+    session.start_run(PAPER, RUBRIC, run_dir, harness="test-harness", model=MODEL)
+    classify(run_dir, FIRST, model=MODEL)
+    classify(run_dir, REPAIR, model=MODEL)
+    first = add_premises(run_dir, PREMISES_FIRST, model=MODEL)
+    add_premises(run_dir, PREMISES_REPAIR, model=MODEL)
+    finish_run(run_dir, model=MODEL)
+    return first
 
 
 @pytest.fixture(scope="module")
-def made(tmp_path_factory: pytest.TempPathFactory) -> Graph:
-    """The graph a fresh run of the pipeline makes from the fixture answers."""
+def made_run(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, dict[str, Any]]:
+    """A run of the fixture records through the tools, and its first premise call's result."""
     run_dir = tmp_path_factory.mktemp("made") / "run"
-    make_run(run_dir, BODIES)
-    return loads((run_dir / "graph.json").read_text(encoding="utf-8"))
+    return run_dir, make_run(run_dir)
+
+
+@pytest.fixture
+def made(made_run: tuple[Path, dict[str, Any]]) -> Graph:
+    """The graph of that run."""
+    return loads((made_run[0] / "graph.json").read_text(encoding="utf-8"))
 
 
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def premise_rejections(run_dir: Path) -> list[dict[str, Any]]:
-    """The entries of a run's ``rejections.json`` that the premise pass made."""
-    # "pass" is the field naming the pipeline stage, not a credential.
-    return [item for item in read_json(run_dir / "rejections.json") if item["pass"] == "premises"]  # noqa: S105
-
-
-def make_run(run_dir: Path, bodies: list[dict[str, Any]], rubric: Path = RUBRIC) -> Any:
-    client = fake_client(bodies)
-    call = partial(provider.call, model=MODEL, max_tokens=1024, client=client)
-    run_extraction(PAPER, run_dir, rubric, call=call, passes=PASSES, run_id=RUN_ID)
-    return client
-
-
-def edited_rubric(tmp_path: Path, old: str, new: str) -> Path:
-    path = tmp_path / "rubric.toml"
-    text = RUBRIC.read_text(encoding="utf-8")
-    assert old in text
-    path.write_text(text.replace(old, new), encoding="utf-8")
-    return path
 
 
 def analyst_parents(graph: Graph, conclusion: str) -> list[str]:
@@ -131,9 +109,7 @@ def test_adding_premises_never_raises_a_credence(rubric: Rubric, classified: Gra
     assert varied.premises is not None
     before = points(classified)
     after = points(
-        assemble_premises(
-            assemble_premises(classified, varied, PREMISES_FIRST).graph, varied, PREMISES_REPAIR, only={"s-5"}
-        ).graph
+        assemble_premises(assemble_premises(classified, varied, PREMISES_FIRST).graph, varied, PREMISES_REPAIR).graph
     )
     assert set(before) <= set(after)
     for node_id, credence in before.items():
@@ -143,10 +119,10 @@ def test_adding_premises_never_raises_a_credence(rubric: Rubric, classified: Gra
         assert after[node_id] < before[node_id], node_id
 
 
-# The output of the pass.
+# What the premises add.
 
 
-def test_a_stated_at_link_reaches_a_chunk_the_classify_pass_did_not_link(
+def test_a_stated_at_link_reaches_a_chunk_the_classify_records_did_not_link(
     rubric: Rubric, classified: Graph, made: Graph
 ) -> None:
     assert "s-1-requires-s-2b" not in classified.relations
@@ -168,7 +144,7 @@ def test_an_unstated_premise_is_an_analyst_assumption_with_the_rubric_values(rub
         assert node.sources == ()
         assert node.base == rubric.premises.base
         assert node.attributes["origin"] == "analyst"
-        assert node.attributes["extraction"] == {"run": RUN_ID, "pass": "premises"}
+        assert node.attributes["extraction"]["tool"] == "add_premises"
     for relation_id in ("a-1-requires-s-2b", "a-2-requires-s-2b", "a-2-requires-s-3", "a-3-requires-s-5"):
         assert graph.relations[relation_id].strength == rubric.premises.strength
 
@@ -185,14 +161,9 @@ def test_identical_premises_are_one_node_with_several_requires(made: Graph) -> N
     assert targets == ["s-2b", "s-3"]
 
 
-def test_overflow_beyond_the_cap_is_reported_not_added(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run"
-    make_run(run_dir, BODIES)
-    report = read_json(run_dir / "report.json")
-    assert report["passes"]["premises"] == {
-        "overflow": [{"conclusion": "s-2b", "statement": "The segments are independent."}]
-    }
-    graph = loads((run_dir / "graph.json").read_text(encoding="utf-8"))
+def test_overflow_beyond_the_cap_is_reported_not_added(made_run: tuple[Path, dict[str, Any]], made: Graph) -> None:
+    assert made_run[1]["overflow"] == [{"conclusion": "s-2b", "statement": "The segments are independent."}]
+    graph = made
     assert analyst_parents(graph, "s-2b") == ["a-1", "a-2"]
     assert all(node.statement != "The segments are independent." for node in graph)
 
@@ -229,11 +200,13 @@ def test_a_statement_repeated_in_one_record_is_one_premise(rubric: Rubric, class
 
 
 def test_a_rerun_gives_the_analyst_nodes_the_same_ids(tmp_path: Path) -> None:
-    make_run(tmp_path / "one", BODIES)
-    make_run(tmp_path / "two", BODIES)
-    one = (tmp_path / "one" / "graph.json").read_bytes()
-    assert one == (tmp_path / "two" / "graph.json").read_bytes() == (RUN / "graph.json").read_bytes()
-    graph = loads(one.decode("utf-8"))
+    graphs = []
+    for name in ("one", "two"):
+        make_run(tmp_path / name)
+        run_id = read_json(tmp_path / name / "manifest.json")["run"]
+        graphs.append((tmp_path / name / "graph.json").read_text(encoding="utf-8").replace(run_id, "<run>"))
+    assert graphs[0] == graphs[1]
+    graph = loads(graphs[0])
     assert [node.id for node in graph if node.attributes.get("origin") == "analyst"] == ["a-1", "a-2", "a-3"]
 
 
@@ -252,58 +225,6 @@ def test_ids_skip_one_the_graph_already_has(rubric: Rubric, classified: Graph) -
     record = {"conclusion": "s-2b", "premises": [{"statement": "Y."}]}
     graph = assemble_premises(first, rubric, [record]).graph
     assert graph.nodes["a-2"].statement == "Y."
-
-
-def test_replay_of_the_recorded_run_is_byte_identical(tmp_path: Path, no_network: None) -> None:
-    run_dir = tmp_path / "run"
-    shutil.copytree(RUN, run_dir)
-    rebuilt = replay(run_dir, passes=PASSES, source=PAPER)
-    assert rebuilt == (run_dir / "graph.json").read_bytes()
-    assert b'"id": "a-3"' in rebuilt
-
-
-def test_replay_refuses_a_changed_premise_record(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run"
-    shutil.copytree(RUN, run_dir)
-    raw = run_dir / "raw" / "0003.json"
-    raw.write_text(raw.read_text(encoding="utf-8").replace("independent", "dependent"), encoding="utf-8")
-    with pytest.raises(RunError) as caught:
-        replay(run_dir, passes=PASSES, source=PAPER)
-    assert caught.value.code == "record-mismatch"
-
-
-# Rejections and the repair round.
-
-
-def test_a_refused_record_is_repaired_once(tmp_path: Path) -> None:
-    run_dir = tmp_path / "run"
-    client = make_run(run_dir, BODIES)
-    assert len(client.sent) == 4
-    rejections = premise_rejections(run_dir)
-    assert [(item["round"], item["node"], item["code"]) for item in rejections] == [
-        ("initial", "s-5", "invalid-argument")
-    ]
-    assert "'s-4-requires-s-5' already exists" in rejections[0]["message"]
-    prompt = (run_dir / "prompts" / "0004.txt").read_text(encoding="utf-8")
-    assert "'s-4-requires-s-5' already exists" in prompt
-    entry = read_json(run_dir / "manifest.json")["passes"][1]
-    assert entry["name"] == "premises"
-    assert [call["raw"] for call in entry["calls"]] == ["raw/0003.json", "raw/0004.json"]
-
-
-def test_the_repair_answer_may_only_name_refused_conclusions(tmp_path: Path) -> None:
-    stray = {"conclusion": "s-3", "premises": [{"statement": "The noise is Gaussian."}]}
-    bodies = [*CLASSIFY_BODIES, BODIES[2], message(4, json.dumps({"records": [*PREMISES_REPAIR, stray]}))]
-    run_dir = tmp_path / "run"
-    make_run(run_dir, bodies)
-    rejections = premise_rejections(run_dir)
-    assert [(item["round"], item["node"], item["code"]) for item in rejections] == [
-        ("initial", "s-5", "invalid-argument"),
-        ("repair", "s-3", "not-rejected"),
-    ]
-    graph = loads((run_dir / "graph.json").read_text(encoding="utf-8"))
-    assert analyst_parents(graph, "s-3") == ["a-2"]
-    assert analyst_parents(graph, "s-5") == ["a-3"]
 
 
 @pytest.mark.parametrize(
@@ -355,62 +276,3 @@ def test_a_link_that_would_close_a_cycle_is_rejected(rubric: Rubric, classified:
     # s-2b may rest on a method, but not on itself.
     result = assemble_premises(linked.graph, rubric, [{"conclusion": "s-2b", "premises": [{"stated_at": "s-2b"}]}])
     assert [rejection["code"] for rejection in result.rejections] == ["invalid-argument"]
-
-
-# The rubric and the prompt.
-
-
-def test_a_rubric_without_premises_needs_no_call(tmp_path: Path) -> None:
-    rubric = tmp_path / "rubric.toml"
-    text = RUBRIC.read_text(encoding="utf-8")
-    rubric.write_text(text[: text.index("[premises]")], encoding="utf-8")
-    run_dir = tmp_path / "run"
-    client = make_run(run_dir, CLASSIFY_BODIES, rubric)
-    assert len(client.sent) == 2
-    assert read_json(run_dir / "report.json")["passes"]["premises"] == {}
-    graph = read_json(run_dir / "graph.json")
-    assert all(node["attributes"]["origin"] == "document" for node in graph["nodes"])
-
-
-def test_a_rubric_without_the_assumption_type_is_refused_before_the_call(tmp_path: Path) -> None:
-    rubric = edited_rubric(tmp_path, 'origins = ["analyst"]', 'origins = ["document"]')
-    client = fake_client(CLASSIFY_BODIES)
-    call = partial(provider.call, model=MODEL, max_tokens=1024, client=client)
-    with pytest.raises(RunError) as caught:
-        run_extraction(PAPER, tmp_path / "run", rubric, call=call, passes=PASSES, run_id=RUN_ID)
-    assert caught.value.code == "invalid-rubric"
-    assert "'assumption'" in str(caught.value)
-    assert len(client.sent) == 2
-
-
-def test_an_answer_without_records_is_an_error(tmp_path: Path) -> None:
-    with pytest.raises(RunError) as caught:
-        make_run(tmp_path / "run", [*CLASSIFY_BODIES, message(3, json.dumps({"conclusions": []}))])
-    assert caught.value.code == "invalid-record"
-
-
-def test_the_prompt_carries_no_classify_output_beyond_the_links(rubric: Rubric, classified: Graph) -> None:
-    prompt = render(classified, rubric, [])
-    for name in [*rubric.types, "unassigned", "compound", "hedge", "form"]:
-        assert f"({name})" not in prompt
-        assert f'"{name}"' not in prompt
-    assert "s-5: We expect the estimator to stay unbiased in practice.\n  rests on s-4: Smith reports" in prompt
-    assert "s-1: We simulate 400 noise realisations with a Welch estimator." in prompt
-    assert "\ns-2: " not in prompt  # a compound is not a premise; its clauses are listed instead
-    assert "s-2b: the estimator is therefore consistent\n  rests on s-2a:" in prompt
-    assert prompt.endswith("nothing else:\n[]\n")
-    assert (RUN / "prompts" / "premises.template.txt").read_text(encoding="utf-8") == PremisePass.template
-
-
-def test_the_schema_has_no_credence_field() -> None:
-    text = json.dumps(output_schema())
-    for word in ("base", "strength", "stated", "credence", "probability"):
-        assert f'"{word}"' not in text
-    record = output_schema()["properties"]["records"]["items"]
-    assert set(record["properties"]) == {"conclusion", "premises"}
-    kinds = record["properties"]["premises"]["items"]["anyOf"]
-    assert [set(kind["properties"]) for kind in kinds] == [{"stated_at"}, {"statement"}]
-
-
-def test_the_pipeline_runs_classify_then_premises_then_checks() -> None:
-    assert [type(item) for item in PASSES] == [ClassifyPass, PremisePass, CheckPass]

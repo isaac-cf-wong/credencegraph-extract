@@ -1,32 +1,27 @@
-"""The recorded answers of a run with the check pass on the invented fixture paper, ``fixtures/checks/paper.tex``.
+"""The records of a run on the invented fixture paper, ``fixtures/checks/paper.tex``, and what its checks find.
 
-The classify answer types every sentence and equation; references take their type from the
-rubric's ``[initial]`` table. The rubric has no ``[premises]``, so the premise pass makes no call.
-
-The check plan proposes, out of document order:
+``CLASSIFY`` types every sentence and equation; references take their type from the rubric's
+``[initial]`` table. The rubric has no ``[premises]``. The checks:
 
 - ``recompute-numbers`` on ``s-2``: ``400 * 250`` is 100000, not the reported 90000, so it fails;
 - ``recompute-numbers`` on ``s-3``: ``400 - 400 * 0.125`` is 350, so it passes;
 - ``rederive-maths`` from ``e-1`` to ``e-2``: ``c / N * N`` equals ``c``, which sympy proves;
 - ``rederive-maths`` on ``e-3``: ``atan(x) + atan(1/x) = pi/2`` for positive ``x``, which sympy cannot
   decide, so it errs and the numeric check passes in its place;
-- ``citation-support`` on ``s-7``: the cited work is in ``fixtures/checks/cited``, and the judgement
-  quotes a passage of it that supports the sentence;
-- ``citation-support`` on ``s-8``: the cited work is missing, so the check errs without a judgement;
-- two proposals that are rejected: one whose numeral 300 no cited chunk contains, and one on the
-  method ``s-1``, which is not assessed. They go back to the model once, and its corrections are
-  rejected too: a repeat of the check of ``s-2``, and a check on ``e-1``, which had nothing refused.
+- ``citation-support`` on ``s-7``: the cited work is in ``fixtures/checks/cited``, and the passage
+  quoted from it supports the sentence;
+- ``citation-support`` on ``s-8``: the work ``r-2`` names is not among the cited works, so a source
+  for it is not tied to the reference and the check errs.
 
-``e-1`` gets no check and ``s-9``, a claim, is of a type no implemented check runs on.
+``e-1`` gets no check and ``s-9``, a claim, is of a type no implemented check runs on. ``RUN`` is a run
+of these checks recorded by the earlier model-calling passes (format 1), which ``verify`` still reads.
 """
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from conftest import FIXTURES
-from notes_pass import message
 
 PAPER = FIXTURES / "checks" / "paper.tex"
 RUBRIC = FIXTURES / "checks" / "rubric.toml"
@@ -97,26 +92,6 @@ PLAN: list[dict[str, Any]] = [
 
 PASSAGE = "In comparable settings the bias stays below 1% for all segment lengths we tried"
 JUDGEMENT = {"passage": PASSAGE, "supports": True}
-
-# The answer to the repair call, which sends back the two refused proposals: it repeats the check of
-# s-2 already admitted (refused as a duplicate) and proposes a check on e-1, which had nothing refused.
-REPAIR = [
-    {
-        "target": "s-2",
-        "type": "recompute-numbers",
-        "nodes": ["s-1", "s-2"],
-        "expression": "400 * 250",
-        "expected": "90000",
-    },
-    {**PRODUCT, "target": "e-1"},
-]
-
-BODIES = [
-    message(1, json.dumps({"records": CLASSIFY})),
-    message(2, json.dumps({"checks": PLAN})),
-    message(3, json.dumps({"checks": REPAIR})),
-    message(4, json.dumps(JUDGEMENT)),
-]
 
 # What each check finds, in id order: its type, target and result.
 RESULTS = [

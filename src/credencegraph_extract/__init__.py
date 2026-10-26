@@ -1,4 +1,4 @@
-"""credencegraph-extract: an automated analyst for credencegraph, with every model call recorded and replayable."""
+"""credencegraph-extract: the tools an agent uses to build the credencegraph graph of a paper, every call recorded and replayable."""
 
 from __future__ import annotations
 

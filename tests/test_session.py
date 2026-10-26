@@ -531,3 +531,49 @@ def test_a_failure_while_moving_the_run_into_place_leaves_nothing(
         start(tmp_path / "run")
     monkeypatch.undo()
     assert list(tmp_path.iterdir()) == []
+
+
+def test_cited_works_that_are_not_a_directory_are_refused(tmp_path: Path) -> None:
+    with pytest.raises(RunError) as raised:
+        start_run(PAPER, RUBRIC, tmp_path / "run", harness="h", model=MODEL, cited=CITED / "smith2020.txt")
+    assert raised.value.code == "invalid-cited"
+    assert not (tmp_path / "run").exists()
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "code"),
+    [
+        ("paper.tex", b"\xff\xfe not utf-8", "invalid-source"),
+        ("rubric.toml", b"this is = = not toml", "invalid-rubric"),
+    ],
+)
+def test_a_document_or_rubric_that_cannot_be_read_is_refused(
+    tmp_path: Path, name: str, content: bytes, code: str
+) -> None:
+    (tmp_path / name).write_bytes(content)
+    source = tmp_path / "paper.tex" if name == "paper.tex" else PAPER
+    rubric = tmp_path / "rubric.toml" if name == "rubric.toml" else RUBRIC
+    with pytest.raises(RunError) as raised:
+        start_run(source, rubric, tmp_path / "run", harness="h", model=MODEL)
+    assert raised.value.code == code
+    assert not (tmp_path / "run").exists()
+
+
+def test_the_command_refuses_to_replay_a_run_of_the_earlier_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    shutil.copytree(FIXTURES / "checks" / "run", tmp_path / "old")
+    assert main(["replay", str(tmp_path / "old")]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error [unsupported-version]: ")
+    assert "verify still runs its checks again" in err
+
+
+def test_the_command_writes_the_replayed_graph(
+    run_dir: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output = tmp_path / "rebuilt.json"
+    assert main(["replay", str(run_dir), "--source", str(PAPER), "--output", str(output)]) == 0
+    assert output.read_bytes() == recorded_graph(run_dir)
+    assert main(["replay", str(run_dir), "--source", str(PAPER), "--output", str(tmp_path / "no" / "dir.json")]) == 2
+    assert "error [io-error]" in capsys.readouterr().err

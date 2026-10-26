@@ -17,7 +17,7 @@ site_name = "credencegraph-extract Documentation"
 # meaningful description of the site content for use by search engines.
 #
 # Read more: https://zensical.org/docs/setup/basics/#site_description
-site_description = "An automated analyst for credencegraph, with every model call recorded and replayable."
+site_description = "The tools an agent uses to build the credencegraph graph of a paper, with every call recorded and replayable."
 
 # The site_author attribute. This is used in the HTML head element.
 #
@@ -48,14 +48,10 @@ nav = [
   { "Get Started" = "index.md" },
   { "API" = [
     { "Overview" = "api/index.md" },
-    { "Provider" = "api/provider.md" },
-    { "Runs" = "api/run.md" },
-    { "Classify pass" = "api/classify.md" },
-    { "Premise pass" = "api/premises.md" },
+    { "Earlier runs" = "api/run.md" },
     { "Assembler" = "api/assemble.md" },
-    { "Check pass" = "api/checks.md" },
+    { "Checks" = "api/checks.md" },
     { "Evaluators" = "api/evaluate.md" },
-    { "Cited works" = "api/cited.md" },
     { "Verify" = "api/verify.md" },
     { "Agent-tool runs" = "api/session.md" },
     { "Graph tools" = "api/tools.md" },

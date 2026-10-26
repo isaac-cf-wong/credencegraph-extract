@@ -177,12 +177,6 @@ def test_a_second_record_for_a_node_is_rejected(graph: Graph, rubric: Rubric) ->
     assert assembly.graph.nodes["s-1"].attributes["form"] == {"kind": "simulation"}
 
 
-def test_only_limits_the_nodes_records_may_name(graph: Graph, rubric: Rubric) -> None:
-    assembly = assemble(graph, rubric, [by_node(FIRST)["s-1"], by_node(FIRST)["e-1"]], only={"e-1"})
-    assert [(rejection["node"], rejection["code"]) for rejection in assembly.rejections] == [("s-1", "not-rejected")]
-    assert assembly.graph.nodes["e-1"].kind == "derivation"
-
-
 def test_edge_rules_other_than_requires_are_found(rubric: Rubric) -> None:
     assert edge_rules_not_requires(rubric) == []
     text = RUBRIC.read_text(encoding="utf-8").replace('relation = "requires"', 'relation = "supports"')
@@ -200,7 +194,7 @@ def test_a_clause_id_used_as_a_node_says_how_to_split(rubric: Rubric, graph: Gra
 
 def test_an_unknown_node_points_at_the_chunk_list(rubric: Rubric, graph: Graph) -> None:
     assert fixes(graph, rubric, {"node": "x-9", "type": "method"}) == [
-        "'x-9' is not a chunk id: use one of the ids listed under Chunks"
+        "'x-9' is not a chunk id: use one of the chunk ids start_run listed"
     ]
 
 
@@ -225,7 +219,7 @@ def test_rests_on_a_node_of_another_type_says_which_types_are_allowed(rubric: Ru
             "['result', 'method', 'derivation', 'literature_claim']: type 's-4' as one of those in the same answer, "
             "or leave it out of rests_on"
         ),
-        "'q-1' in rests_on is not a node id: use ids listed under Chunks",
+        "'q-1' in rests_on is not a node id: use node ids as start_run listed them",
     ]
     assert fixes(graph, rubric, record) == [
         "type 'claim' must rest on at least 1 chunk(s) of the types ['result', 'method', 'derivation', 'literature_claim']"

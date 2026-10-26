@@ -1,16 +1,14 @@
 """The ``credencegraph-extract`` command.
 
-``run`` extracts a graph from a LaTeX document into a new run directory. ``replay`` rebuilds a run's
-graph from its recorded calls, without the network, and reports whether it is byte-identical to the
-recorded ``graph.json``. A run's citation checks read the cited works from ``--cited``; a replay
-needs the same directory, and re-runs every check that a run allowed, uncalibrated ones included.
-``verify`` runs each run's deterministic checks again from their recorded inputs, reports every
-check whose record the re-run does not reproduce, and warns when the runs record one rubric name and
-version with different file digests. ``mcp`` serves the agent tools over MCP on stdio, for an agent
-harness to start (``mcp_server``). ``tool`` makes one of those calls from the command line, for a
-harness without MCP, and prints its JSON result; ``unlock`` reports whether a tool call holds a run's
-lock, and which process. The exit status is 0 on success, 1 if a replayed graph or a
-verified check differs from the recorded one, and 2 on any error, reported as one line on stderr.
+``mcp`` serves the agent tools over MCP on stdio, for an agent harness to start (``mcp_server``).
+``tool`` makes one of those calls from the command line, for a harness without MCP, and prints its JSON
+result; ``unlock`` reports whether a tool call holds a run's lock, and which process. ``replay``
+applies a run's logged calls again to its document, without the network, and reports whether the graph
+is byte-identical to the run's. ``verify`` runs each run's deterministic checks again from their
+recorded inputs, reports every check whose record the re-run does not reproduce, and warns when the runs
+record one rubric name and version with different file digests; it reads runs of either format. The
+exit status is 0 on success, 1 if a replayed graph or a verified check differs from the recorded one,
+and 2 on any error, reported as one line on stderr.
 """
 
 from __future__ import annotations
@@ -18,26 +16,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Mapping, Sequence
-from functools import partial
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-import anthropic
-
-from credencegraph_extract import cited, provider, session
+from credencegraph_extract import session
 from credencegraph_extract.digest import bytes_digest
-from credencegraph_extract.pipeline import passes
-from credencegraph_extract.run import GRAPH, MANIFEST, RunError, read_manifest, read_run_file, replay, run_extraction
+from credencegraph_extract.run import MANIFEST, RunError
 from credencegraph_extract.verify import plain, rubric_reuse, run_manifest, verify_run
-
-DEFAULT_MAX_TOKENS = 16000
-
-
-def _no_model(prompt: str, schema: Mapping[str, Any]) -> dict[str, Any]:
-    """Refuse a model call when no ``--model`` was given."""
-    raise RunError("missing-model", "a pass needs the model: pass --model with the exact dated model id")
-
 
 # The agent tools, as ``tool`` takes them; the same as the MCP server's.
 TOOL_NAMES = ("start_run", "get_state", "classify", "add_premises", "run_checks", "judge_citation", "finish_run")
@@ -47,39 +33,16 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="credencegraph-extract", description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
 
-    run = commands.add_parser("run", help="Extract a graph from a LaTeX document into a new run directory.")
-    run.add_argument("source", type=Path, help="The main .tex file of the document.")
-    run.add_argument("run_dir", type=Path, help="The run directory to create; it must not exist or be empty.")
-    run.add_argument("--rubric", type=Path, required=True, help="The TOML rubric.")
-    run.add_argument("--document", help="The document id of every anchor; the source's file name by default.")
-    run.add_argument("--model", help="The exact dated model id the passes call.")
-    run.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS, help="The output token limit per call.")
-    run.add_argument(
-        "--store-source",
-        action="store_true",
-        help="Copy the source document into the run directory (it is not copied by default; its digest always is).",
+    rerun = commands.add_parser(
+        "replay", help="Apply a run's logged calls again to its document and compare the graph with the run's."
     )
-    run.add_argument("--cited", type=Path, help="The directory of cited works, each named by its bibliography key.")
-    run.add_argument(
-        "--fetch-arxiv",
-        action="store_true",
-        help="Download a cited work missing from --cited from arXiv, into --cited, when its entry names one.",
-    )
-    run.add_argument(
-        "--allow-uncalibrated",
-        action="store_true",
-        help="Run a model-judged check with a model its check type was not fitted with; the report lists each.",
-    )
-
-    rerun = commands.add_parser("replay", help="Rebuild a run's graph from raw/ and compare it with graph.json.")
     rerun.add_argument("run_dir", type=Path, help="The run directory.")
     rerun.add_argument("--source", type=Path, help="The source document, for a run that did not store it.")
     rerun.add_argument("--output", type=Path, help="Also write the rebuilt graph to this file.")
-    rerun.add_argument("--cited", type=Path, help="The directory of cited works the run read.")
     rerun.add_argument(
         "--sources",
         type=Path,
-        help="For an agent-tool run: the fetched sources it did not store, as files named by their digest.",
+        help="The fetched sources the run did not store, as files named by the hex of their digest.",
     )
 
     check = commands.add_parser(
@@ -121,8 +84,14 @@ def _format_version(run_dir: Path) -> Any:
         return None
 
 
-def _replay_tools(args: argparse.Namespace) -> int:
-    """Replay an agent-tool run's call log; 0 if the graph it leads to is byte-identical, 1 if it differs."""
+def _replay(args: argparse.Namespace) -> int:
+    """Replay a run's call log; 0 if the graph it leads to is byte-identical, 1 if it differs."""
+    if _format_version(args.run_dir) != session.VERSION:
+        raise RunError(
+            "unsupported-version",
+            f"{str(args.run_dir)!r} is not an agent-tool run; a run of the earlier model-calling passes "
+            "is no longer replayed, but verify still runs its checks again",
+        )
     rebuilt = session.replay(args.run_dir, source=args.source, sources=args.sources)
     recorded = session.recorded_graph(args.run_dir)
     if args.output:
@@ -138,25 +107,6 @@ def _replay_tools(args: argparse.Namespace) -> int:
         f"replayed {args.run_dir}: the graph after {calls} calls differs: "
         f"recorded {bytes_digest(recorded)}, rebuilt {bytes_digest(rebuilt)}"
     )
-    return 1
-
-
-def _replay(args: argparse.Namespace) -> int:
-    """Replay a run and report whether its graph is byte-identical; 0 if it is, 1 if it differs."""
-    if _format_version(args.run_dir) == session.VERSION:
-        return _replay_tools(args)
-    resolve = cited.directory(args.cited) if args.cited else cited.no_sources
-    rebuilt = replay(args.run_dir, passes=passes(cited=resolve, allow_uncalibrated=True), source=args.source)
-    recorded = read_manifest(args.run_dir)["graph_digest"]
-    if args.output:
-        try:
-            args.output.write_bytes(rebuilt)
-        except OSError as error:
-            raise RunError("io-error", f"cannot write {str(args.output)!r}: {error.strerror or error}") from None
-    if rebuilt == read_run_file(args.run_dir, GRAPH) and bytes_digest(rebuilt) == recorded:
-        print(f"replayed {args.run_dir}: {GRAPH} is byte-identical ({recorded})")
-        return 0
-    print(f"replayed {args.run_dir}: {GRAPH} differs: recorded {recorded}, rebuilt {bytes_digest(rebuilt)}")
     return 1
 
 
@@ -181,25 +131,6 @@ def _verify(args: argparse.Namespace) -> int:
     for warning in rubric_reuse(manifests):
         print(f"warning: {warning}")
     return status
-
-
-def _run(args: argparse.Namespace) -> int:
-    """Run the pipeline into a new run directory."""
-    call = partial(provider.call, model=args.model, max_tokens=args.max_tokens) if args.model else _no_model
-    if args.fetch_arxiv and not args.cited:
-        raise RunError("invalid-argument", "--fetch-arxiv needs --cited, the directory to download into")
-    resolve = cited.directory(args.cited, fetch_arxiv=args.fetch_arxiv) if args.cited else cited.no_sources
-    manifest = run_extraction(
-        args.source,
-        args.run_dir,
-        args.rubric,
-        call=call,
-        passes=passes(cited=resolve, allow_uncalibrated=args.allow_uncalibrated),
-        document=args.document,
-        store_source=args.store_source,
-    )
-    print(f"run {manifest['run']} written to {args.run_dir}: graph {manifest['graph_digest']}")
-    return 0
 
 
 def _tool(args: argparse.Namespace) -> int:
@@ -253,7 +184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Every failure is reported as one ``error [<code>]: <message>`` line on stderr with status 2,
     never as a traceback: a run directory that is malformed or incomplete, a file that cannot be
-    read or written, a source or record that does not match the manifest, and a provider error.
+    read or written, a source or record that does not match the manifest, and a call the run refuses.
 
     Args:
         argv: The arguments; ``sys.argv[1:]`` by default.
@@ -265,17 +196,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     args = _parser().parse_args(argv)
     try:
-        commands = {"run": _run, "replay": _replay, "verify": _verify, "mcp": _mcp, "tool": _tool, "unlock": _unlock}
+        commands = {"replay": _replay, "verify": _verify, "mcp": _mcp, "tool": _tool, "unlock": _unlock}
         command = commands[args.command]
         return command(args)
     except RunError as error:
-        code, message = error.code, str(error)
-    except provider.ProviderError as error:
-        code, message = "provider-error", str(error)
-    except anthropic.APIError as error:
-        code, message = "provider-error", f"{type(error).__name__}: {error}"
-    print(f"error [{code}]: {message}", file=sys.stderr)
-    return 2
+        print(f"error [{error.code}]: {error}", file=sys.stderr)
+        return 2
 
 
 def app() -> None:

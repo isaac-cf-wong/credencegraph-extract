@@ -10,7 +10,7 @@ change, and is kept in the run's rejections; the agent may simply call again.
   returns it to unassigned (``assemble``), but not once a check targets it: a failed check cannot be
   escaped by making its node a type no check applies to. A chunk already split cannot be split again.
 - ``add_premises`` adds the implicit premises of conclusions, as the premise records do.
-- ``run_checks`` checks and runs proposals of the maths check types, as the check pass does, and adds a
+- ``run_checks`` checks and runs proposals of the maths check types (``checks.run_maths``), and adds a
   check node for each that runs, with its files in the run. A check is never withdrawn or run again on
   its target, nor run again on another target as another encoding of the same step.
 - ``judge_citation`` reads a citation's source itself, finds the agent's passage in it, and records a

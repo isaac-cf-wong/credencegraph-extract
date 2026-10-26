@@ -1,26 +1,25 @@
-"""The recorded answers of the classify and premise passes on the invented fixture paper, ``fixtures/classify/paper.tex``.
+"""The classify and premise records of a run on the invented fixture paper, ``fixtures/classify/paper.tex``.
 
-The first answer types every chunk, splits ``s-2`` into a result and a claim, and locates two hedges:
+``FIRST`` types every chunk, splits ``s-2`` into a result and a claim, and locates two hedges:
 ``suggests``, which the fixture rubric maps, and ``We expect``, which it does not. Two of its records
 are refused: ``s-4``'s form quotes a statement the text does not contain, and ``s-5`` rests on
-``s-4``, which is still unassigned when ``s-5`` is applied. The repair answer corrects both. The
-records are listed out of document order, which the assembler restores.
+``s-4``, which is still unassigned when ``s-5`` is applied. ``REPAIR`` corrects both. The records are
+listed out of document order, which the assembler restores.
 
-The premise pass then gets the three claims, ``s-2b``, ``s-3`` and ``s-5``. Its first answer links
-``s-2b`` to ``s-1``, a chunk the classify pass did not link, and gives ``s-2b`` three unstated
+The premise records concern the three claims, ``s-2b``, ``s-3`` and ``s-5``. ``PREMISES_FIRST`` links
+``s-2b`` to ``s-1``, a chunk the classify records did not link, and gives ``s-2b`` three unstated
 premises, one more than the fixture rubric's ``max_per_conclusion`` of 2, so the third is reported
 as overflow. ``s-3`` needs the stationarity premise of ``s-2b`` again, with different whitespace,
 so both share one analyst node. ``s-5``'s record is refused, as it links ``s-4``, which ``s-5``
-already rests on; the repair answer drops that link.
+already rests on; ``PREMISES_REPAIR`` drops that link. ``RUN`` is a run of these records made by the
+earlier model-calling passes (format 1).
 """
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from conftest import FIXTURES
-from notes_pass import message
 
 PAPER = FIXTURES / "classify" / "paper.tex"
 RUBRIC = FIXTURES / "classify" / "rubric.toml"
@@ -88,10 +87,3 @@ PREMISES_FIRST: list[dict[str, Any]] = [
 PREMISES_REPAIR: list[dict[str, Any]] = [
     {"conclusion": "s-5", "premises": [{"statement": "The settings of Smith match ours."}]},
 ]
-
-CLASSIFY_BODIES = [message(1, json.dumps({"records": FIRST})), message(2, json.dumps({"records": REPAIR}))]
-PREMISES_BODIES = [
-    message(3, json.dumps({"records": PREMISES_FIRST})),
-    message(4, json.dumps({"records": PREMISES_REPAIR})),
-]
-BODIES = CLASSIFY_BODIES + PREMISES_BODIES

@@ -7,7 +7,16 @@ from typing import Any
 import pytest
 from credencegraph.core import Node
 
-from credencegraph_extract.citation import SourceError, entry_doi, read_url, text_of, tie, verify_observation
+from credencegraph_extract.citation import (
+    SourceError,
+    arxiv_id,
+    entry_doi,
+    key_file,
+    read_url,
+    text_of,
+    tie,
+    verify_observation,
+)
 from credencegraph_extract.fetch import Fetched, FetchError
 
 PASSAGE = "the estimator is unbiased for every segment length"
@@ -52,6 +61,19 @@ DOI_WEB = web(
 )
 def test_the_doi_an_entry_names(statement: str, doi: str | None) -> None:
     assert entry_doi(entry(statement)) == doi
+
+
+@pytest.mark.parametrize(
+    ("statement", "expected"),
+    [
+        ("arXiv: 2101.01234", "2101.01234"),
+        ("A. Smith, Estimators, arXiv:2101.01234v2.", "2101.01234v2"),
+        ("arXiv:hep-th/9901001v1", "hep-th/9901001v1"),
+        ("J. Stat. 12", None),
+    ],
+)
+def test_the_arxiv_id_an_entry_names(statement: str, expected: str | None) -> None:
+    assert arxiv_id(entry(statement)) == expected
 
 
 def test_the_page_the_doi_of_the_entry_resolves_to_is_tied() -> None:
@@ -142,3 +164,35 @@ def test_an_observation_is_checked_against_its_bytes() -> None:
     assert verify_observation(observation, data, PASSAGE) == []
     assert verify_observation(observation, data, "another passage") == ["found"]
     assert verify_observation(observation, data + b"!", PASSAGE) == ["digest"]
+
+
+def test_a_text_source_is_read_and_normalised() -> None:
+    text = text_of(b"Estimators of noise.\nA. Smith.\n\nWe study  estimators", ".txt")
+    assert text == "Estimators of noise. A. Smith. We study estimators"
+
+
+def test_a_latex_source_is_read_through_the_latex_reader() -> None:
+    data = b"\\documentclass{article}\n\\begin{document}\nThe bias is small.\n% a comment\n\\end{document}\n"
+    assert text_of(data, ".tex") == "The bias is small."
+
+
+@pytest.mark.parametrize("kind", [".txt", "text/plain", "text/html"])
+def test_a_source_with_no_text_is_refused(kind: str) -> None:
+    with pytest.raises(SourceError, match="the source has no text") as raised:
+        text_of(b" \n\t ", kind)
+    assert raised.value.code == "unreadable-source"
+
+
+@pytest.mark.parametrize("key", [None, "../smith2020", ".hidden", "a/b", ""])
+def test_a_key_that_cannot_name_a_cited_file_names_none(key: object) -> None:
+    # Even when a file of that name is among the cited works, a key that is hidden or relative names none.
+    reference = Node("r-1", kind="reference", statement="A. Smith.", attributes={"unit": "reference", "key": key})
+    names = {"smith2020.txt", "../smith2020.txt", ".hidden.txt", "a/b.txt", ".txt"}
+    assert key_file(reference, names) is None
+
+
+def test_a_key_names_the_first_of_its_files() -> None:
+    reference = Node(
+        "r-1", kind="reference", statement="A. Smith.", attributes={"unit": "reference", "key": "smith2020"}
+    )
+    assert key_file(reference, {"smith2020.pdf", "smith2020.tex"}) == "smith2020.tex"
