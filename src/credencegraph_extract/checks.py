@@ -890,7 +890,7 @@ def _step(check_type: str, fields: Mapping[str, Any], rounding: Fraction | None 
     writes it. ``None`` for a citation, whose target and reference are its identity, and for fields
     that do not parse.
     """
-    if check_type not in {RECOMPUTE, REDERIVE, NUMERIC}:
+    if not isinstance(check_type, str) or check_type not in {RECOMPUTE, REDERIVE, NUMERIC}:
         return None
     keys = ("expression", "expected") if check_type == RECOMPUTE else ("lhs", "rhs", "symbols")
     found = {key: fields.get(key) for key in keys}
@@ -910,9 +910,11 @@ def _proposed_type(check_type: Any) -> Any:
 
 def _rounding(graph: Graph, node_ids: Any, expected: Any) -> Fraction | None:
     """The rounding of an arithmetic check's reported value, from the chunks it cites, or ``None`` when it has none."""
-    if not isinstance(node_ids, Sequence) or not isinstance(expected, str):
+    if not isinstance(node_ids, list | tuple) or not all(isinstance(node_id, str) for node_id in node_ids):
         return None
-    nodes = [graph.nodes[node_id] for node_id in node_ids if isinstance(node_id, str) and node_id in graph]
+    if not isinstance(expected, str):
+        return None
+    nodes = [graph.nodes[node_id] for node_id in node_ids if node_id in graph]
     try:
         return _reported(graph, nodes, expected)[1]
     except (ValueError, ArithmeticError):
@@ -925,17 +927,31 @@ def _plan_step(graph: Graph, plan: _Plan) -> tuple[Any, ...] | None:
     return _step(plan.type, plan.record, rounding)
 
 
+def _recorded(graph: Graph, check: Any) -> tuple[str, str, tuple[Any, ...] | None] | None:
+    """A check record of the graph as target, proposed type and step, or ``None`` for a record not of that shape.
+
+    A record counts only when its type and target are strings and its inputs a mapping; its cited nodes
+    are read only from an artifact that is a mapping, as a list of ids. A record of any other shape was
+    not written by a check and is not one a proposal can repeat.
+    """
+    record = plain(check) if isinstance(check, Mapping) else None
+    if not isinstance(record, dict):
+        return None
+    check_type, target, inputs = record.get("type"), record.get("target"), record.get("inputs")
+    if not isinstance(check_type, str) or not isinstance(target, str) or not isinstance(inputs, dict):
+        return None
+    artifact = record.get("artifact")
+    nodes = artifact.get("nodes") if isinstance(artifact, dict) else None
+    return (
+        target,
+        _proposed_type(check_type),
+        _step(check_type, inputs, _rounding(graph, nodes, inputs.get("expected"))),
+    )
+
+
 def _admitted(graph: Graph, plans: Sequence[_Plan]) -> list[tuple[str, str, tuple[Any, ...] | None]]:
     """The checks a new proposal may not repeat, as target, proposed type and step: those in the graph and the plans."""
-    found = []
-    for node in graph:
-        check = node.attributes.get("check")
-        if isinstance(check, Mapping) and isinstance(check.get("inputs"), Mapping):
-            check_type, inputs = check.get("type"), check["inputs"]
-            artifact = check.get("artifact")
-            nodes = artifact.get("nodes") if isinstance(artifact, Mapping) else None
-            step = _step(check_type, inputs, _rounding(graph, nodes, inputs.get("expected")))
-            found.append((check.get("target"), _proposed_type(check_type), step))
+    found = [entry for node in graph if (entry := _recorded(graph, node.attributes.get("check"))) is not None]
     found.extend((plan.target.id, plan.type, _plan_step(graph, plan)) for plan in plans)
     return found
 

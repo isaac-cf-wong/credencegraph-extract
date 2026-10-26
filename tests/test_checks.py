@@ -519,18 +519,38 @@ def test_one_value_reported_with_another_rounding_is_another_step() -> None:
     )
 
 
-@pytest.mark.parametrize("artifact", ["malformed", None, ["s-1"], {"nodes": "s-1"}])
-def test_a_recorded_check_of_another_shape_does_not_stop_admission(artifact: object) -> None:
+RECORDED = {"type": "recompute-numbers", "target": "s-1", "inputs": {"expression": "1 + 1", "expected": "2"}}
+
+
+def recorded_graph(**changes: object) -> Graph:
     graph = Graph()
     graph.add_node(Node("s-1", kind="result", statement="So 350 remain.", attributes={"origin": "document"}))
-    record = {"type": "recompute-numbers", "target": "s-1", "inputs": {"expression": "1 + 1", "expected": "2"}}
-    graph.add_node(
-        Node(
-            "c-1", kind="recompute-numbers", statement="a check", attributes={"check": {**record, "artifact": artifact}}
-        )
-    )
-    [(target, check_type, _)] = checks._admitted(graph, [])
+    record = {**RECORDED, **changes}
+    graph.add_node(Node("c-1", kind="recompute-numbers", statement="a check", attributes={"check": record}))
+    return graph
+
+
+@pytest.mark.parametrize("artifact", ["malformed", None, ["s-1"], {"nodes": "s-1"}])
+def test_a_recorded_check_with_an_artifact_of_another_shape_still_counts(artifact: object) -> None:
+    [(target, check_type, _)] = checks._admitted(recorded_graph(artifact=artifact), [])
     assert (target, check_type) == ("s-1", "recompute-numbers")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"type": {"bad": "type"}}, {"type": ["recompute-numbers"]}, {"target": ["s-1"]}, {"inputs": "1 + 1"}],
+)
+def test_a_recorded_check_of_another_shape_is_not_one_a_proposal_repeats(changes: dict[str, object]) -> None:
+    assert checks._admitted(recorded_graph(**changes), []) == []
+
+
+def test_cited_nodes_written_as_a_string_give_no_rounding() -> None:
+    # A string is not a list of ids: "s1" must not be read as the nodes "s" and "1".
+    graph = Graph()
+    for node_id, text in (("s", "So 350 remain."), ("1", "So 350.0 remain."), ("s1", "So 350.00 remain.")):
+        graph.add_node(Node(node_id, kind="result", statement=text, attributes={"origin": "document"}))
+    assert checks._rounding(graph, "s1", "350") is None
+    assert checks._rounding(graph, ["s1"], "350") == Fraction(1, 200)
 
 
 def test_one_value_written_two_ways_for_two_targets_is_one_check(tmp_path: Path) -> None:
