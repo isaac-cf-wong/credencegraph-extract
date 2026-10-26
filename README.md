@@ -60,6 +60,20 @@ or a run that does not exist, comes back as a JSON result
 record comes back with a `fix` saying what to change, for the agent to call
 again.
 
+The skill
+[`skills/credencegraph-extract/SKILL.md`](skills/credencegraph-extract/SKILL.md)
+teaches an agent the workflow and the rules, with the setup for Claude Code,
+Codex, OpenCode, Cursor and Pi. Install it with
+[agentflow](https://github.com/isaac-cf-wong/agentflow), from a clone
+(`agentflow install skills/credencegraph-extract`) or through a manifest entry:
+
+```toml
+[[skills]]
+git = "https://github.com/isaac-cf-wong/credencegraph-extract"
+ref = "<release tag or commit>"
+subdir = "skills/credencegraph-extract"
+```
+
 A harness without MCP makes the same calls from the command line:
 
 ```shell
