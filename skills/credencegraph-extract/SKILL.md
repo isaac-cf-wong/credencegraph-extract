@@ -13,8 +13,11 @@ license: BSD-3-Clause
 # credencegraph-extract
 
 You are the analyst. The tools turn your records into a graph; you never write
-graph JSON and never give a probability. Every call you make is recorded in the
-run directory, so a reader can see what you did, rebuild the graph and check it.
+graph JSON and never give a probability. Every call that changes the run is
+recorded in the run directory, refused records included, so a reader can see
+what you did, rebuild the graph and check it. A read (`get_state`) and a call
+refused as a whole, such as one with an argument of the wrong type, change
+nothing and are not recorded.
 
 ## Setup
 
