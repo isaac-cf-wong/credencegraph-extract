@@ -330,6 +330,9 @@ them, and adds a check node and its files under `checks/` for each. Checks are
 append-only: a check is never withdrawn, nor run again on its target, nor run on
 another target as another encoding of the same step, so a failed check stays
 observed. The versions of the code that ran a call's checks are logged with it.
+Every check finishes in bounded time: an exponent above 100 or a maths step of
+degree above 1000 is refused when it is proposed, and a step too large to
+simplify symbolically is decided by the numeric fallback.
 
 `judge_citation` takes the citing node, the bibliography entry's id, a source,
 the passage the agent found and whether it supports the node. The tool reads the

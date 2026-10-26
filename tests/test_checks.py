@@ -490,8 +490,8 @@ def test_a_maths_step_is_the_same_step_however_its_sides_are_written(
         ("*".join(f"(x{i} + 1)" for i in range(28)), [f"x{i}" for i in range(28)]),
         ("(a + b + c + d + e + f + g + h)**32", list("abcdefgh")),
         ("((x + 1)**16 + 1)**16", ["x"]),
-        ("sin((x + 1)**400)", ["x"]),
-        ("1/(x + 1)**400", ["x"]),
+        ("sin(((x + 1)**100 + 1)**100)", ["x"]),
+        ("1/((x + 1)**100 + 1)**100", ["x"]),
     ],
     ids=["28 binomials", "power of a sum", "nested powers", "inside a function", "negative power"],
 )

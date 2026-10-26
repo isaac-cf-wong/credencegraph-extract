@@ -381,3 +381,62 @@ def test_the_default_connection_is_cut_at_the_deadline_however_the_peer_paces_it
         connection.close()
         listener.close()
     assert time.monotonic() - started < 1.0
+
+
+def test_a_slow_resolver_does_not_hold_the_fetch_past_its_time_limit() -> None:
+    def slow(host: str, port: int) -> list[str]:
+        time.sleep(2)
+        return [PUBLIC]
+
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="longer than its time limit") as raised:
+        fetch("http://slow-dns.example/", resolve=slow, connect=lambda *args: Stall(), max_seconds=0.2)
+    assert raised.value.code == "fetch-failed"
+    assert time.monotonic() - started < 1
+
+
+def serve_once(response: bytes) -> int:
+    """Serve one response on a loopback port, then close; return the port."""
+    listener = socket.create_server(("127.0.0.1", 0))
+
+    def serve() -> None:
+        peer, _ = listener.accept()
+        with peer:
+            peer.recv(4096)
+            peer.sendall(response)
+        listener.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    return listener.getsockname()[1]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nabc",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n",
+    ],
+    ids=["shorter than its length", "chunked without its last chunk"],
+)
+def test_a_body_cut_short_is_not_read_as_complete(response: bytes) -> None:
+    connection = fetch_module._Socket("127.0.0.1", serve_once(response), "local.test", False, 1.0, time.monotonic() + 5)
+    try:
+        _, _, read = connection.get("/", {"Host": "local.test"})
+        with pytest.raises(http.client.IncompleteRead):
+            fetch_module._body(read, 1000, time.monotonic() + 5)
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize(
+    "response",
+    [b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc", b"HTTP/1.0 200 OK\r\n\r\nabc"],
+    ids=["of its length", "ended by the connection"],
+)
+def test_a_whole_body_is_read(response: bytes) -> None:
+    connection = fetch_module._Socket("127.0.0.1", serve_once(response), "local.test", False, 1.0, time.monotonic() + 5)
+    try:
+        _, _, read = connection.get("/", {"Host": "local.test"})
+        assert fetch_module._body(read, 1000, time.monotonic() + 5) == b"abc"
+    finally:
+        connection.close()

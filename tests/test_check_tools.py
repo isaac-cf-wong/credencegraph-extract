@@ -441,3 +441,28 @@ def test_a_step_too_large_to_simplify_is_decided_numerically(run_dir: Path) -> N
         ("rederive-maths-numeric", "passed"),
     ]
     assert result["checks"][0]["detail"] == "a side could expand to more than 256 terms, too many to simplify"
+
+
+@pytest.mark.parametrize(
+    ("lhs", "message"),
+    [
+        ("((x + 1)**(10**100) + 1)**(10**100)", "is larger than 100"),
+        ("((x + 1)**100 + 1)**100", "the step has degree above 1000, too high to check"),
+    ],
+    ids=["an exponent too large", "a degree too high"],
+)
+def test_a_step_too_large_to_check_is_refused_at_once(run_dir: Path, lhs: str, message: str) -> None:
+    step = {
+        **PHASE,
+        "lhs": lhs,
+        "rhs": lhs,
+        "symbols": [{"name": "x", "assumptions": ["positive"], "domain": [0.5, 1]}],
+    }
+    started = time.monotonic()
+    result = run_checks(run_dir, [step], model=MODEL)
+    assert time.monotonic() - started < 5
+    assert result["checks"] == []
+    [refused] = result["refused"]
+    assert refused["code"] == "invalid-record"
+    assert message in refused["message"]
+    assert refused["fix"]

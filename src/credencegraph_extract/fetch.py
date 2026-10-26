@@ -14,9 +14,10 @@ metadata service. ``fetch`` therefore:
   address the connection reached before sending the request, so a name that resolves to a public
   address when checked and a private one when connected (DNS rebinding) cannot reach the private one;
 - follows redirects itself, applying all of the above to every hop, up to ``MAX_HOPS``;
-- gives up when a connection or a read waits ``TIMEOUT`` seconds, when the whole fetch, redirects
-  and body included, takes ``MAX_SECONDS``, however slowly a server drips its body, and refuses a body
-  larger than ``MAX_BYTES``.
+- gives up when a connection or a read waits ``TIMEOUT`` seconds, and when the whole fetch, name
+  resolution, redirects and body included, takes ``MAX_SECONDS``, however slowly a server drips its
+  bytes; refuses a body larger than ``MAX_BYTES``, and one that ends before the length its headers
+  declare.
 
 A local file is never named by a URL: ``file:`` and every other scheme are refused.
 """
@@ -205,7 +206,16 @@ class _Socket:
             self._connection.putheader(name, value)
         self._connection.endheaders()
         response = self._connection.getresponse()
-        return response.status, {name.lower(): value for name, value in response.getheaders()}, response.read1
+
+        def read(size: int) -> bytes:
+            # A body that ends before the length its headers declare was cut short, not complete; a chunked
+            # body cut short raises in http.client itself. One with neither ends when the connection does.
+            piece = response.read1(size)
+            if not piece and isinstance(response.length, int) and response.length > 0:
+                raise http.client.IncompleteRead(b"", response.length)
+            return piece
+
+        return response.status, {name.lower(): value for name, value in response.getheaders()}, read
 
     def close(self) -> None:
         self._watchdog.cancel()
@@ -246,12 +256,34 @@ def _authority(host: str, port: int, scheme: str) -> str:
     return name if SCHEMES[scheme] == port else f"{name}:{port}"
 
 
-def _address(host: str, port: int, resolve: Resolve) -> str:
+def _resolved(host: str, port: int, resolve: Resolve, deadline: float) -> list[str]:
+    """Resolve a host in a worker thread, giving up at the deadline.
+
+    A resolver cannot be interrupted, so one still waiting at the deadline is left to finish on its own,
+    in a daemon thread, and its answer is ignored.
+    """
+    answer: list[Any] = []
+
+    def work() -> None:
+        try:
+            answer.append(list(resolve(host, port)))
+        except OSError as error:
+            answer.append(error)
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    worker.join(_left(deadline))
+    if not answer:
+        _left(deadline)
+        raise FetchError("fetch-failed", "the fetch took longer than its time limit")
+    if isinstance(answer[0], OSError):
+        raise FetchError("fetch-failed", f"cannot resolve {host!r}: {answer[0]}")
+    return answer[0]
+
+
+def _address(host: str, port: int, resolve: Resolve, deadline: float) -> str:
     """Resolve a host and check every address; return the one to connect to."""
-    try:
-        addresses = [host] if _literal(host) else list(resolve(host, port))
-    except OSError as error:
-        raise FetchError("fetch-failed", f"cannot resolve {host!r}: {error}") from None
+    addresses = [host] if _literal(host) else _resolved(host, port, resolve, deadline)
     if not addresses:
         raise FetchError("fetch-failed", f"{host!r} resolves to no address")
     for address in addresses:
@@ -304,7 +336,7 @@ def _hop(  # noqa: PLR0913 - one request and the limits it is made under
 ) -> tuple[int, Mapping[str, str], bytes]:
     """Make one request under the policy: check, resolve, check, connect to the checked address, check the peer."""
     scheme, host, port, target = _split(url)
-    address = _address(host, port, resolve)
+    address = _address(host, port, resolve, deadline)
     try:
         connection = connect(address, port, host, scheme == "https", min(timeout, _left(deadline)), deadline)
     except (OSError, ssl.SSLError, http.client.HTTPException) as error:

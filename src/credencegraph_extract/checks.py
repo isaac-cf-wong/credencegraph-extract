@@ -449,6 +449,29 @@ class _Plan:
     reference: Node | None = None
 
 
+def _check_step(record: Mapping[str, Any]) -> None:
+    """Refuse a ``rederive-maths`` proposal whose encoding does not parse, or whose step is of too high a degree to check."""
+    _strings(record, "lhs", "rhs", "assumption")
+    declared = record.get("symbols")
+    if not isinstance(declared, list) or not all(
+        isinstance(item, Mapping)
+        and isinstance(item.get("name"), str)
+        and isinstance(item.get("assumptions"), list)
+        and all(isinstance(a, str) for a in item["assumptions"])
+        for item in declared
+    ):
+        raise _ProposalError(INVALID_RECORD, "symbols must be a list of {name, assumptions, domain}")
+    try:
+        names = evaluate.symbols(declared)
+        sides = (evaluate.symbolic(record["lhs"], names), evaluate.symbolic(record["rhs"], names))
+    except EvaluationError as error:
+        raise _ProposalError(INVALID_RECORD, str(error)) from None
+    if max(_degree(side) for side in sides) > MAX_DEGREE:
+        msg = f"the step has degree above {MAX_DEGREE}, too high to check"
+        hint = f"check the paper's own smaller steps, each of degree at most {MAX_DEGREE}, rather than this one"
+        raise _ProposalError(INVALID_RECORD, msg, hint)
+
+
 def _plan(graph: Graph, rubric: Rubric, record: Any) -> _Plan:
     """Check a proposal before it is run.
 
@@ -494,22 +517,7 @@ def _plan(graph: Graph, rubric: Rubric, record: Any) -> _Plan:
             if Fraction(Decimal(numeral)) not in written:
                 raise _ProposalError(UNFAITHFUL, f"no numeral of {[node.id for node in nodes]} equals {numeral}")
     else:
-        _strings(record, "lhs", "rhs", "assumption")
-        declared = record.get("symbols")
-        if not isinstance(declared, list) or not all(
-            isinstance(item, Mapping)
-            and isinstance(item.get("name"), str)
-            and isinstance(item.get("assumptions"), list)
-            and all(isinstance(a, str) for a in item["assumptions"])
-            for item in declared
-        ):
-            raise _ProposalError(INVALID_RECORD, "symbols must be a list of {name, assumptions, domain}")
-        try:
-            names = evaluate.symbols(declared)
-            evaluate.symbolic(record["lhs"], names)
-            evaluate.symbolic(record["rhs"], names)
-        except EvaluationError as error:
-            raise _ProposalError(INVALID_RECORD, str(error)) from None
+        _check_step(record)
     return _Plan(target, check_type, record, nodes=nodes)
 
 
@@ -777,6 +785,30 @@ def _corrected(refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
 
 # The most terms a side's expansion may have, by ``_terms``'s bound, for ``_step`` to expand it.
 MAX_TERMS = 256
+# The highest degree a maths step may have (``_degree``). The numeric check substitutes each point exactly,
+# as rationals, whose size grows with the degree: degree 1000 takes a fraction of a second, 10000 seconds,
+# 20000 most of a minute.
+MAX_DEGREE = 1000
+
+
+def _degree(expression: sympy.Expr) -> int:
+    """A bound on an expression's degree in its symbols, the size its exact evaluation grows with.
+
+    A symbol has degree 1 and a number 0; a sum the largest of its terms', a product the sum of its
+    factors', a power to a numeric exponent its base's times the exponent's size (at least 1), and any
+    other node (a function, a power to a symbolic exponent) the sum of what is inside it. Counts saturate
+    just above ``MAX_DEGREE``.
+    """
+    over = MAX_DEGREE + 1
+    if isinstance(expression, sympy.Symbol):
+        return 1
+    if isinstance(expression, sympy.Number):
+        return 0
+    if isinstance(expression, sympy.Add):
+        return max(_degree(argument) for argument in expression.args)
+    if isinstance(expression, sympy.Pow) and expression.exp.is_Number:
+        return min(_degree(expression.base) * max(math.ceil(abs(expression.exp)), 1), over)
+    return min(sum(_degree(argument) for argument in expression.args), over)
 
 
 def _terms(expression: sympy.Expr) -> int:
@@ -789,15 +821,24 @@ def _terms(expression: sympy.Expr) -> int:
     count inside it otherwise. The bound is computed in one pass over the tree, so deciding not to expand
     costs little whatever the expansion would.
     """
+    # Counts saturate just above the limit, so the bound's own arithmetic stays small whatever the input.
+    over = MAX_TERMS + 1
     if isinstance(expression, sympy.Add):
-        return sum(_terms(argument) for argument in expression.args)
+        return min(sum(_terms(argument) for argument in expression.args), over)
     if isinstance(expression, sympy.Mul):
-        return math.prod(_terms(argument) for argument in expression.args)
+        count = 1
+        for argument in expression.args:
+            count = min(count * _terms(argument), over)
+        return count
     if isinstance(expression, sympy.Pow) and expression.exp.is_Integer:
-        inner = _terms(expression.base)
-        return math.comb(abs(int(expression.exp)) + inner - 1, inner - 1)
+        inner, power = _terms(expression.base), abs(int(expression.exp))
+        if inner == 1:
+            return 1
+        if inner >= over or power >= over:
+            return over
+        return min(math.comb(power + inner - 1, inner - 1), over)
     inside = max((_terms(argument) for argument in expression.args), default=1)
-    return 1 if inside <= MAX_TERMS else inside
+    return 1 if inside <= MAX_TERMS else over
 
 
 def _canonical(side: sympy.Expr) -> str:
