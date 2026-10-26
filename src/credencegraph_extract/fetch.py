@@ -39,6 +39,9 @@ from urllib.parse import urljoin, urlsplit
 MAX_HOPS = 5
 TIMEOUT = 30.0
 MAX_SECONDS = 120.0
+# The most name lookups alive at once; a lookup abandoned at a fetch's deadline holds its place until it returns.
+MAX_RESOLVERS = 4
+_RESOLVERS = threading.BoundedSemaphore(MAX_RESOLVERS)
 # The most a body read asks for at once: each read returns what has arrived, so the deadline is checked between.
 CHUNK = 64 * 1024
 MAX_BYTES = 50 * 1024 * 1024
@@ -260,8 +263,12 @@ def _resolved(host: str, port: int, resolve: Resolve, deadline: float) -> list[s
     """Resolve a host in a worker thread, giving up at the deadline.
 
     A resolver cannot be interrupted, so one still waiting at the deadline is left to finish on its own,
-    in a daemon thread, and its answer is ignored.
+    in a daemon thread, and its answer is ignored. At most ``MAX_RESOLVERS`` such threads are alive at
+    once: a fetch that finds none free before its deadline fails without starting another, so lookups
+    that never return cannot pile up threads.
     """
+    if not _RESOLVERS.acquire(timeout=_left(deadline)):
+        raise FetchError("fetch-failed", "the fetch took longer than its time limit, waiting to resolve a name")
     answer: list[Any] = []
 
     def work() -> None:
@@ -269,9 +276,15 @@ def _resolved(host: str, port: int, resolve: Resolve, deadline: float) -> list[s
             answer.append(list(resolve(host, port)))
         except OSError as error:
             answer.append(error)
+        finally:
+            _RESOLVERS.release()
 
     worker = threading.Thread(target=work, daemon=True)
-    worker.start()
+    try:
+        worker.start()
+    except BaseException:
+        _RESOLVERS.release()
+        raise
     worker.join(_left(deadline))
     if not answer:
         _left(deadline)

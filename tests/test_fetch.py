@@ -440,3 +440,27 @@ def test_a_whole_body_is_read(response: bytes) -> None:
         assert fetch_module._body(read, 1000, time.monotonic() + 5) == b"abc"
     finally:
         connection.close()
+
+
+def test_lookups_that_never_return_hold_at_most_a_few_threads() -> None:
+    release = threading.Event()
+
+    def stuck(host: str, port: int) -> list[str]:
+        release.wait(10)
+        return [PUBLIC]
+
+    before = threading.active_count()
+    try:
+        for _ in range(3 * fetch_module.MAX_RESOLVERS):
+            with pytest.raises(FetchError, match="longer than its time limit"):
+                fetch("http://stuck.example/", resolve=stuck, connect=lambda *args: Stall(), max_seconds=0.02)
+        assert threading.active_count() - before <= fetch_module.MAX_RESOLVERS
+    finally:
+        release.set()
+    # Once the lookups return, their places are free again.
+    deadline = time.monotonic() + 5
+    while threading.active_count() > before and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert (
+        fetch("http://quick.example/", resolve=lambda host, port: [PUBLIC], connect=lambda *args: Stall()).data == b"x"
+    )
