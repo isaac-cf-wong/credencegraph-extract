@@ -1,8 +1,8 @@
-"""Write tools for the tests of the run machinery: ``note`` sets ``attributes.note`` on a node, and
-``observe`` adds a check on a target.
+"""Write tools for the tests of the run machinery.
 
-They stand in for the real tools so the call log, the lock, crash recovery and replay can be tested
-on their own. ``register`` registers them.
+``note`` sets ``attributes.note`` on a node, and ``observe`` adds a check on a target. They stand in
+for the real tools so the call log, the lock, crash recovery and replay can be tested on their own.
+``register`` registers them.
 """
 
 from __future__ import annotations
