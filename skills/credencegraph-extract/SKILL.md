@@ -42,12 +42,14 @@ OpenCode, in the project's `opencode.json`:
     "mcp": {
         "credencegraph-extract": {
             "type": "local",
-            "command": ["credencegraph-extract", "mcp"],
-            "enabled": true
+            "command": ["credencegraph-extract", "mcp"]
         }
     }
 }
 ```
+
+OpenCode 2 nests the same entry one level deeper, under
+`"mcp": {"servers": {...}}`.
 
 Cursor, in the project's `.cursor/mcp.json` (or `~/.cursor/mcp.json`):
 
