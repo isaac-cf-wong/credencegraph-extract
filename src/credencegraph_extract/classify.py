@@ -143,12 +143,34 @@ def _field_schema(field: FormField, rubric: Rubric) -> dict[str, Any]:
     raise RunError("invalid-rubric", msg)
 
 
+def _typed(rubric: Rubric, name: str) -> dict[str, Any]:
+    """The properties a record of one type may have, and those it must have, beside ``node``."""
+    spec = rubric.types[name]
+    properties: dict[str, Any] = {"type": {"type": "string", "enum": [name]}}
+    required = ["type"]
+    if spec.form:
+        needed = [field.name for field in spec.form.values() if field.required]
+        properties["form"] = {
+            "type": "object",
+            "properties": {field.name: _field_schema(field, rubric) for field in spec.form.values()},
+            "additionalProperties": False,
+        }
+        if needed:
+            properties["form"]["required"] = needed
+            required.append("form")
+    if spec.rests_on is not None:
+        properties["rests_on"] = {"type": "array", "items": dict(_STRING)}
+    properties["hedge"] = dict(_STRING)
+    return {"type": "object", "properties": properties, "required": required, "additionalProperties": False}
+
+
 def output_schema(rubric: Rubric) -> dict[str, Any]:
     """Return the output schema of the pass, built from the rubric.
 
-    The form allows every field some type declares, each with the schema of its field type (or any
-    of them, where types declare one name differently); the core checks that a field belongs to the
-    record's type. No record has a field for a credence.
+    A record of each type a document chunk may have is a branch of its own, so a server that enforces
+    the schema keeps every record to what its type allows: a ``form`` with only the type's fields,
+    those the type requires required, and ``rests_on`` only on a type with an edge rule. A split's
+    children use the same branches without ``node``. No record has a field for a credence.
 
     Args:
         rubric: The rubric.
@@ -157,45 +179,28 @@ def output_schema(rubric: Rubric) -> dict[str, Any]:
         The JSON Schema.
     """
     types = [name for name, spec in rubric.types.items() if DOCUMENT in spec.origins]
-    fields: dict[str, list[dict[str, Any]]] = {}
-    for name in types:
-        for field in rubric.types[name].form.values():
-            schema = _field_schema(field, rubric)
-            if schema not in fields.setdefault(field.name, []):
-                fields[field.name].append(schema)
-    form = {
-        "type": "object",
-        "properties": {
-            name: options[0] if len(options) == 1 else {"anyOf": options} for name, options in fields.items()
-        },
-        "additionalProperties": False,
-    }
-    typed = {
-        "type": {"type": "string", "enum": types},
-        "form": form,
-        "rests_on": {"type": "array", "items": dict(_STRING)},
-        "hedge": dict(_STRING),
-    }
-    single = {
-        "type": "object",
-        "properties": {"node": dict(_STRING), **typed},
-        "required": ["node", "type"],
-        "additionalProperties": False,
-    }
-    child = {"type": "object", "properties": typed, "required": ["type"], "additionalProperties": False}
+    children = [_typed(rubric, name) for name in types]
+    singles = [
+        {
+            **child,
+            "properties": {"node": dict(_STRING), **child["properties"]},
+            "required": ["node", *child["required"]],
+        }
+        for child in children
+    ]
     split = {
         "type": "object",
         "properties": {
             "node": dict(_STRING),
             "split": {"type": "array", "items": dict(_STRING)},
-            "children": {"type": "array", "items": child},
+            "children": {"type": "array", "items": {"anyOf": children}},
         },
         "required": ["node", "split", "children"],
         "additionalProperties": False,
     }
     return {
         "type": "object",
-        "properties": {"records": {"type": "array", "items": {"anyOf": [single, split]}}},
+        "properties": {"records": {"type": "array", "items": {"anyOf": [*singles, split]}}},
         "required": ["records"],
         "additionalProperties": False,
     }
