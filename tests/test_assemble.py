@@ -12,7 +12,7 @@ from credencegraph.ingest.chunks import chunks_to_graph
 from credencegraph.ingest.latex import read_latex
 from credencegraph.rubric import Rubric, check_graph, load_rubric, loads_rubric
 
-from credencegraph_extract.assemble import assemble, edge_rules_not_requires
+from credencegraph_extract.assemble import assemble, edge_rules_not_requires, fixes
 
 
 @pytest.fixture
@@ -187,3 +187,142 @@ def test_edge_rules_other_than_requires_are_found(rubric: Rubric) -> None:
     assert edge_rules_not_requires(rubric) == []
     text = RUBRIC.read_text(encoding="utf-8").replace('relation = "requires"', 'relation = "supports"')
     assert edge_rules_not_requires(loads_rubric(text)) == ["claim"]
+
+
+# ``fixes`` says what to change in a record the core refused, for the model's one repair call.
+
+
+def test_a_clause_id_used_as_a_node_says_how_to_split(rubric: Rubric, graph: Graph) -> None:
+    [fix] = fixes(graph, rubric, {"node": "s-2a", "type": "result", "form": {"quantity": "The bias"}})
+    assert fix.startswith("'s-2a' is not a chunk id: a clause id such as 's-2a' exists only once a split of 's-2'")
+    assert '"node": \'s-2\', "split" and "children"' in fix
+
+
+def test_an_unknown_node_points_at_the_chunk_list(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "x-9", "type": "method"}) == [
+        "'x-9' is not a chunk id: use one of the ids listed under Chunks"
+    ]
+
+
+def test_an_unknown_type_lists_the_types_a_chunk_may_have(rubric: Rubric, graph: Graph) -> None:
+    [fix] = fixes(graph, rubric, {"node": "s-1", "type": "assumption"})
+    assert fix == (
+        "'assumption' is not a type a chunk may have: use one of "
+        "['reference', 'method', 'result', 'derivation', 'literature_claim', 'claim']"
+    )
+
+
+def test_rests_on_on_a_type_that_rests_on_nothing_is_to_be_left_out(rubric: Rubric, graph: Graph) -> None:
+    record = {"node": "e-1", "type": "derivation", "rests_on": ["s-1"]}
+    assert fixes(graph, rubric, record) == ["type 'derivation' rests on nothing: leave out rests_on"]
+
+
+def test_rests_on_a_node_of_another_type_says_which_types_are_allowed(rubric: Rubric, graph: Graph) -> None:
+    record = {"node": "s-5", "type": "claim", "form": {"shape": "bound", "statement": "the estimator"}}
+    assert fixes(graph, rubric, {**record, "rests_on": ["s-4", "q-1"]}) == [
+        (
+            "'s-4' in rests_on is of type 'unassigned', and type 'claim' rests only on "
+            "['result', 'method', 'derivation', 'literature_claim']: type 's-4' as one of those in the same answer, "
+            "or leave it out of rests_on"
+        ),
+        "'q-1' in rests_on is not a node id: use ids listed under Chunks",
+    ]
+    assert fixes(graph, rubric, record) == [
+        "type 'claim' must rest on at least 1 chunk(s) of the types ['result', 'method', 'derivation', 'literature_claim']"
+    ]
+
+
+def test_form_fields_of_another_type_and_missing_ones_are_named(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "e-1", "type": "derivation", "form": {"quantity": "b"}}) == [
+        "type 'derivation' has no form field ['quantity']: its form fields are ['equation']; leave the others out"
+    ]
+    assert fixes(graph, rubric, {"node": "s-2", "type": "result"}) == ["type 'result' needs the form field 'quantity'"]
+
+
+def test_text_values_not_in_the_chunk_are_to_be_copied_exactly(rubric: Rubric, graph: Graph) -> None:
+    record = {"node": "s-2", "type": "result", "form": {"quantity": "the Bias"}, "hedge": "perhaps"}
+    assert fixes(graph, rubric, record) == [
+        "form field 'quantity': 'the Bias' is not a substring of the text; copy it exactly from the chunk's text",
+        "hedge 'perhaps' is not in the chunk's text: copy the phrase exactly, or leave hedge out",
+    ]
+    assert fixes(graph, rubric, {"node": "s-2", "type": "result", "form": {"quantity": 3}}) == [
+        "form field 'quantity' of type 'result' must be a verbatim"
+    ]
+
+
+def test_a_split_names_each_clause_and_child_that_needs_a_change(rubric: Rubric, graph: Graph) -> None:
+    record = {
+        "node": "s-2",
+        "split": ["The bias vanishes for long segments", "the estimator is consistent"],
+        "children": [{"type": "result", "form": {"quantity": "The bias"}}, {"type": "derivation", "rests_on": ["s-1"]}],
+    }
+    assert fixes(graph, rubric, record) == [
+        "clause 2 occurs 0 times in the text of 's-2': copy a clause that occurs once",
+        "children[1]: type 'derivation' rests on nothing: leave out rests_on",
+    ]
+    assert fixes(graph, rubric, {"node": "s-2", "split": ["a"], "children": []}) == [
+        'a split record needs "split", a list of clauses, and "children", one typed record per clause'
+    ]
+
+
+def test_a_record_the_core_accepts_needs_no_fix(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "s-1", "type": "method", "form": {"kind": "simulation"}}) == []
+    assert fixes(graph, rubric, "not a record") == ["send each record as a JSON object"]
+
+
+def test_a_rests_on_that_is_not_a_list_is_named_as_such(rubric: Rubric, graph: Graph) -> None:
+    graph = assemble(graph, rubric, [{"node": "s-1", "type": "method", "form": {"kind": "simulation"}}]).graph
+    record = {
+        "node": "s-5",
+        "type": "claim",
+        "form": {"shape": "bound", "statement": "the estimator"},
+        "rests_on": "s-1",
+    }
+    assert fixes(graph, rubric, record) == ['rests_on must be a list of chunk ids, such as ["s-2"]']
+
+
+def test_a_form_that_is_not_an_object_lists_the_types_fields(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "s-1", "type": "method", "form": "simulation"}) == [
+        "form must be an object of field names and values; the form fields of type 'method' are ['kind']"
+    ]
+
+
+def test_an_enum_value_outside_its_values_lists_them(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "s-1", "type": "method", "form": {"kind": "survey"}}) == [
+        "form field 'kind' of type 'method' must be one of ['simulation', 'dataset', 'procedure']"
+    ]
+
+
+def test_an_incomplete_quantity_says_what_it_needs() -> None:
+    rubric = loads_rubric(
+        '[rubric]\nformat = 1\nname = "q"\nversion = "1"\n'
+        '[types.result]\ndescription = "r"\nform.amount = { type = "quantity", required = true }\n'
+    )
+    graph = chunks_to_graph(read_latex(PAPER), "paper.tex", rubric.initial)[0]
+    assert fixes(graph, rubric, {"node": "s-1", "type": "result", "form": {"amount": {"value": 400}}}) == [
+        "form field 'amount' of type 'result' must be an object with a number \"value\" and a string \"unit\""
+    ]
+
+
+def test_a_split_child_is_told_to_copy_from_its_clause(rubric: Rubric, graph: Graph) -> None:
+    record = {
+        "node": "s-2",
+        "split": ["The bias vanishes for long segments", "the estimator is therefore consistent"],
+        "children": [
+            {"type": "result", "form": {"quantity": "the estimator"}, "hedge": "therefore"},
+            {"type": "method", "form": {"kind": "procedure"}},
+        ],
+    }
+    assert fixes(graph, rubric, record) == [
+        (
+            "children[0]: form field 'quantity': 'the estimator' is not a substring of the text; copy it exactly "
+            "from the clause's text"
+        ),
+        "children[0]: hedge 'therefore' is not in the clause's text: copy the phrase exactly, or leave hedge out",
+    ]
+
+
+def test_a_chunk_id_written_with_its_label_is_told_the_id(rubric: Rubric, graph: Graph) -> None:
+    assert fixes(graph, rubric, {"node": "s-1 (unassigned)", "type": "method", "form": {"kind": "simulation"}}) == [
+        "'s-1 (unassigned)' is not a chunk id: write the id alone, 's-1', without the type in parentheses"
+    ]

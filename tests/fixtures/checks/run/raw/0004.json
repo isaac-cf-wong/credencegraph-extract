@@ -1,0 +1,47 @@
+{
+  "pass": "checks",
+  "request": {
+    "provider": "anthropic",
+    "sdk_version": "2.3.0",
+    "model": "claude-fixture-20261024",
+    "parameters": {
+      "max_tokens": 1024
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "passage": {
+          "type": "string"
+        },
+        "supports": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "passage",
+        "supports"
+      ],
+      "additionalProperties": false
+    },
+    "prompt_digest": "sha256:91b5dc0dec5d0d9a9adacf4ce5d120640a03827991da074a505b822426b25c73",
+    "request_id": "req_msg_fixture0004"
+  },
+  "response": {
+    "id": "msg_fixture0004",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-fixture-20261024",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"passage\": \"In comparable settings the bias stays below 1% for all segment lengths we tried\", \"supports\": true}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 40,
+      "output_tokens": 12
+    }
+  }
+}

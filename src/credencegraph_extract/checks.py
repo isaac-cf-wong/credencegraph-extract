@@ -23,7 +23,8 @@ document, and the model proposes checks, each of a type the runner implements:
 
 A proposal the runner cannot run, being malformed, of an unknown type, on a node the type does not
 target, with a numeral the cited chunks do not contain, or a second of its type on one node, is
-rejected, with the code and record. Two checks of one type on one node would fail or pass together,
+rejected, with the code and record, and sent back to the model once with the error and what to change
+in it; what it still gets wrong stays rejected. Two checks of one type on one node would fail or pass together,
 so they must not count as two observations.
 
 Each check run becomes an evidence node ``c-NNN`` of its check type, numbered in document order of
@@ -40,7 +41,7 @@ model: ``fails`` if any failed, else ``holds`` if any passed, else ``undetermine
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from fractions import Fraction
@@ -56,6 +57,7 @@ from credencegraph.rubric.model import ANALYST, DOCUMENT, EVIDENCE, Check
 from credencegraph.rubric.validate import CITES, FAILS, HOLDS, NOT_ASSESSED, PART_OF, UNDETERMINED, node_text, origin_of
 
 from credencegraph_extract import evaluate
+from credencegraph_extract.assemble import unlabelled
 from credencegraph_extract.cited import Cited, CitedError, no_sources
 from credencegraph_extract.digest import bytes_digest
 from credencegraph_extract.evaluate import ERROR, FAILED, PASSED, EvaluationError
@@ -80,6 +82,12 @@ INVALID_RECORD = "invalid-record"
 DUPLICATE_RECORD = "duplicate-record"
 UNFAITHFUL = "unfaithful-numeral"
 NOT_A_TARGET = "not-a-target"
+UNKNOWN_NODE = "unknown-node"
+NOT_REJECTED = "not-rejected"
+
+# The rounds of the plan: the first answer, and the one correcting its refused proposals.
+INITIAL = "initial"
+REPAIR = "repair"
 
 # The files of a check's directory.
 INPUTS = "inputs.json"
@@ -114,6 +122,11 @@ $targets
 
 Chunks of the document, in document order, as id (type): text
 $chunks
+
+Proposals from your previous answer that were refused, each with the error it got and what to change
+("fix"). If this list is not empty, return corrected proposals for these targets only, and nothing
+else:
+$rejected
 """
 
 JUDGE_TEMPLATE = """\
@@ -207,16 +220,73 @@ def applicable(rubric: Rubric, kind: str) -> list[str]:
     return [name for name in PROPOSED if name in rubric.checks and kind in rubric.checks[name].targets]
 
 
-def render(graph: Graph, rubric: Rubric) -> str:
+# What to change in a refused proposal, by rejection code, where the code alone says it.
+_FIXES = {
+    NOT_A_TARGET: "propose a check only on a target listed under Targets, of a check type listed for it",
+    UNKNOWN_NODE: "use only chunk ids listed under Chunks",
+    DUPLICATE_RECORD: "propose at most one check of each type on a target",
+    NOT_REJECTED: "while correcting, send proposals only for the targets listed below",
+}
+
+
+def _label_fix(code: str, record: Any) -> str | None:
+    """What to change in a proposal that wrote an id with the label its prompt lists it with, as ``s-2 (result)``."""
+    if not isinstance(record, Mapping):
+        return None
+    target, nodes = record.get("target"), record.get("nodes")
+    bare = unlabelled(target)
+    if code == NOT_A_TARGET and bare is not None:
+        return f"{target!r} is not a target id: write the id alone, {bare!r}, without the type in parentheses"
+    labelled = [node for node in nodes if unlabelled(node)] if isinstance(nodes, list) else []
+    if code == UNKNOWN_NODE and labelled:
+        bare_nodes = [unlabelled(node) for node in labelled]
+        return f"{labelled} are not chunk ids: write each id alone, as {bare_nodes}, without the type in parentheses"
+    return None
+
+
+def fix(code: str, record: Any) -> str | None:
+    """Say what to change in a refused proposal, as an instruction to the model, or ``None`` beyond the error.
+
+    Args:
+        code: The rejection code.
+        record: The proposal.
+
+    Returns:
+        The instruction.
+    """
+    nodes = record.get("nodes") if isinstance(record, Mapping) else None
+    label_fix = _label_fix(code, record)
+    if label_fix is not None:
+        return label_fix
+    if code == UNFAITHFUL:
+        return (
+            f"write every number, the expected value included, exactly as a numeral the text of {nodes} writes, "
+            "and add to nodes any chunk whose numeral you use; a constant no cited chunk writes, such as the 1 of "
+            "1 - p or a 100, is not allowed: rewrite the expression without it, as a - a * p rather than "
+            "a * (1 - p), where a and p are numerals the text writes"
+        )
+    return _FIXES.get(code)
+
+
+def render(graph: Graph, rubric: Rubric, rejected: Sequence[Mapping[str, Any]] = ()) -> str:
     """Render the plan prompt.
 
     Args:
         graph: The graph.
         rubric: The rubric.
+        rejected: The refused proposals to correct; none for the first call. Each is sent with its
+            code, error and, where ``fix`` gives one, what to change.
 
     Returns:
         The prompt.
     """
+    repair = []
+    for rejection in rejected:
+        item = {key: rejection[key] for key in ("record", "code", "message")}
+        found = fix(rejection["code"], rejection["record"])
+        if found:
+            item["fix"] = found
+        repair.append(item)
     lines = []
     for node_id in targets(graph, rubric):
         node = graph.nodes[node_id]
@@ -231,7 +301,9 @@ def render(graph: Graph, rubric: Rubric) -> str:
         key = node.attributes.get("key")
         extra = f" [label {label}]" if label else f" [key {key}]" if key else ""
         chunks.append(f"{node.id} ({node.kind}){extra}: {node.statement}")
-    return Template(PLAN_TEMPLATE).substitute(targets="\n".join(lines), chunks="\n".join(chunks))
+    return Template(PLAN_TEMPLATE).substitute(
+        targets="\n".join(lines), chunks="\n".join(chunks), rejected=json.dumps(repair, indent=2, ensure_ascii=False)
+    )
 
 
 def output_schema(rubric: Rubric) -> dict[str, Any]:
@@ -327,7 +399,7 @@ def _chunks(graph: Graph, ids: Sequence[str]) -> list[Node]:
     """Return the document nodes a proposal cites, or refuse it."""
     missing = [node_id for node_id in ids if node_id not in graph]
     if missing:
-        raise _ProposalError("unknown-node", f"nodes not in the graph: {missing}")
+        raise _ProposalError(UNKNOWN_NODE, f"nodes not in the graph: {missing}")
     nodes = [graph.nodes[node_id] for node_id in ids]
     others = [node.id for node in nodes if origin_of(node) != DOCUMENT]
     if others:
@@ -582,6 +654,46 @@ def directory_digest(files: Mapping[str, bytes]) -> str:
     return bytes_digest(listing.encode("utf-8"))
 
 
+def _corrected(refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
+    """The targets a repair answer may propose checks on: those of the refused proposals.
+
+    A target written with its label, as ``s-2 (result)``, counts as the id it names, so its correction is
+    admitted. When a refused proposal names no target at all (its target is missing or not a string), its
+    correction may be on any target: there is no id to hold it to. Returns ``None`` then, for no restriction; duplicates are still refused.
+    """
+    named = [rejection["node"] for rejection in refused]
+    if not all(isinstance(target, str) for target in named):
+        return None
+    # An unknown name stays in the set as written: it matches no correction, so it opens nothing.
+    return {unlabelled(target) or target for target in named}
+
+
+def _admit(
+    graph: Graph, rubric: Rubric, proposals: Sequence[Any], plans: list[_Plan], *, only: Collection[str] | None = None
+) -> list[dict[str, Any]]:
+    """Check each proposal and add those that pass to ``plans``; return the refused ones as rejections.
+
+    A proposal is refused as ``_plan`` refuses it, when it repeats the target and type of a plan already
+    admitted, and, with ``only``, when its target is not one of those.
+    """
+    rejections = []
+    for record in proposals:
+        try:
+            target = record.get("target") if isinstance(record, Mapping) else None
+            if only is not None and not (isinstance(target, str) and target in only):
+                raise _ProposalError(NOT_REJECTED, f"{target!r} had no refused proposal to correct")
+            plan = _plan(graph, rubric, record)
+            if any((plan.target.id, plan.type) == (other.target.id, other.type) for other in plans):
+                msg = f"{plan.target.id!r} has an earlier {plan.type} proposal: one check of a type per node"
+                raise _ProposalError(DUPLICATE_RECORD, msg)
+            plans.append(plan)
+        except _ProposalError as refused:
+            node = record.get("target") if isinstance(record, Mapping) else None
+            node = node if isinstance(node, str) else None
+            rejections.append({"node": node, "code": refused.code, "message": str(refused), "record": record})
+    return rejections
+
+
 def verdict(results: Sequence[str]) -> str | None:
     """Return the verdict the results of a node's checks give, or ``None`` when no check ran.
 
@@ -615,7 +727,7 @@ class CheckPass:
     template: str = TEMPLATE
 
     def run(self, graph: Graph, rubric: Rubric, ask: Ask) -> Outcome:
-        """Apply the pass: one plan call, then one judgement call per citation check.
+        """Apply the pass: one plan call, one repair call if any proposal was refused, then one judgement call per citation check.
 
         A graph with no node to assess needs no call and is returned unchanged; nor does one whose
         nodes no implemented check type of the rubric may run on, whose nodes are then marked
@@ -628,7 +740,7 @@ class CheckPass:
 
         Returns:
             The graph with the check nodes, their check edges and the verdicts; the rejected
-            proposals; the files of each check's directory; and the report, whose ``checks`` lists
+            proposals of both rounds, each marked with its round; the files of each check's directory; and the report, whose ``checks`` lists
             each check's id, type, target and result and whose ``uncalibrated`` lists every check
             run with a model its check type does not list.
 
@@ -639,26 +751,19 @@ class CheckPass:
         assessed = targets(graph, rubric)
         if not assessed:
             return Outcome(graph)
-        proposals: list[Any] = []
         model: str | None = None
+        plans: list[_Plan] = []
+        rejections: list[dict[str, Any]] = []
         if any(applicable(rubric, graph.nodes[node_id].kind) for node_id in assessed):
             output, request = ask.answer(render(graph, rubric), output_schema(rubric))
-            proposals = _proposals(output)
             model = request.get("model")
+            refused = _admit(graph, rubric, _proposals(output), plans)
+            rejections = [{"round": INITIAL, **rejection} for rejection in refused]
+            if refused:
+                answer = ask(render(graph, rubric, refused), output_schema(rubric))
+                again = _admit(graph, rubric, _proposals(answer), plans, only=_corrected(refused))
+                rejections.extend({"round": REPAIR, **rejection} for rejection in again)
         order = {node_id: i for i, node_id in enumerate(graph.nodes)}
-        rejections = []
-        plans: list[_Plan] = []
-        for record in proposals:
-            try:
-                plan = _plan(graph, rubric, record)
-                if any((plan.target.id, plan.type) == (other.target.id, other.type) for other in plans):
-                    msg = f"{plan.target.id!r} has an earlier {plan.type} proposal: one check of a type per node"
-                    raise _ProposalError(DUPLICATE_RECORD, msg)
-                plans.append(plan)
-            except _ProposalError as refused:
-                node = record.get("target") if isinstance(record, Mapping) else None
-                node = node if isinstance(node, str) else None
-                rejections.append({"node": node, "code": refused.code, "message": str(refused), "record": record})
         plans.sort(key=lambda plan: order[plan.target.id])
         results: list[Result] = []
         uncalibrated = []

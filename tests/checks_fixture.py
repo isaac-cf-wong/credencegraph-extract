@@ -14,7 +14,8 @@ The check plan proposes, out of document order:
   quotes a passage of it that supports the sentence;
 - ``citation-support`` on ``s-8``: the cited work is missing, so the check errs without a judgement;
 - two proposals that are rejected: one whose numeral 300 no cited chunk contains, and one on the
-  method ``s-1``, which is not assessed.
+  method ``s-1``, which is not assessed. They go back to the model once, and its corrections are
+  rejected too: a repeat of the check of ``s-2``, and a check on ``e-1``, which had nothing refused.
 
 ``e-1`` gets no check and ``s-9``, a claim, is of a type no implemented check runs on.
 """
@@ -97,10 +98,24 @@ PLAN: list[dict[str, Any]] = [
 PASSAGE = "In comparable settings the bias stays below 1% for all segment lengths we tried"
 JUDGEMENT = {"passage": PASSAGE, "supports": True}
 
+# The answer to the repair call, which sends back the two refused proposals: it repeats the check of
+# s-2 already admitted (refused as a duplicate) and proposes a check on e-1, which had nothing refused.
+REPAIR = [
+    {
+        "target": "s-2",
+        "type": "recompute-numbers",
+        "nodes": ["s-1", "s-2"],
+        "expression": "400 * 250",
+        "expected": "90000",
+    },
+    {**PRODUCT, "target": "e-1"},
+]
+
 BODIES = [
     message(1, json.dumps({"records": CLASSIFY})),
     message(2, json.dumps({"checks": PLAN})),
-    message(3, json.dumps(JUDGEMENT)),
+    message(3, json.dumps({"checks": REPAIR})),
+    message(4, json.dumps(JUDGEMENT)),
 ]
 
 # What each check finds, in id order: its type, target and result.
