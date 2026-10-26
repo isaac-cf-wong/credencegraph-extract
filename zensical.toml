@@ -17,7 +17,7 @@ site_name = "credencegraph-extract Documentation"
 # meaningful description of the site content for use by search engines.
 #
 # Read more: https://zensical.org/docs/setup/basics/#site_description
-site_description = "An automated analyst for credencegraph, with every model call recorded and replayable."
+site_description = "The tools an agent uses to build the credencegraph graph of a paper, with every call recorded and replayable."
 
 # The site_author attribute. This is used in the HTML head element.
 #

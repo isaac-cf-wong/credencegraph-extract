@@ -46,6 +46,8 @@ ARXIV_ABS = "https://arxiv.org/abs/{}"
 ARXIV_PDF = "https://arxiv.org/pdf/{}"
 DOI_URL = "https://doi.org/{}"
 
+# A bibliography key that can name a file: no separators, and not a hidden or relative name.
+_KEY = re.compile(r"[\w:+-][\w.:+-]*")
 # An arXiv identifier in a bibliography entry, new style (2101.01234v2) or old (hep-th/9901001).
 _ARXIV = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)")
 # An arXiv URL: its identifier, without a version, and the version if it names one.
@@ -206,7 +208,7 @@ def key_file(reference: Node, names: Mapping[str, str] | set[str]) -> str | None
         ``<key>.txt``, ``<key>.tex`` or ``<key>.pdf``, the first there, or ``None``.
     """
     key = reference.attributes.get("key")
-    if not isinstance(key, str):
+    if not isinstance(key, str) or not _KEY.fullmatch(key):
         return None
     return next((f"{key}{suffix}" for suffix in SUFFIXES if f"{key}{suffix}" in names), None)
 
