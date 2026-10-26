@@ -38,7 +38,8 @@ ERROR = "error"
 # The longest expression, and the most syntax nodes, the evaluators accept.
 MAX_LENGTH = 500
 MAX_NODES = 200
-# The largest exponent a power of two numbers may have: ``9 ** 9 ** 9`` would not finish.
+# The largest numeric exponent a power may have, of a number or of an expression: ``9 ** 9 ** 9`` would not
+# finish, nor would expanding, simplifying or evaluating ``(x + y) ** 10 ** 100``.
 MAX_EXPONENT = 100
 
 # A numeral as the evaluators accept it: decimal digits, an optional fraction and an optional exponent.
@@ -116,9 +117,8 @@ def _numeral(expression: str, node: ast.Constant) -> str:
 
 
 def _check_power(base: Any, exponent: Any) -> None:
-    """Refuse a power of two numbers whose exponent is too large to compute."""
-    number = isinstance(base, Fraction | sympy.Number) and isinstance(exponent, Fraction | sympy.Number)
-    if number and abs(exponent) > MAX_EXPONENT:
+    """Refuse a power whose exponent is a number too large to compute with, whatever its base."""
+    if isinstance(exponent, Fraction | sympy.Number) and abs(exponent) > MAX_EXPONENT:
         msg = f"the exponent {exponent} is larger than {MAX_EXPONENT}"
         raise EvaluationError(msg)
 

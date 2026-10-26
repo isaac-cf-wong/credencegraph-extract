@@ -59,6 +59,8 @@ nav = [
     { "Verify" = "api/verify.md" },
     { "Agent-tool runs" = "api/session.md" },
     { "Graph tools" = "api/tools.md" },
+    { "Fetch" = "api/fetch.md" },
+    { "Citation sources" = "api/citation.md" },
   ] },
   { "Contributing" = "contributing.md" },
   { "Security" = "security.md" },

@@ -253,15 +253,18 @@ lists the node's type in its `targets`:
   `--allow-uncalibrated` is given, and then `report.json` lists each such check
   under `passes.checks.uncalibrated`.
 
-A proposal that cannot be run, or a second of its type on one node (the two
-would pass or fail together), is rejected with a code in `rejections.json`. The
-refused proposals go back to the model once, each with its error and a `fix`
-(for an unfaithful numeral: cite every chunk whose numeral is used, and write
-the expression with the text's own numerals only, as `a - a * p` rather than
-`a * (1 - p)`); the corrections are checked the same way, and each rejection
-names its round, `initial` or `repair`. Each check that runs becomes an
-**evidence node** `c-NNN` (in document order of its target, then run order) of
-its check type, with a statement from a fixed template
+A proposal that cannot be run, a second of its type on one node, or the same
+step as another proposal on another target (the same expected value and exact
+value of the expression, or the same two sides of a maths step however they are
+written) is rejected with a code in `rejections.json`: checks that would pass or
+fail together are one observation, not two. The refused proposals go back to the
+model once, each with its error and a `fix` (for an unfaithful numeral: cite
+every chunk whose numeral is used, and write the expression with the text's own
+numerals only, as `a - a * p` rather than `a * (1 - p)`; for a citation naming a
+bibliography key, the id of its entry); the corrections are checked the same
+way, and each rejection names its round, `initial` or `repair`. Each check that
+runs becomes an **evidence node** `c-NNN` (in document order of its target, then
+run order) of its check type, with a statement from a fixed template
 (`recompute-numbers on s-3: passed`), and the check record in
 `attributes.check`: `type`, `target`, `artifact`, `inputs`, `result`, `detail`,
 `tool` (this package, Python and the libraries used), `model` (provider, model
@@ -320,6 +323,37 @@ the checks, runs the core's check at the `assessed` level with rubric credences,
 and writes `graph.json`, `rejections.json` and `report.json`; any later write
 removes them until the next `finish_run`. `verify` takes a finished run of
 either format.
+
+`run_checks` runs proposals of the maths check types (`recompute-numbers`,
+`rederive-maths` and its numeric fallback), checked as the check pass checks
+them, and adds a check node and its files under `checks/` for each. Checks are
+append-only: a check is never withdrawn, nor run again on its target, nor run on
+another target as another encoding of the same step, so a failed check stays
+observed. The versions of the code that ran a call's checks are logged with it.
+Every check finishes in bounded time: an exponent above 100 or a maths step of
+degree above 1000 is refused when it is proposed, and a step too large to
+simplify symbolically is decided by the numeric fallback.
+
+`judge_citation` takes the citing node, the bibliography entry's id, a source,
+the passage the agent found and whether it supports the node. The tool reads the
+source itself, never text the agent pastes: a file of the run's copy of the
+cited works, or an `http` or `https` URL, fetched from public addresses only (it
+connects to the address it checked, on every redirect hop, so a URL cannot reach
+the machine's own network). The check passes or fails, as the agent judged, only
+when the passage is in the source and the source is **tied to the reference**:
+the cited copy the entry's key names, unchanged since `start_run`; the arXiv
+paper the entry names, fetched by the tool at the entry's version or the current
+one; or the page the entry's DOI resolves to. Any other source, such as a page
+the agent wrote, gives an `error`, which moves no credence, and `report.json`
+lists it. A citation check that passed or failed stays; one that erred may be
+followed by another.
+
+What the tool read is logged with the call (the URLs, the digests of the bytes
+and of their text, and where the passage is), not the bytes, which are kept in
+`sources/` only with `store_source`. Rebuilding a run reads nothing again;
+`replay` reads every source again from its bytes and refuses a reading they do
+not give, so a fetched source the run did not store is passed with
+`--sources DIR`, as files named by the hex of their digest.
 
 ## Verify
 

@@ -23,10 +23,13 @@ The layout::
       ingested.json   the graph start_run ingested, the start of every rebuild
       rubric.toml     byte copy of the rubric
       cited/          byte copies of the cited works, made by start_run
+      checks/c-NNN/   each check's inputs, output and log, written from the state
       source/         a copy of the document, only with store_source
+      sources/        the bytes of each fetched source, named by digest, only with store_source
       graph.json      the graph, only while the run is finished
       rejections.json every refused record, only while the run is finished
-      report.json     the core's coverage report, only while the run is finished
+      report.json     coverage, untied citation checks and checks made with a model their type was
+                      not fitted with, only while the run is finished
 
 ``replay`` re-ingests the document and applies every logged call again, checking each call's result
 digest; the graph it ends with must be byte-identical to the run's. The log records no local path:
@@ -58,9 +61,9 @@ from credencegraph.rubric.model import DOCUMENT
 from credencegraph.rubric.validate import origin_of
 
 from credencegraph_extract.assemble import edge_rules_not_requires, premises_rubric_problem
-from credencegraph_extract.checks import IMPLEMENTED
+from credencegraph_extract.checks import IMPLEMENTED, plain
 from credencegraph_extract.digest import bytes_digest
-from credencegraph_extract.run import RunError, new_run_id
+from credencegraph_extract.run import CHECKS, RunError, new_run_id
 from credencegraph_extract.version import __version__
 
 FORMAT = "credencegraph-extract-run"
@@ -73,6 +76,7 @@ INGESTED = "ingested.json"
 RUBRIC = "rubric.toml"
 CITED = "cited"
 SOURCE = "source"
+SOURCES = "sources"
 LOCK = ".lock"
 GRAPH = "graph.json"
 REJECTIONS = "rejections.json"
@@ -95,11 +99,13 @@ class State:
         graph: The graph so far.
         rejections: Every refused record or proposal, with the call that sent it.
         finished: Whether the last write was ``finish_run``; any other write makes it ``False``.
+        files: The files of the checks run, by path in the run (``checks/c-NNN/<name>``), as text.
     """
 
     graph: Graph
     rejections: tuple[Mapping[str, Any], ...] = ()
     finished: bool = False
+    files: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -111,14 +117,21 @@ class Context:
         run_id: The run's id.
         rubric: The run's rubric.
         call: The number of the call being applied, from 1 for ``start_run``.
-        sources: Where a replay finds fetched sources the run did not store, as files named by their
-            digest; ``None`` in a live run.
+        cited: The digest of each file of the run's copy of the cited works, as ``start_run`` recorded it.
+        model: The model the call reports.
+        replaying: Whether the call is applied by ``replay``, which reads every source again from its
+            bytes; a live call or a rebuild takes what the log recorded.
+        sources: Where a replay finds fetched sources the run did not store, as files named by the hex
+            of their digest.
     """
 
     run_dir: Path
     run_id: str
     rubric: Rubric
     call: int
+    cited: Mapping[str, str] = field(default_factory=dict)
+    model: str | None = None
+    replaying: bool = False
     sources: Path | None = None
 
 
@@ -353,6 +366,7 @@ def _state_file(state: State, calls: int, log_digest: str) -> bytes:
             "log_digest": log_digest,
             "finished": state.finished,
             "rejections": [dict(item) for item in state.rejections],
+            "files": dict(sorted(state.files.items())),
             "graph": graph_to_dict(state.graph),
         }
     )
@@ -367,6 +381,31 @@ def _operations() -> dict[str, Operation]:
     from credencegraph_extract import tools  # noqa: F401, PLC0415 - registers the operations; tools imports this module
 
     return OPERATIONS
+
+
+def _context(  # noqa: PLR0913 - the run, its log, and how the call is applied
+    run_dir: Path,
+    manifest: Mapping[str, Any],
+    rubric: Rubric,
+    calls: list[dict[str, Any]],
+    call: Mapping[str, Any],
+    *,
+    replaying: bool = False,
+    sources: Path | None = None,
+) -> Context:
+    """The context a logged call is applied in: the run, the cited works' pins from its first call, and the call's model."""
+    cited = calls[0]["args"].get("cited") or {}
+    model = call.get("model")
+    return Context(
+        run_dir,
+        manifest["run"],
+        rubric,
+        call["seq"],
+        cited=dict(cited),
+        model=model if isinstance(model, str) else None,
+        replaying=replaying,
+        sources=sources,
+    )
 
 
 def _apply(context: Context, state: State, call: Mapping[str, Any]) -> tuple[State, dict[str, Any]]:
@@ -390,7 +429,7 @@ def _rebuild(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls: 
     state = State(graph)
     _check_digests(calls[0], state, _start_result(graph, rubric, manifest["run"]))
     for call in calls[1:]:
-        context = Context(run_dir, manifest["run"], rubric, call["seq"])
+        context = _context(run_dir, manifest, rubric, calls, call)
         state, result = _apply(context, state, call)
         _check_digests(call, state, result)
     return state
@@ -411,7 +450,10 @@ def _load(run_dir: Path, manifest: Mapping[str, Any], calls: list[dict[str, Any]
     if isinstance(saved, dict) and saved.get("calls") == len(calls) and saved.get("log_digest") == log_digest:
         try:
             state = State(
-                graph_from_dict(saved["graph"]), tuple(saved.get("rejections") or ()), bool(saved.get("finished"))
+                graph_from_dict(saved["graph"]),
+                tuple(saved.get("rejections") or ()),
+                bool(saved.get("finished")),
+                dict(saved.get("files") or {}),
             )
         except (KeyError, TypeError, ValueError):
             state = None
@@ -507,7 +549,7 @@ def write(  # noqa: PLR0913 - the call and who makes it
         # The call is applied to its arguments as the log will hold them, so a replay, which reads them
         # back from the log, gives the same result whatever order the agent wrote their keys in.
         call = {"seq": seq, "tool": tool, "args": json.loads(_line(dict(args))), **identity}
-        after, result = _apply(Context(run_dir, manifest["run"], rubric, seq), state, call)
+        after, result = _apply(_context(run_dir, manifest, rubric, calls, call), state, call)
         line = _line({**call, "call_digest": _call_digest(call), **_digests(after, result), "at": _now()})
         log_digest = bytes_digest(_read(run_dir, CALLS) + line)
         temporary = run_dir / (STATE + ".tmp")
@@ -518,6 +560,7 @@ def write(  # noqa: PLR0913 - the call and who makes it
             os.fsync(log.fileno())
         temporary.replace(run_dir / STATE)
         _replace(run_dir / MANIFEST, _manifest(manifest, [*calls, json.loads(line)], after, log_digest))
+        _check_files(run_dir, after)
         _outputs(run_dir, rubric, after)
     return result
 
@@ -538,15 +581,17 @@ def _digests(state: State, result: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _state_digests(state: State) -> dict[str, Any]:
-    """What a log line records of the state a call left: its graph, its rejections and whether it is finished.
+    """What a log line records of the state a call left: its graph, its rejections, its check files and whether it is finished.
 
     A cached ``state.json`` is trusted only when these match the last line, so a derived file cannot
     stand in for what the log leads to.
     """
     rejections = json.dumps([dict(item) for item in state.rejections], ensure_ascii=False, sort_keys=True)
+    files = json.dumps(dict(state.files), ensure_ascii=False, sort_keys=True)
     return {
         "graph_digest": bytes_digest(_graph_text(state.graph)),
         "rejections_digest": bytes_digest(rejections.encode("utf-8")),
+        "files_digest": bytes_digest(files.encode("utf-8")),
         "finished": state.finished,
     }
 
@@ -591,6 +636,7 @@ def _reconcile(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls
         _replace(run_dir / STATE, _state_file(state, len(calls), log_digest))
     if manifest.get("log_digest") != log_digest or manifest.get("finished") != state.finished:
         _replace(run_dir / MANIFEST, _manifest(manifest, calls, state, log_digest))
+    _check_files(run_dir, state)
     _outputs(run_dir, rubric, state)
     return state
 
@@ -609,12 +655,28 @@ def reconcile(run_dir: Path) -> None:
         _reconcile(run_dir, manifest, _rubric(run_dir, manifest), read_calls(run_dir))
 
 
+def _check_files(run_dir: Path, state: State) -> None:
+    """Write the files of the checks run from the state, each that is missing or differs.
+
+    Checks are only ever added, so the files of a check, once written, stay; a file edited by hand is
+    written again from the state.
+    """
+    for path, text in state.files.items():
+        target = run_dir / path
+        if not path.startswith(f"{CHECKS}/") or ".." in Path(path).parts:
+            raise RunError("invalid-record", f"the check file {path!r} is not under {CHECKS}/")
+        data = text.encode("utf-8")
+        if not target.is_file() or target.read_bytes() != data:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            _replace(target, data)
+
+
 def _outputs(run_dir: Path, rubric: Rubric, state: State) -> None:
     """Write a finished run's outputs from its state, or remove them from a run a later write unfinished.
 
     They are derived from the state, never read back: ``graph.json`` (the graph as the core serialises
-    it), ``rejections.json`` (every refused record, with the call that sent it) and ``report.json`` (the
-    core's coverage report). An unfinished run has none, so a stale graph is never taken for its result.
+    it), ``rejections.json`` (every refused record, with the call that sent it) and ``report.json``
+    (``_report``). An unfinished run has none, so a stale graph is never taken for its result.
     """
     if not state.finished:
         for name in OUTPUTS:
@@ -622,7 +684,31 @@ def _outputs(run_dir: Path, rubric: Rubric, state: State) -> None:
         return
     _replace(run_dir / GRAPH, _graph_text(state.graph))
     _replace(run_dir / REJECTIONS, _json([dict(item) for item in state.rejections]))
-    _replace(run_dir / REPORT, _json({"coverage": coverage(state.graph, rubric)}))
+    _replace(run_dir / REPORT, _json(_report(state.graph, rubric)))
+
+
+def _report(graph: Graph, rubric: Rubric) -> dict[str, Any]:
+    """A finished run's report: the core's coverage, the citation checks whose source was not tied to the reference, and the checks made with a model their check type was not fitted with.
+
+    An untied citation check is an ``error`` and moves no credence; it is listed for a reader to look at.
+    A check type's ``models`` are advisory for an agent-tool run, whose model is the one the harness
+    reports: a check made with another is listed, not refused.
+    """
+    untied = []
+    uncalibrated = []
+    for node in graph:
+        check = node.attributes.get("check")
+        if not isinstance(check, Mapping):
+            continue
+        artifact = check.get("artifact") or {}
+        if artifact.get("tied") is False:
+            entry = {"check": node.id, "target": check.get("target"), "reference": artifact.get("reference")}
+            untied.append({**entry, "source": plain(artifact.get("source")), "detail": check.get("detail")})
+        spec = rubric.checks.get(check.get("type"))
+        model = (check.get("model") or {}).get("model")
+        if spec is not None and spec.models and model is not None and model not in spec.models:
+            uncalibrated.append({"check": node.id, "type": check.get("type"), "model": model})
+    return {"coverage": coverage(graph, rubric), "untied_citations": untied, "uncalibrated": uncalibrated}
 
 
 def _now() -> str:
@@ -949,7 +1035,8 @@ def replay(run_dir: Path, *, source: Path | None = None, sources: Path | None = 
     state = State(graph)
     _check_digests(calls[0], state, _start_result(graph, rubric, manifest["run"]))
     for call in calls[1:]:
-        state, result = _apply(Context(run_dir, manifest["run"], rubric, call["seq"], sources), state, call)
+        context = _context(run_dir, manifest, rubric, calls, call, replaying=True, sources=sources)
+        state, result = _apply(context, state, call)
         _check_digests(call, state, result)
     return _graph_text(state.graph)
 

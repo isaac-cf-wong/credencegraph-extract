@@ -22,10 +22,11 @@ document, and the model proposes checks, each of a type the runner implements:
   and reports every check run that way.
 
 A proposal the runner cannot run, being malformed, of an unknown type, on a node the type does not
-target, with a numeral the cited chunks do not contain, or a second of its type on one node, is
-rejected, with the code and record, and sent back to the model once with the error and what to change
-in it; what it still gets wrong stays rejected. Two checks of one type on one node would fail or pass together,
-so they must not count as two observations.
+target, with a numeral the cited chunks do not contain, a second of its type on one node, or the same
+step as another check on another target, is rejected, with the code and record, and sent back to the
+model once with the error and what to change in it; what it still gets wrong stays rejected. Two
+checks of one type on one node, or of one step however it is written, would fail or pass together, so
+they must not count as two observations.
 
 Each check run becomes an evidence node ``c-NNN`` of its check type, numbered in document order of
 the targets and then in run order, joined to its target by the check edge ``target --observes-->
@@ -41,14 +42,17 @@ model: ``fails`` if any failed, else ``holds`` if any passed, else ``undetermine
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from fractions import Fraction
+from functools import lru_cache
 from itertools import count
 from string import Template
 from typing import Any
 
+import sympy
 from credencegraph.core import Graph, Node, SourceAnchor
 from credencegraph.core.relation import OBSERVES, Relation
 from credencegraph.ingest.chunks import EQUATION, REFERENCE
@@ -156,11 +160,12 @@ _ALLOWED = {
 
 
 class _ProposalError(Exception):
-    """A proposal is not run, with the code and message of a rejection."""
+    """A proposal is not run, with the code and message of a rejection, and what to change where only the refusal knows it."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, fix: str | None = None) -> None:
         super().__init__(message)
         self.code = code
+        self.fix = fix
 
 
 @dataclass(frozen=True)
@@ -285,7 +290,7 @@ def render(graph: Graph, rubric: Rubric, rejected: Sequence[Mapping[str, Any]] =
     repair = []
     for rejection in rejected:
         item = {key: rejection[key] for key in ("record", "code", "message")}
-        found = fix(rejection["code"], rejection["record"])
+        found = rejection.get("fix") or fix(rejection["code"], rejection["record"])
         if found:
             item["fix"] = found
         repair.append(item)
@@ -428,6 +433,11 @@ def _target(graph: Graph, rubric: Rubric, record: Any) -> tuple[Node, str]:
     return node, check_type
 
 
+def _entries(graph: Graph) -> list[Node]:
+    """The document's bibliography entries."""
+    return [node for node in graph if origin_of(node) == DOCUMENT and node.attributes.get("unit") == REFERENCE]
+
+
 @dataclass(frozen=True)
 class _Plan:
     """A proposal that passed every check before running."""
@@ -437,6 +447,29 @@ class _Plan:
     record: Mapping[str, Any]
     nodes: tuple[Node, ...] = ()
     reference: Node | None = None
+
+
+def _check_step(record: Mapping[str, Any]) -> None:
+    """Refuse a ``rederive-maths`` proposal whose encoding does not parse, or whose step is of too high a degree to check."""
+    _strings(record, "lhs", "rhs", "assumption")
+    declared = record.get("symbols")
+    if not isinstance(declared, list) or not all(
+        isinstance(item, Mapping)
+        and isinstance(item.get("name"), str)
+        and isinstance(item.get("assumptions"), list)
+        and all(isinstance(a, str) for a in item["assumptions"])
+        for item in declared
+    ):
+        raise _ProposalError(INVALID_RECORD, "symbols must be a list of {name, assumptions, domain}")
+    try:
+        names = evaluate.symbols(declared)
+        sides = (evaluate.symbolic(record["lhs"], names), evaluate.symbolic(record["rhs"], names))
+    except EvaluationError as error:
+        raise _ProposalError(INVALID_RECORD, str(error)) from None
+    if max(_degree(side) for side in sides) > MAX_DEGREE:
+        msg = f"the step has degree above {MAX_DEGREE}, too high to check"
+        hint = f"check the paper's own smaller steps, each of degree at most {MAX_DEGREE}, rather than this one"
+        raise _ProposalError(INVALID_RECORD, msg, hint)
 
 
 def _plan(graph: Graph, rubric: Rubric, record: Any) -> _Plan:
@@ -451,7 +484,10 @@ def _plan(graph: Graph, rubric: Rubric, record: Any) -> _Plan:
         _strings(record, "reference")
         reference = graph.nodes.get(record["reference"])
         if reference is None or origin_of(reference) != DOCUMENT or reference.attributes.get("unit") != REFERENCE:
-            raise _ProposalError(INVALID_RECORD, f"{record['reference']!r} is not a bibliography entry of the document")
+            named = record["reference"]
+            keyed = [node.id for node in _entries(graph) if node.attributes.get("key") == named]
+            hint = f'{named!r} is the key of {keyed[0]}: give "reference": "{keyed[0]}"' if keyed else None
+            raise _ProposalError(INVALID_RECORD, f"{named!r} is not a bibliography entry of the document", hint)
         parents = {target.id} | {
             relation.target
             for relation in graph.relations.values()
@@ -481,22 +517,7 @@ def _plan(graph: Graph, rubric: Rubric, record: Any) -> _Plan:
             if Fraction(Decimal(numeral)) not in written:
                 raise _ProposalError(UNFAITHFUL, f"no numeral of {[node.id for node in nodes]} equals {numeral}")
     else:
-        _strings(record, "lhs", "rhs", "assumption")
-        declared = record.get("symbols")
-        if not isinstance(declared, list) or not all(
-            isinstance(item, Mapping)
-            and isinstance(item.get("name"), str)
-            and isinstance(item.get("assumptions"), list)
-            and all(isinstance(a, str) for a in item["assumptions"])
-            for item in declared
-        ):
-            raise _ProposalError(INVALID_RECORD, "symbols must be a list of {name, assumptions, domain}")
-        try:
-            names = evaluate.symbols(declared)
-            evaluate.symbolic(record["lhs"], names)
-            evaluate.symbolic(record["rhs"], names)
-        except EvaluationError as error:
-            raise _ProposalError(INVALID_RECORD, str(error)) from None
+        _check_step(record)
     return _Plan(target, check_type, record, nodes=nodes)
 
 
@@ -507,16 +528,7 @@ def _recompute(graph: Graph, plan: _Plan) -> Result:
     # The reported value and its rounding as the text writes it; of several numerals exactly equal to it, the
     # coarsest. Values are compared as exact fractions of their decimal text, never as floats, which would let
     # 0.10000000000000001 stand for 0.1.
-    exact = Fraction(Decimal(expected))
-    reported, half = max(
-        (
-            (number, rounding)
-            for node in plan.nodes
-            for number, rounding in evaluate.text_numerals(node_text(graph, node))
-            if number == exact
-        ),
-        key=lambda pair: pair[1],
-    )
+    reported, half = _reported(graph, plan.nodes, expected)
     difference = abs(value - reported)
     result = PASSED if difference <= half else FAILED
     within = "within" if result == PASSED else "outside"
@@ -533,6 +545,23 @@ def _recompute(graph: Graph, plan: _Plan) -> Result:
             "rounding": _exact(half),
             "difference": _exact(difference),
         },
+    )
+
+
+def _reported(graph: Graph, nodes: Sequence[Node], expected: str) -> tuple[Fraction, Fraction]:
+    """The reported value and its rounding as the cited chunks write it: of several numerals equal to it, the coarsest.
+
+    ``_plan`` has checked that one of the chunks writes the expected value.
+    """
+    exact = Fraction(Decimal(expected))
+    return max(
+        (
+            (number, rounding)
+            for node in nodes
+            for number, rounding in evaluate.text_numerals(node_text(graph, node))
+            if number == exact
+        ),
+        key=lambda pair: pair[1],
     )
 
 
@@ -558,7 +587,12 @@ def _rederive(plan: _Plan) -> Result:
     names = evaluate.symbols(encoding["symbols"])
     lhs, rhs = evaluate.symbolic(encoding["lhs"], names), evaluate.symbolic(encoding["rhs"], names)
     try:
-        result, detail = evaluate.identity(lhs, rhs)
+        if max(_terms(lhs), _terms(rhs)) > MAX_TERMS:
+            # Simplifying a side whose expansion could have this many terms can take arbitrarily long; the
+            # numeric fallback, where the rubric declares it, decides the step instead.
+            result, detail = ERROR, f"a side could expand to more than {MAX_TERMS} terms, too many to simplify"
+        else:
+            result, detail = evaluate.identity(lhs, rhs)
     except (ArithmeticError, TypeError, ValueError, AttributeError, NotImplementedError, RecursionError) as error:
         result, detail = ERROR, f"sympy failed: {type(error).__name__}: {error}"
     return Result(
@@ -583,6 +617,17 @@ def _numeric(plan: _Plan, artifact: Mapping[str, Any]) -> Result:
         result, detail = ERROR, f"sympy failed: {type(error).__name__}: {error}"
     output = {"result": result}
     return Result(NUMERIC, plan.target.id, artifact, inputs, result, detail, output, libraries=("sympy",))
+
+
+def _maths(graph: Graph, rubric: Rubric, plan: _Plan) -> list[Result]:
+    """Run a ``recompute-numbers`` or ``rederive-maths`` plan, and the numeric fallback when the symbolic check errs and the rubric declares it."""
+    if plan.type == RECOMPUTE:
+        return [_recompute(graph, plan)]
+    symbolic = _rederive(plan)
+    numeric = rubric.checks.get(NUMERIC)
+    if symbolic.result == ERROR and numeric is not None and plan.target.kind in numeric.targets:
+        return [symbolic, _numeric(plan, symbolic.artifact)]
+    return [symbolic]
 
 
 def _citation(graph: Graph, plan: _Plan, cited: Cited, ask: Ask) -> Result:
@@ -746,13 +791,181 @@ def _corrected(refused: Sequence[Mapping[str, Any]]) -> set[str] | None:
     return {unlabelled(target) or target for target in named}
 
 
+# The most terms a side's expansion may have, by ``_terms``'s bound, for ``_step`` to expand it.
+MAX_TERMS = 256
+# The highest degree a maths step may have (``_degree``). The numeric check substitutes each point exactly,
+# as rationals, whose size grows with the degree: degree 1000 takes a fraction of a second, 10000 seconds,
+# 20000 most of a minute.
+MAX_DEGREE = 1000
+
+
+def _degree(expression: sympy.Expr) -> int:
+    """A bound on an expression's degree in its symbols, the size its exact evaluation grows with.
+
+    A symbol has degree 1 and a number 0; a sum the largest of its terms', a product the sum of its
+    factors', a power to a numeric exponent its base's times the exponent's size (at least 1), and any
+    other node (a function, a power to a symbolic exponent) the sum of what is inside it. Counts saturate
+    just above ``MAX_DEGREE``.
+    """
+    over = MAX_DEGREE + 1
+    if isinstance(expression, sympy.Symbol):
+        return 1
+    if isinstance(expression, sympy.Number):
+        return 0
+    if isinstance(expression, sympy.Add):
+        return max(_degree(argument) for argument in expression.args)
+    if isinstance(expression, sympy.Pow) and expression.exp.is_Number:
+        return min(_degree(expression.base) * max(math.ceil(abs(expression.exp)), 1), over)
+    return min(sum(_degree(argument) for argument in expression.args), over)
+
+
+def _terms(expression: sympy.Expr) -> int:
+    """An upper bound on the number of terms ``sympy.expand`` gives, from the expression's tree alone.
+
+    A sum has at most the sum of its terms' counts, a product at most their product, and a power of a
+    sum of ``k`` terms to an integer ``n`` at most ``C(|n| + k - 1, k - 1)`` (a negative power's base is
+    expanded too). ``sympy.expand`` also expands inside a function's arguments and a power's base and
+    exponent, so any other node counts as one term when everything inside it is small, and as the largest
+    count inside it otherwise. The bound is computed in one pass over the tree, so deciding not to expand
+    costs little whatever the expansion would.
+    """
+    # Counts saturate just above the limit, so the bound's own arithmetic stays small whatever the input.
+    over = MAX_TERMS + 1
+    if isinstance(expression, sympy.Add):
+        return min(sum(_terms(argument) for argument in expression.args), over)
+    if isinstance(expression, sympy.Mul):
+        count = 1
+        for argument in expression.args:
+            count = min(count * _terms(argument), over)
+        return count
+    if isinstance(expression, sympy.Pow) and expression.exp.is_Integer:
+        inner, power = _terms(expression.base), abs(int(expression.exp))
+        if inner == 1:
+            return 1
+        if inner >= over or power >= over:
+            return over
+        return min(math.comb(power + inner - 1, inner - 1), over)
+    inside = max((_terms(argument) for argument in expression.args), default=1)
+    return 1 if inside <= MAX_TERMS else over
+
+
+def _canonical(side: sympy.Expr) -> str:
+    """A side of a maths step in a form two encodings of the same expression share: expanded, when that is cheap.
+
+    Expanding makes ``(x + 1)**2``, ``x**2 + 2*x + 1`` and ``x*(x + 2) + 1`` one form. A side whose
+    expansion could have more than ``MAX_TERMS`` terms (``_terms``) is not expanded, since that could
+    take arbitrarily long; it is compared as sympy writes it.
+    """
+    if _terms(side) > MAX_TERMS:
+        return sympy.srepr(side)
+    return sympy.srepr(sympy.expand(side))
+
+
+@lru_cache(maxsize=1024)
+def _step_of(check_type: str, encoded: str) -> tuple[Any, ...] | None:
+    """``_step`` of the fields as canonical JSON, so the steps of a run's checks are computed once."""
+    fields = json.loads(encoded)
+    try:
+        if check_type == RECOMPUTE:
+            value = evaluate.arithmetic(fields["expression"]).value
+            return (RECOMPUTE, value, Fraction(Decimal(fields["expected"])), fields["rounding"])
+        if check_type in {REDERIVE, NUMERIC}:
+            names = evaluate.symbols(fields["symbols"])
+            sides = (evaluate.symbolic(fields["lhs"], names), evaluate.symbolic(fields["rhs"], names))
+            return (REDERIVE, frozenset(_canonical(side) for side in sides))
+    except (EvaluationError, KeyError, TypeError, ValueError, ArithmeticError, AttributeError):
+        return None
+    return None
+
+
+def _step(check_type: str, fields: Mapping[str, Any], rounding: Fraction | None = None) -> tuple[Any, ...] | None:
+    """What a maths check decides, so that two encodings of one step count as one check.
+
+    ``recompute-numbers`` decides whether the exact value of its expression is within the rounding of
+    its reported value, the rounding the cited chunks' numeral implies (``_reported``), so two with the
+    same value, expected value and ``rounding`` pass or fail together, however the expression is
+    written. ``rederive-maths``, and its numeric fallback, decides whether ``lhs`` equals ``rhs``, so
+    two whose sides have the same canonical forms (``_canonical``), in either order, do: a true step's
+    two sides share one form, so two true steps about the same expression are one step, however each
+    writes it. ``None`` for a citation, whose target and reference are its identity, and for fields
+    that do not parse.
+    """
+    if not isinstance(check_type, str) or check_type not in {RECOMPUTE, REDERIVE, NUMERIC}:
+        return None
+    keys = ("expression", "expected") if check_type == RECOMPUTE else ("lhs", "rhs", "symbols")
+    found = {key: fields.get(key) for key in keys}
+    if check_type == RECOMPUTE:
+        found["rounding"] = str(rounding)
+    try:
+        encoded = json.dumps(found, sort_keys=True, default=plain)
+    except (TypeError, ValueError):
+        return None
+    return _step_of(check_type, encoded)
+
+
+def _proposed_type(check_type: Any) -> Any:
+    """The type a check was proposed as: the numeric fallback is a ``rederive-maths`` proposal."""
+    return REDERIVE if check_type == NUMERIC else check_type
+
+
+def _rounding(graph: Graph, node_ids: Any, expected: Any) -> Fraction | None:
+    """The rounding of an arithmetic check's reported value, from the chunks it cites, or ``None`` when it has none."""
+    if not isinstance(node_ids, list | tuple) or not all(isinstance(node_id, str) for node_id in node_ids):
+        return None
+    if not isinstance(expected, str):
+        return None
+    nodes = [graph.nodes[node_id] for node_id in node_ids if node_id in graph]
+    try:
+        return _reported(graph, nodes, expected)[1]
+    except (ValueError, ArithmeticError):
+        return None
+
+
+def _plan_step(graph: Graph, plan: _Plan) -> tuple[Any, ...] | None:
+    """The step of an admitted plan."""
+    rounding = _rounding(graph, [node.id for node in plan.nodes], plan.record.get("expected"))
+    return _step(plan.type, plan.record, rounding)
+
+
+def _recorded(graph: Graph, check: Any) -> tuple[str, str, tuple[Any, ...] | None] | None:
+    """A check record of the graph as target, proposed type and step, or ``None`` for a record not of that shape.
+
+    A record counts only when its type and target are strings and its inputs a mapping; its cited nodes
+    are read only from an artifact that is a mapping, as a list of ids. A record of any other shape was
+    not written by a check and is not one a proposal can repeat.
+    """
+    record = plain(check) if isinstance(check, Mapping) else None
+    if not isinstance(record, dict):
+        return None
+    check_type, target, inputs = record.get("type"), record.get("target"), record.get("inputs")
+    if not isinstance(check_type, str) or not isinstance(target, str) or not isinstance(inputs, dict):
+        return None
+    artifact = record.get("artifact")
+    nodes = artifact.get("nodes") if isinstance(artifact, dict) else None
+    return (
+        target,
+        _proposed_type(check_type),
+        _step(check_type, inputs, _rounding(graph, nodes, inputs.get("expected"))),
+    )
+
+
+def _admitted(graph: Graph, plans: Sequence[_Plan]) -> list[tuple[str, str, tuple[Any, ...] | None]]:
+    """The checks a new proposal may not repeat, as target, proposed type and step: those in the graph and the plans."""
+    found = [entry for node in graph if (entry := _recorded(graph, node.attributes.get("check"))) is not None]
+    found.extend((plan.target.id, plan.type, _plan_step(graph, plan)) for plan in plans)
+    return found
+
+
 def _admit(
     graph: Graph, rubric: Rubric, proposals: Sequence[Any], plans: list[_Plan], *, only: Collection[str] | None = None
 ) -> list[dict[str, Any]]:
     """Check each proposal and add those that pass to ``plans``; return the refused ones as rejections.
 
-    A proposal is refused as ``_plan`` refuses it, when it repeats the target and type of a plan already
-    admitted, and, with ``only``, when its target is not one of those.
+    A proposal is refused as ``_plan`` refuses it; when it repeats the target and type of a check the
+    graph has or a plan already admitted; when it is the same step as one of those, on another target
+    (``_step``), since checks that pass or fail together are one piece of evidence; and, with ``only``,
+    when its target is not one of those. A rejection carries a ``fix`` where only the refusal knows what
+    to change.
     """
     rejections = []
     for record in proposals:
@@ -761,15 +974,258 @@ def _admit(
             if only is not None and not (isinstance(target, str) and target in only):
                 raise _ProposalError(NOT_REJECTED, f"{target!r} had no refused proposal to correct")
             plan = _plan(graph, rubric, record)
-            if any((plan.target.id, plan.type) == (other.target.id, other.type) for other in plans):
+            admitted = _admitted(graph, plans)
+            if any((plan.target.id, plan.type) == (other, other_type) for other, other_type, _ in admitted):
                 msg = f"{plan.target.id!r} has an earlier {plan.type} proposal: one check of a type per node"
                 raise _ProposalError(DUPLICATE_RECORD, msg)
+            step = _plan_step(graph, plan)
+            earlier = [other for other, _, other_step in admitted if step is not None and other_step == step]
+            if earlier:
+                msg = f"{earlier[0]!r} has a {plan.type} check of the same step: one step is one check"
+                hint = f"propose this check once, on the step's own target; {earlier[0]!r} already has it"
+                raise _ProposalError(DUPLICATE_RECORD, msg, hint)
             plans.append(plan)
         except _ProposalError as refused:
             node = record.get("target") if isinstance(record, Mapping) else None
             node = node if isinstance(node, str) else None
-            rejections.append({"node": node, "code": refused.code, "message": str(refused), "record": record})
+            rejection = {"node": node, "code": refused.code, "message": str(refused), "record": record}
+            if refused.fix is not None:
+                rejection["fix"] = refused.fix
+            rejections.append(rejection)
     return rejections
+
+
+def add_checks(
+    graph: Graph, rubric: Rubric, results: Sequence[Result], versions: Mapping[str, str]
+) -> tuple[Graph, dict[str, bytes], list[dict[str, Any]]]:
+    """Add each result to a graph as a check node with its check edge, numbered after the graph's checks.
+
+    A check node ``c-NNN`` takes the first number the graph does not have. Its ``attributes.check`` is
+    the check record, and ``attributes.observed`` is ``true`` for a pass and ``false`` for a fail; an
+    errored check has no ``observed``. The edge ``target --observes--> c-NNN`` carries the check type's
+    ``sensitivity`` and ``false_pass``. Verdicts are not set: ``assess`` derives them.
+
+    Args:
+        graph: The graph.
+        rubric: The rubric, which declares every result's check type.
+        results: The results, in the order they are numbered.
+        versions: The versions of the code that ran the checks, by name, as ``session.versions`` gives them.
+
+    Returns:
+        The graph with the checks; the files of each check's directory, by path in the run; and one
+        entry per check: its id, type, target and result.
+    """
+    fresh = (node_id for n in count(1) if (node_id := f"c-{n:03d}") not in graph)
+    nodes: list[Node] = []
+    relations: list[Relation] = []
+    files: dict[str, bytes] = {}
+    report = []
+    for result in results:
+        check_id = next(fresh)
+        check: Check = rubric.checks[result.type]
+        tool = {
+            "name": "credencegraph-extract",
+            "version": versions.get("credencegraph-extract"),
+            "python": versions.get("python"),
+            **{library: versions.get(library) for library in result.libraries},
+        }
+        record, check_files = _record(check_id, result, tool)
+        files.update({f"{CHECKS}/{check_id}/{name}": data for name, data in check_files.items()})
+        attributes: dict[str, Any] = {"origin": EVIDENCE, "check": record}
+        if result.result != ERROR:
+            attributes["observed"] = result.result == PASSED
+        nodes.append(
+            Node(
+                check_id,
+                kind=result.type,
+                statement=f"{result.type} on {result.target}: {result.result}",
+                sources=result.sources,
+                attributes=attributes,
+            )
+        )
+        relations.append(
+            Relation(
+                f"{result.target}-{OBSERVES}-{check_id}",
+                OBSERVES,
+                result.target,
+                check_id,
+                sensitivity=check.sensitivity,
+                false_pass=check.false_pass,
+            )
+        )
+        report.append({"id": check_id, "type": result.type, "target": result.target, "result": result.result})
+    out = Graph()
+    for node in (*graph, *nodes):
+        out.add_node(node)
+    for relation in (*graph.relations.values(), *relations):
+        out.add_relation(relation)
+    return out, files, report
+
+
+def run_maths(
+    graph: Graph, rubric: Rubric, proposals: Sequence[Any], versions: Mapping[str, str]
+) -> tuple[Graph, dict[str, bytes], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Check and run proposals of the maths check types, one tool call's worth, after the checks a graph has.
+
+    Each proposal is checked as the check pass checks it, in the order given, and is refused when it
+    repeats the target and type of a check the graph has or an earlier proposal, or the same step on
+    another target (``_admit``). A ``citation-support`` proposal is refused: the citation tool runs it.
+    The admitted ones run in the order given; a ``rederive-maths`` that errs is followed by its numeric
+    fallback when the rubric declares one. Verdicts are not set.
+
+    Args:
+        graph: The graph, with the checks already run.
+        rubric: The rubric.
+        proposals: The proposals.
+        versions: The versions of the code that runs them.
+
+    Returns:
+        The graph with the new checks; the files of their directories; each new check's id, type,
+        target, result and detail; and the refused proposals, each with its code, message and, where
+        the refusal knows what to change, a ``fix``.
+    """
+    plans: list[_Plan] = []
+    rejections: list[dict[str, Any]] = []
+    for record in proposals:
+        if isinstance(record, Mapping) and record.get("type") == CITATION:
+            target = record.get("target")
+            rejections.append(
+                {
+                    "node": target if isinstance(target, str) else None,
+                    "code": INVALID_RECORD,
+                    "message": f"a {CITATION} check is not run with the maths checks",
+                    "record": record,
+                    "fix": f"send a {CITATION} check to the citation tool, with the source and the passage",
+                }
+            )
+            continue
+        rejections.extend(_admit(graph, rubric, [record], plans))
+    results = [result for plan in plans for result in _maths(graph, rubric, plan)]
+    out, files, report = add_checks(graph, rubric, results, versions)
+    checks = [{**entry, "detail": result.detail} for entry, result in zip(report, results, strict=True)]
+    return out, files, checks, rejections
+
+
+def citation_refusal(graph: Graph, rubric: Rubric, target: Any, reference: Any) -> dict[str, Any] | None:
+    """Refuse a citation check the check pass would refuse, or one on a target whose citation check already passed or failed.
+
+    The target must be a node the rubric runs ``citation-support`` on, and it, or a node it is part of,
+    must cite the reference, a bibliography entry of the document. A citation check that passed or
+    failed stays: another on the same target is refused. One that erred moved no credence, so another
+    may follow it.
+
+    Args:
+        graph: The graph.
+        rubric: The rubric.
+        target: The node the check bears on.
+        reference: The id of the bibliography entry.
+
+    Returns:
+        The rejection, with its code, message, record and, where the refusal knows what to change, a
+        ``fix``; or ``None`` when the check may run.
+    """
+    record = {"target": target, "type": CITATION, "reference": reference}
+    try:
+        _plan(graph, rubric, record)
+        settled = [
+            node.id
+            for node in graph
+            if isinstance(check := node.attributes.get("check"), Mapping)
+            and check.get("type") == CITATION
+            and check.get("target") == target
+            and check.get("result") != ERROR
+        ]
+        if settled:
+            msg = f"{target!r} has the citation check {settled[0]}, which passed or failed: it stays"
+            raise _ProposalError(
+                DUPLICATE_RECORD, msg, f"leave {target!r}: a citation check runs again only after one that errs"
+            )
+    except _ProposalError as refused:
+        rejection = {"node": target if isinstance(target, str) else None, "code": refused.code, "message": str(refused)}
+        rejection["record"] = record
+        if refused.fix is not None:
+            rejection["fix"] = refused.fix
+        return rejection
+    return None
+
+
+def _document(observation: Mapping[str, Any]) -> str:
+    """The id of a citation's source document: its arXiv id and version, its DOI, its cited file, or its final URL."""
+    found = observation.get("tie")
+    if isinstance(found, Mapping) and found.get("by") == "arxiv":
+        return f"arXiv:{found.get('id')}{found.get('version')}"
+    if (
+        isinstance(found, Mapping)
+        and found.get("by") == "doi"
+        and observation.get("final_url") == found.get("final_url")
+    ):
+        return f"doi:{found.get('doi')}"
+    return str(observation.get("file") if observation.get("kind") == "cited" else observation.get("final_url"))
+
+
+def judged(  # noqa: PLR0913 - the check, what was read, what the agent said, and how it is tied
+    graph: Graph,
+    target: str,
+    reference: str,
+    observation: Mapping[str, Any],
+    *,
+    passage: str,
+    supports: bool,
+    untied: str | None,
+    model: str | None,
+) -> Result:
+    """Return the result of a citation check from what the tool read and what the agent judged.
+
+    The check is an ``error`` when the quoted passage is not in the source's text, or when the source
+    is not tied to the reference (``untied`` says why): an errored check moves no credence. Otherwise
+    it passes when the agent judged that the passage supports the target, and fails when not.
+
+    Args:
+        graph: The graph.
+        target: The citing node.
+        reference: The bibliography entry.
+        observation: What the tool read: ``citation.read_cited`` or ``citation.read_url``.
+        passage: The passage the agent quoted.
+        supports: The agent's judgement.
+        untied: Why the source is not tied to the reference, or ``None``.
+        model: The model the call reported.
+
+    Returns:
+        The result.
+    """
+    document = _document(observation)
+    source = (
+        {"file": observation.get("file")}
+        if observation.get("kind") == "cited"
+        else {
+            "url": observation.get("url"),
+            "final_url": observation.get("final_url"),
+        }
+    )
+    artifact: dict[str, Any] = {
+        "kind": "citation",
+        "reference": reference,
+        "document": document,
+        "source": source,
+        "tied": untied is None,
+    }
+    inputs = {"statement": node_text(graph, graph.nodes[target]), "source_digest": observation.get("text_digest")}
+    output = {"passage": passage, "supports": supports, "read": dict(observation)}
+    reported = {"model": model}
+    found = observation.get("found")
+    if not isinstance(found, list):
+        detail = "the quoted passage is not in the text of the source"
+        return Result(CITATION, target, artifact, inputs, ERROR, detail, output, model=reported)
+    quote = normalise_text(passage)
+    locator = f"chars={found[0]}-{found[1]}"
+    artifact.update(locator=locator, quote=quote, digest=text_digest(quote))
+    if untied is not None:
+        detail = f"source not tied to the reference: {untied}"
+        return Result(CITATION, target, artifact, inputs, ERROR, detail, output, model=reported)
+    anchor = SourceAnchor(document, locator, quote, text_digest(quote))
+    result = PASSED if supports else FAILED
+    detail = f"the passage at {locator} {'supports' if supports else 'does not support'} the statement"
+    return Result(CITATION, target, artifact, inputs, result, detail, output, (anchor,), model=reported)
 
 
 def assess(graph: Graph, rubric: Rubric) -> Graph:
@@ -882,14 +1338,8 @@ class CheckPass:
         results: list[Result] = []
         uncalibrated = []
         for plan in plans:
-            if plan.type == RECOMPUTE:
-                results.append(_recompute(graph, plan))
-            elif plan.type == REDERIVE:
-                symbolic = _rederive(plan)
-                results.append(symbolic)
-                numeric = rubric.checks.get(NUMERIC)
-                if symbolic.result == ERROR and numeric is not None and plan.target.kind in numeric.targets:
-                    results.append(_numeric(plan, symbolic.artifact))
+            if plan.type != CITATION:
+                results.extend(_maths(graph, rubric, plan))
             else:
                 check = rubric.checks[CITATION]
                 if check.models and model not in check.models:
@@ -913,53 +1363,7 @@ class CheckPass:
         uncalibrated: list[int],
     ) -> Outcome:
         """Assemble the check nodes, the check edges, the verdicts, the files and the report."""
-        versions = ask.versions
-        fresh = (node_id for n in count(1) if (node_id := f"c-{n:03d}") not in graph)
-        nodes: list[Node] = []
-        relations: list[Relation] = []
-        files: dict[str, bytes] = {}
-        report = []
-        by_target: dict[str, list[str]] = {}
-        for result in results:
-            check_id = next(fresh)
-            check: Check = rubric.checks[result.type]
-            tool = {
-                "name": "credencegraph-extract",
-                "version": versions.get("credencegraph-extract"),
-                "python": versions.get("python"),
-                **{library: versions.get(library) for library in result.libraries},
-            }
-            record, check_files = _record(check_id, result, tool)
-            files.update({f"{CHECKS}/{check_id}/{name}": data for name, data in check_files.items()})
-            attributes: dict[str, Any] = {"origin": EVIDENCE, "check": record}
-            if result.result != ERROR:
-                attributes["observed"] = result.result == PASSED
-            nodes.append(
-                Node(
-                    check_id,
-                    kind=result.type,
-                    statement=f"{result.type} on {result.target}: {result.result}",
-                    sources=result.sources,
-                    attributes=attributes,
-                )
-            )
-            relations.append(
-                Relation(
-                    f"{result.target}-{OBSERVES}-{check_id}",
-                    OBSERVES,
-                    result.target,
-                    check_id,
-                    sensitivity=check.sensitivity,
-                    false_pass=check.false_pass,
-                )
-            )
-            by_target.setdefault(result.target, []).append(result.result)
-            report.append({"id": check_id, "type": result.type, "target": result.target, "result": result.result})
-        out = Graph()
-        for node in (*graph, *nodes):
-            out.add_node(node)
-        for relation in (*graph.relations.values(), *relations):
-            out.add_relation(relation)
+        out, files, report = add_checks(graph, rubric, results, ask.versions)
         out = assess(out, rubric)
         uncalibrated_report = [
             {"check": report[i]["id"], "type": report[i]["type"], "model": results[i].model} for i in uncalibrated

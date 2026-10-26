@@ -6,6 +6,8 @@ import json
 import shutil
 import subprocess
 import sys
+import time
+from fractions import Fraction
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -27,14 +29,14 @@ from checks_fixture import (
     RUN_ID,
     VERDICTS,
 )
-from credencegraph.core import Graph, loads
+from credencegraph.core import Graph, Node, loads
 from credencegraph.core.relation import OBSERVES
 from credencegraph.inference import conditional, marginal
 from credencegraph.rubric import Rubric, check_graph, load_rubric
 from credencegraph.semantics.compiler import compile_graph
 from notes_pass import MODEL, fake_client, message
 
-from credencegraph_extract import cited, evaluate, provider
+from credencegraph_extract import checks, cited, evaluate, provider
 from credencegraph_extract.checks import CheckPass, directory_digest, fix, output_schema, render
 from credencegraph_extract.cli import main
 from credencegraph_extract.digest import bytes_digest
@@ -436,6 +438,140 @@ def test_a_correction_of_a_proposal_that_named_no_target_may_be_on_any_target(tm
     make_run(run_dir, bodies_with([{"type": "recompute-numbers"}], repair=[{**RECOMPUTE, "expected": "350"}]))
     assert [item["round"] for item in check_rejections(run_dir)] == ["initial"]
     assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3"]
+
+
+@pytest.mark.parametrize(
+    "again",
+    [
+        {**PRODUCT, "target": "e-1"},
+        {**PRODUCT, "target": "e-1", "lhs": "c", "rhs": "N * c / N"},
+    ],
+    ids=["same encoding", "sides swapped and rewritten"],
+)
+def test_one_step_proposed_for_two_targets_is_one_check(tmp_path: Path, again: dict[str, Any]) -> None:
+    # Checks that pass or fail together are one piece of evidence, not one per target.
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([PRODUCT, again], repair=[]))
+    assert [(item["round"], item["node"], item["code"]) for item in check_rejections(run_dir)] == [
+        ("initial", "e-1", "duplicate-record")
+    ]
+    assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["e-2"]
+    prompt = (run_dir / "prompts" / "0003.txt").read_text(encoding="utf-8")
+    assert "propose this check once, on the step's own target; 'e-2' already has it" in prompt
+
+
+X = [{"name": "x", "assumptions": ["real"], "domain": [-2, 2]}]
+
+
+@pytest.mark.parametrize(
+    ("one", "other", "same"),
+    [
+        # Two true steps about the same polynomial, each written differently, are one step.
+        (("(x + 1)**2", "x**2 + 2*x + 1"), ("x**2 + 2*x + 1", "x*(x + 2) + 1"), True),
+        (("(x + 1)**2", "x**2 + 2*x + 1"), ("x**2 + 2*x + 1", "(x + 1)**2"), True),
+        # A different claim about the same expression is a different step.
+        (("(x + 1)**2", "x**2 + 2*x + 1"), ("(x + 1)**2", "x**2 + 1"), False),
+        (("(x + 1)**2", "x**2 + 2*x + 1"), ("(x - 1)**2", "x**2 - 2*x + 1"), False),
+        # A large power is compared as written rather than expanded.
+        (("(x + 1)**40", "(x + 1)**40"), ("(1 + x)**40", "(x + 1)**40"), True),
+    ],
+)
+def test_a_maths_step_is_the_same_step_however_its_sides_are_written(
+    one: tuple[str, str], other: tuple[str, str], same: bool
+) -> None:
+    first = checks._step("rederive-maths", {"lhs": one[0], "rhs": one[1], "symbols": X})
+    second = checks._step("rederive-maths", {"lhs": other[0], "rhs": other[1], "symbols": X})
+    assert first is not None
+    assert (first == second) is same
+
+
+@pytest.mark.parametrize(
+    ("lhs", "names"),
+    [
+        ("*".join(f"(x{i} + 1)" for i in range(28)), [f"x{i}" for i in range(28)]),
+        ("(a + b + c + d + e + f + g + h)**32", list("abcdefgh")),
+        ("((x + 1)**16 + 1)**16", ["x"]),
+        ("sin(((x + 1)**100 + 1)**100)", ["x"]),
+        ("1/((x + 1)**100 + 1)**100", ["x"]),
+    ],
+    ids=["28 binomials", "power of a sum", "nested powers", "inside a function", "negative power"],
+)
+def test_a_step_too_large_to_expand_is_keyed_quickly(lhs: str, names: list[str]) -> None:
+    # Expanding any of these takes minutes or more; its key must not.
+    symbols = [{"name": name, "assumptions": ["real"], "domain": [-1, 1]} for name in names]
+    started = time.monotonic()
+    assert checks._step("rederive-maths", {"lhs": lhs, "rhs": "1", "symbols": symbols}) is not None
+    assert time.monotonic() - started < 1
+
+
+def test_one_value_reported_with_another_rounding_is_another_step() -> None:
+    # Whether an arithmetic check passes depends on the rounding the cited numeral implies: 350 is 350 +- 0.5,
+    # 350.0 is 350 +- 0.05, so the same calculation checked against each is two steps, not one.
+    graph = Graph()
+    graph.add_node(Node("s-1", kind="result", statement="So 350 remain.", attributes={"origin": "document"}))
+    graph.add_node(Node("s-2", kind="result", statement="So 350.0 remain.", attributes={"origin": "document"}))
+    coarse, fine = checks._rounding(graph, ["s-1"], "350"), checks._rounding(graph, ["s-2"], "350")
+    assert (coarse, fine) == (Fraction(1, 2), Fraction(1, 20))
+    fields = {"expression": "400 - 50", "expected": "350"}
+    assert checks._step("recompute-numbers", fields, coarse) != checks._step("recompute-numbers", fields, fine)
+    assert checks._step("recompute-numbers", fields, coarse) == checks._step(
+        "recompute-numbers", {"expression": "7 * 50", "expected": "350"}, coarse
+    )
+
+
+RECORDED = {"type": "recompute-numbers", "target": "s-1", "inputs": {"expression": "1 + 1", "expected": "2"}}
+
+
+def recorded_graph(**changes: object) -> Graph:
+    graph = Graph()
+    graph.add_node(Node("s-1", kind="result", statement="So 350 remain.", attributes={"origin": "document"}))
+    record = {**RECORDED, **changes}
+    graph.add_node(Node("c-1", kind="recompute-numbers", statement="a check", attributes={"check": record}))
+    return graph
+
+
+@pytest.mark.parametrize("artifact", ["malformed", None, ["s-1"], {"nodes": "s-1"}])
+def test_a_recorded_check_with_an_artifact_of_another_shape_still_counts(artifact: object) -> None:
+    [(target, check_type, _)] = checks._admitted(recorded_graph(artifact=artifact), [])
+    assert (target, check_type) == ("s-1", "recompute-numbers")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"type": {"bad": "type"}}, {"type": ["recompute-numbers"]}, {"target": ["s-1"]}, {"inputs": "1 + 1"}],
+)
+def test_a_recorded_check_of_another_shape_is_not_one_a_proposal_repeats(changes: dict[str, object]) -> None:
+    assert checks._admitted(recorded_graph(**changes), []) == []
+
+
+def test_cited_nodes_written_as_a_string_give_no_rounding() -> None:
+    # A string is not a list of ids: "s1" must not be read as the nodes "s" and "1".
+    graph = Graph()
+    for node_id, text in (("s", "So 350 remain."), ("1", "So 350.0 remain."), ("s1", "So 350.00 remain.")):
+        graph.add_node(Node(node_id, kind="result", statement=text, attributes={"origin": "document"}))
+    assert checks._rounding(graph, "s1", "350") is None
+    assert checks._rounding(graph, ["s1"], "350") == Fraction(1, 200)
+
+
+def test_one_value_written_two_ways_for_two_targets_is_one_check(tmp_path: Path) -> None:
+    rewritten = {**RECOMPUTE, "target": "s-2", "expression": "400 - 0.125 * 400", "expected": "350"}
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([{**RECOMPUTE, "expected": "350"}, rewritten], repair=[]))
+    assert [(item["node"], item["code"]) for item in check_rejections(run_dir)] == [("s-2", "duplicate-record")]
+    assert [node.attributes["check"]["target"] for node in checks_of(read_graph(run_dir)).values()] == ["s-3"]
+
+
+def test_a_citation_naming_the_key_is_told_the_id_and_its_correction_runs(tmp_path: Path) -> None:
+    keyed = {"target": "s-7", "type": "citation-support", "reference": "smith2020"}
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([keyed], JUDGEMENT, repair=[{**keyed, "reference": "r-1"}]))
+    assert [(item["round"], item["node"], item["code"]) for item in check_rejections(run_dir)] == [
+        ("initial", "s-7", "invalid-record")
+    ]
+    prompt = (run_dir / "prompts" / "0003.txt").read_text(encoding="utf-8")
+    # The prompt sends the fix as JSON, so its quotes are escaped there.
+    assert json.dumps('\'smith2020\' is the key of r-1: give "reference": "r-1"')[1:-1] in prompt
+    assert [node.attributes["check"]["result"] for node in checks_of(read_graph(run_dir)).values()] == ["passed"]
 
 
 def test_no_repair_call_is_made_when_every_proposal_is_admitted(tmp_path: Path) -> None:
