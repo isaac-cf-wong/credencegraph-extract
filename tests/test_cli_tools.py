@@ -117,7 +117,7 @@ def test_a_call_the_run_refuses_is_one_error_line(
 
 def test_an_unknown_argument_names_the_ones_the_tool_takes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     line = refused(capsys, ["tool", "get_state", "--run", str(tmp_path), "--args", '{"verbose": true}'])
-    assert line == "error [invalid-argument]: get_state takes no ['verbose']; it takes []"
+    assert line == "error [invalid-argument]: get_state takes no ['verbose']; it takes ['run']"
 
 
 def test_a_call_on_no_run_is_one_error_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -166,3 +166,45 @@ def test_a_run_made_through_the_cli_replays(
     tool(capsys, "run_checks", run, proposals=[checks_fixture.PLAN[1]], model=MODEL)
     tool(capsys, "finish_run", run, model=MODEL)
     assert session.replay(run, source=checks_fixture.PAPER) == (run / "graph.json").read_bytes()
+
+
+async def _invented_over_mcp(run: Path, name: str) -> Any:
+    async with Client(server) as client:
+        result = await client.call_tool(name, {"run": str(run), "model": MODEL, "verbose": True})
+    assert not result.is_error
+    return result.structured_content
+
+
+@pytest.mark.parametrize(
+    "name", ["start_run", "get_state", "classify", "add_premises", "run_checks", "judge_citation", "finish_run"]
+)
+def test_an_invented_argument_is_refused_alike_over_mcp_and_the_cli(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], name: str
+) -> None:
+    # The protocol would drop it silently; both paths refuse it, with the same message.
+    run = tmp_path / "run"
+    tool(capsys, "start_run", run, **START)
+    over_mcp = anyio.run(_invented_over_mcp, run, name)
+    line = refused(capsys, ["tool", name, "--run", str(run), "--args", json.dumps({"model": MODEL, "verbose": True})])
+    assert line == f"error [{over_mcp['error']['code']}]: {over_mcp['error']['message']}"
+    assert "'verbose'" in line.split("; it takes")[0]
+    assert len(session.read_calls(run)) == 1
+
+
+def test_unlock_removes_a_leftover_record_while_it_holds_the_lock(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Removed after the lock is released, the record of a call that took the lock in between would go.
+    run = tmp_path / "run"
+    tool(capsys, "start_run", run, **START)
+    (run / session.LOCK_OWNER).write_text("{}", encoding="utf-8")
+    seen = []
+    release = session._unlock
+
+    def unlock(handle: Any) -> None:
+        seen.append((run / session.LOCK_OWNER).exists())
+        release(handle)
+
+    monkeypatch.setattr(session, "_unlock", unlock)
+    assert session.lock_holder(run) is None
+    assert seen == [False]

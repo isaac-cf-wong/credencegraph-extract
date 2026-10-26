@@ -16,7 +16,6 @@ verified check differs from the recorded one, and 2 on any error, reported as on
 from __future__ import annotations
 
 import argparse
-import inspect
 import json
 import sys
 from collections.abc import Mapping, Sequence
@@ -205,7 +204,7 @@ def _run(args: argparse.Namespace) -> int:
 
 def _tool(args: argparse.Namespace) -> int:
     """Make one agent-tool call through the same binding as the MCP server, and print its result."""
-    from credencegraph_extract.mcp_server import TOOLS  # noqa: PLC0415 - only the tool commands need the MCP SDK
+    from credencegraph_extract.mcp_server import TOOLS, refuse_invented  # noqa: PLC0415 - only this command needs the SDK
 
     text = sys.stdin.read() if args.args == "-" else args.args
     try:
@@ -216,22 +215,12 @@ def _tool(args: argparse.Namespace) -> int:
         raise RunError("invalid-argument", "--args must be a JSON object of the tool's arguments")
     if "run" in arguments:
         raise RunError("invalid-argument", "give the run directory with --run, not in --args")
-    _refuse_unknown(args.name, arguments)
+    refuse_invented(args.name, arguments)
     result = TOOLS[args.name](run=args.run, **arguments)
     if isinstance(result, dict) and set(result) == {"error"}:
         raise RunError(result["error"]["code"], result["error"]["message"])
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
-
-
-def _refuse_unknown(name: str, arguments: Mapping[str, Any]) -> None:
-    """Refuse an argument the tool does not take, naming the ones it does."""
-    from credencegraph_extract.mcp_server import TOOLS  # noqa: PLC0415
-
-    taken = [parameter for parameter in inspect.signature(TOOLS[name]).parameters if parameter != "run"]
-    unknown = sorted(set(arguments) - set(taken))
-    if unknown:
-        raise RunError("invalid-argument", f"{name} takes no {unknown}; it takes {taken}")
 
 
 def _unlock(args: argparse.Namespace) -> int:

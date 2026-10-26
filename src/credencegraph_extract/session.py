@@ -291,8 +291,12 @@ def lock_holder(run_dir: Path) -> dict[str, Any] | None:
             handle.write(b"\0")
             handle.flush()
         if _try_lock(handle):
-            _unlock(handle)
-            (run_dir / LOCK_OWNER).unlink(missing_ok=True)
+            # A record left by a process that died holding the lock; removed while the lock is held, so a
+            # call that takes it next cannot have its own record removed.
+            try:
+                (run_dir / LOCK_OWNER).unlink(missing_ok=True)
+            finally:
+                _unlock(handle)
             return None
     return _owner(run_dir) or {}
 
