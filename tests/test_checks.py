@@ -400,6 +400,17 @@ def test_a_refused_unknown_target_does_not_open_the_repair_to_other_targets(tmp_
     assert checks_of(read_graph(run_dir)) == {}
 
 
+@pytest.mark.parametrize("target", [["s-3"], {"id": "s-3"}])
+def test_a_correction_whose_target_is_not_a_string_is_refused(tmp_path: Path, target: Any) -> None:
+    # A list or dict cannot be looked up in the refused targets; it was raised, ending the run.
+    run_dir = tmp_path / "run"
+    make_run(run_dir, bodies_with([{**RECOMPUTE, "target": "ghost-99"}], repair=[{**RECOMPUTE, "target": target}]))
+    assert [(item["round"], item["node"], item["code"]) for item in check_rejections(run_dir)] == [
+        ("initial", "ghost-99", "not-a-target"),
+        ("repair", None, "not-rejected"),
+    ]
+
+
 def test_a_labelled_and_an_unknown_target_admit_only_the_labelled_ones_correction(tmp_path: Path) -> None:
     refused = [{**RECOMPUTE, "target": "s-3 (result)", "expected": "350"}, {**PRODUCT, "target": "ghost-99"}]
     run_dir = tmp_path / "run"

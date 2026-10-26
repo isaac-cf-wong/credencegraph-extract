@@ -680,7 +680,7 @@ def _admit(
     for record in proposals:
         try:
             target = record.get("target") if isinstance(record, Mapping) else None
-            if only is not None and target not in only:
+            if only is not None and not (isinstance(target, str) and target in only):
                 raise _ProposalError(NOT_REJECTED, f"{target!r} had no refused proposal to correct")
             plan = _plan(graph, rubric, record)
             if any((plan.target.id, plan.type) == (other.target.id, other.type) for other in plans):
