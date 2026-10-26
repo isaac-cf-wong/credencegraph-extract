@@ -24,6 +24,9 @@ The layout::
       rubric.toml     byte copy of the rubric
       cited/          byte copies of the cited works, made by start_run
       source/         a copy of the document, only with store_source
+      graph.json      the graph, only while the run is finished
+      rejections.json every refused record, only while the run is finished
+      report.json     the core's coverage report, only while the run is finished
 
 ``replay`` re-ingests the document and applies every logged call again, checking each call's result
 digest; the graph it ends with must be byte-identical to the run's. The log records no local path:
@@ -50,7 +53,7 @@ from credencegraph.core import Graph, dumps
 from credencegraph.core.serialization import graph_from_dict, graph_to_dict
 from credencegraph.ingest.chunks import chunks_to_graph
 from credencegraph.ingest.latex import LatexError, _Reader
-from credencegraph.rubric import Rubric, RubricError, loads_rubric
+from credencegraph.rubric import Rubric, RubricError, coverage, loads_rubric
 from credencegraph.rubric.model import DOCUMENT
 from credencegraph.rubric.validate import origin_of
 
@@ -71,6 +74,11 @@ RUBRIC = "rubric.toml"
 CITED = "cited"
 SOURCE = "source"
 LOCK = ".lock"
+GRAPH = "graph.json"
+REJECTIONS = "rejections.json"
+REPORT = "report.json"
+# The files a finished run has, derived from its state.
+OUTPUTS = (GRAPH, REJECTIONS, REPORT)
 
 START = "start_run"
 FINISH = "finish_run"
@@ -350,9 +358,20 @@ def _state_file(state: State, calls: int, log_digest: str) -> bytes:
     )
 
 
+def _operations() -> dict[str, Operation]:
+    """The registered operations, the tools' included.
+
+    The tools register their operations when their module is imported; a process that only writes,
+    replays or rebuilds through this module may not have imported it.
+    """
+    from credencegraph_extract import tools  # noqa: F401, PLC0415 - registers the operations; tools imports this module
+
+    return OPERATIONS
+
+
 def _apply(context: Context, state: State, call: Mapping[str, Any]) -> tuple[State, dict[str, Any]]:
     """Apply one logged call's operation."""
-    fn = OPERATIONS.get(call["tool"])
+    fn = _operations().get(call["tool"])
     if fn is None:
         raise RunError("unknown-tool", f"call {call['seq']} is of the unknown tool {call['tool']!r}")
     after, result = fn(context, state, call.get("args") or {})
@@ -362,12 +381,44 @@ def _apply(context: Context, state: State, call: Mapping[str, Any]) -> tuple[Sta
 
 
 def _rebuild(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls: list[dict[str, Any]]) -> State:
-    """The state the log leads to, from the ingested graph."""
-    state = State(_graph(_read(run_dir, INGESTED), INGESTED))
+    """The state the log leads to, from the ingested graph, each call checked against its log line.
+
+    A log whose calls no longer give the results and graphs their lines record (edited by hand) is
+    refused rather than adopted.
+    """
+    graph = _graph(_read(run_dir, INGESTED), INGESTED)
+    state = State(graph)
+    _check_digests(calls[0], state, _start_result(graph, rubric, manifest["run"]))
     for call in calls[1:]:
         context = Context(run_dir, manifest["run"], rubric, call["seq"])
-        state, _ = _apply(context, state, call)
+        state, result = _apply(context, state, call)
+        _check_digests(call, state, result)
     return state
+
+
+def _load(run_dir: Path, manifest: Mapping[str, Any], calls: list[dict[str, Any]]) -> tuple[State, bool]:
+    """The state after every logged call, and whether ``state.json`` held it as the log's last line records.
+
+    ``state.json`` is used only when it was written for this exact log (its digest) and its graph,
+    rejections and finished flag have the digests the last line records; otherwise the state is rebuilt
+    from the log, each call checked against its line.
+    """
+    try:
+        saved = json.loads(_read(run_dir, STATE))
+    except (RunError, ValueError):
+        saved = None
+    log_digest = bytes_digest(_read(run_dir, CALLS))
+    if isinstance(saved, dict) and saved.get("calls") == len(calls) and saved.get("log_digest") == log_digest:
+        try:
+            state = State(
+                graph_from_dict(saved["graph"]), tuple(saved.get("rejections") or ()), bool(saved.get("finished"))
+            )
+        except (KeyError, TypeError, ValueError):
+            state = None
+        last = calls[-1]
+        if state is not None and all(last.get(name) == value for name, value in _state_digests(state).items()):
+            return state, True
+    return _rebuild(run_dir, manifest, _rubric(run_dir, manifest), calls), False
 
 
 def current_state(run_dir: Path) -> State:
@@ -385,16 +436,7 @@ def current_state(run_dir: Path) -> State:
         RunError: If the run directory is malformed or incomplete.
     """
     manifest = read_manifest(run_dir)
-    calls = read_calls(run_dir)
-    log_digest = bytes_digest(_read(run_dir, CALLS))
-    try:
-        saved = json.loads(_read(run_dir, STATE))
-    except (RunError, ValueError):
-        saved = None
-    if isinstance(saved, dict) and saved.get("calls") == len(calls) and saved.get("log_digest") == log_digest:
-        rejections = tuple(saved.get("rejections") or ())
-        return State(graph_from_dict(saved["graph"]), rejections, bool(saved.get("finished")))
-    return _rebuild(run_dir, manifest, _rubric(run_dir, manifest), calls)
+    return _load(run_dir, manifest, read_calls(run_dir))[0]
 
 
 def _manifest(manifest: Mapping[str, Any], calls: list[Mapping[str, Any]], state: State, log_digest: str) -> bytes:
@@ -454,17 +496,19 @@ def write(  # noqa: PLR0913 - the call and who makes it
             call as a whole.
     """
     identity = _identity(model, agent, note)
-    if tool not in OPERATIONS:
+    if tool not in _operations():
         raise RunError("unknown-tool", f"{tool!r} is not a tool that changes a run")
     with lock(run_dir):
         manifest = read_manifest(run_dir)
         rubric = _rubric(run_dir, manifest)
         calls = read_calls(run_dir)
-        state = current_state(run_dir)
+        state = _reconcile(run_dir, manifest, rubric, calls)
         seq = len(calls) + 1
-        call = {"seq": seq, "tool": tool, "args": dict(args), **identity}
+        # The call is applied to its arguments as the log will hold them, so a replay, which reads them
+        # back from the log, gives the same result whatever order the agent wrote their keys in.
+        call = {"seq": seq, "tool": tool, "args": json.loads(_line(dict(args))), **identity}
         after, result = _apply(Context(run_dir, manifest["run"], rubric, seq), state, call)
-        line = _line({**call, **_digests(after, result), "at": _now()})
+        line = _line({**call, "call_digest": _call_digest(call), **_digests(after, result), "at": _now()})
         log_digest = bytes_digest(_read(run_dir, CALLS) + line)
         temporary = run_dir / (STATE + ".tmp")
         _durable_write(temporary, _state_file(after, seq, log_digest))
@@ -474,6 +518,7 @@ def write(  # noqa: PLR0913 - the call and who makes it
             os.fsync(log.fileno())
         temporary.replace(run_dir / STATE)
         _replace(run_dir / MANIFEST, _manifest(manifest, [*calls, json.loads(line)], after, log_digest))
+        _outputs(run_dir, rubric, after)
     return result
 
 
@@ -483,17 +528,101 @@ def _graph_text(graph: Graph) -> bytes:
 
 
 def _digests(state: State, result: Mapping[str, Any]) -> dict[str, str]:
-    """What a log line records of a call's effect: the digests of its result and of the graph it left."""
-    return {"result_digest": bytes_digest(_json(result)), "graph_digest": bytes_digest(_graph_text(state.graph))}
+    """What a log line records of a call's effect: the digests of its result and of the graph it left.
+
+    The result is digested with sorted keys, so its digest does not depend on how its own keys were
+    built; the call itself is applied to its arguments as the log holds them (``write``).
+    """
+    canonical = json.dumps(result, ensure_ascii=False, allow_nan=False, sort_keys=True).encode("utf-8")
+    return {"result_digest": bytes_digest(canonical), **_state_digests(state)}
+
+
+def _state_digests(state: State) -> dict[str, Any]:
+    """What a log line records of the state a call left: its graph, its rejections and whether it is finished.
+
+    A cached ``state.json`` is trusted only when these match the last line, so a derived file cannot
+    stand in for what the log leads to.
+    """
+    rejections = json.dumps([dict(item) for item in state.rejections], ensure_ascii=False, sort_keys=True)
+    return {
+        "graph_digest": bytes_digest(_graph_text(state.graph)),
+        "rejections_digest": bytes_digest(rejections.encode("utf-8")),
+        "finished": state.finished,
+    }
+
+
+# The fields of a log line that make up the call itself, which ``call_digest`` covers.
+CALL_FIELDS = ("seq", "tool", "args", "model", "agent", "note")
+
+
+def _call_digest(call: Mapping[str, Any]) -> str:
+    """The digest of a call's own fields, so a line whose call was edited by hand is refused.
+
+    It covers what no result digest does, such as the harness, the model and the note. A line edited
+    together with this digest is a forgery of the run's files, which the run directory does not guard
+    against: it has no key.
+    """
+    fields = {name: call.get(name) for name in CALL_FIELDS}
+    return bytes_digest(json.dumps(fields, ensure_ascii=False, allow_nan=False, sort_keys=True).encode("utf-8"))
 
 
 def _check_digests(call: Mapping[str, Any], state: State, result: Mapping[str, Any]) -> None:
-    """Refuse a replayed call whose result or graph differs from what its log line recorded."""
+    """Refuse a replayed call whose own fields, result or state differ from what its log line recorded."""
+    if call.get("call_digest") != _call_digest(call):
+        raise RunError("record-mismatch", f"call {call['seq']} ({call['tool']}) was changed after it was logged")
     for name, digest in _digests(state, result).items():
         if call.get(name) != digest:
-            what = "result" if name == "result_digest" else "graph"
+            what = name.removesuffix("_digest")
             msg = f"call {call['seq']} ({call['tool']}) gives another {what} than its log line records"
             raise RunError("record-mismatch", msg)
+
+
+def _reconcile(run_dir: Path, manifest: Mapping[str, Any], rubric: Rubric, calls: list[dict[str, Any]]) -> State:
+    """Bring every file derived from the log back in line with it, and return the state; the caller holds the lock.
+
+    A process that dies after a call's log line is appended can leave ``state.json``, ``manifest.json``
+    or the outputs behind the log: the state rebuilt, the manifest saying the run is unfinished while
+    its last call finished it, or a finished run without its ``graph.json``. Each is rewritten from
+    the state the log leads to.
+    """
+    state, trusted = _load(run_dir, manifest, calls)
+    log_digest = bytes_digest(_read(run_dir, CALLS))
+    if not trusted:
+        _replace(run_dir / STATE, _state_file(state, len(calls), log_digest))
+    if manifest.get("log_digest") != log_digest or manifest.get("finished") != state.finished:
+        _replace(run_dir / MANIFEST, _manifest(manifest, calls, state, log_digest))
+    _outputs(run_dir, rubric, state)
+    return state
+
+
+def reconcile(run_dir: Path) -> None:
+    """Bring a run's state, manifest and outputs back in line with its call log, under the lock.
+
+    Args:
+        run_dir: The run directory.
+
+    Raises:
+        RunError: If the run directory is malformed or incomplete.
+    """
+    with lock(run_dir):
+        manifest = read_manifest(run_dir)
+        _reconcile(run_dir, manifest, _rubric(run_dir, manifest), read_calls(run_dir))
+
+
+def _outputs(run_dir: Path, rubric: Rubric, state: State) -> None:
+    """Write a finished run's outputs from its state, or remove them from a run a later write unfinished.
+
+    They are derived from the state, never read back: ``graph.json`` (the graph as the core serialises
+    it), ``rejections.json`` (every refused record, with the call that sent it) and ``report.json`` (the
+    core's coverage report). An unfinished run has none, so a stale graph is never taken for its result.
+    """
+    if not state.finished:
+        for name in OUTPUTS:
+            (run_dir / name).unlink(missing_ok=True)
+        return
+    _replace(run_dir / GRAPH, _graph_text(state.graph))
+    _replace(run_dir / REJECTIONS, _json([dict(item) for item in state.rejections]))
+    _replace(run_dir / REPORT, _json({"coverage": coverage(state.graph, rubric)}))
 
 
 def _now() -> str:
@@ -646,7 +775,8 @@ def _populate(  # noqa: PLR0913, PLR0917 - what start_run read and decided, writ
         (run / SOURCE / source_name).write_bytes(read.source_bytes)
     state = State(graph)
     (run / INGESTED).write_bytes(_json({"graph": graph_to_dict(graph)}))
-    line = _line({"seq": 1, "tool": START, "args": args, **identity, **_digests(state, result), "at": _now()})
+    call = {"seq": 1, "tool": START, "args": json.loads(_line(args)), **identity}
+    line = _line({**call, "call_digest": _call_digest(call), **_digests(state, result), "at": _now()})
     _durable_write(run / CALLS, line)
     log_digest = bytes_digest(line)
     _replace(run / STATE, _state_file(state, 1, log_digest))
@@ -753,8 +883,10 @@ def get_state(run_dir: Path) -> dict[str, Any]:
         RunError: If the run directory is malformed or incomplete.
     """
     with lock(run_dir):
-        state = current_state(run_dir)
-        calls = len(read_calls(run_dir))
+        manifest = read_manifest(run_dir)
+        all_calls = read_calls(run_dir)
+        state = _reconcile(run_dir, manifest, _rubric(run_dir, manifest), all_calls)
+        calls = len(all_calls)
     nodes = []
     for node in state.graph:
         item: dict[str, Any] = {"id": node.id, "type": node.kind, "text": node.statement}

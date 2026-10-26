@@ -36,13 +36,24 @@ from credencegraph.core.errors import ValidationError
 from credencegraph.core.relation import REQUIRES, Relation
 from credencegraph.rubric import FormField, NodeType, Rubric, annotate_node, normalise_text, split_node
 from credencegraph.rubric.faithfulness import unfaithful
-from credencegraph.rubric.model import ANALYST, DOCUMENT, ENUM, EQREF, NUMBER, QUANTITY, VERBATIM
+from credencegraph.rubric.model import (
+    ANALYST,
+    COMPOUND,
+    DOCUMENT,
+    ENUM,
+    EQREF,
+    NUMBER,
+    QUANTITY,
+    UNASSIGNED,
+    VERBATIM,
+)
 from credencegraph.rubric.validate import node_text, origin_of
 
 # Rejection codes of the assembler's own, beside the core's error codes.
 INVALID_RECORD = "invalid-record"
 DUPLICATE_RECORD = "duplicate-record"
 NOT_REJECTED = "not-rejected"
+ALREADY_SPLIT = "already-split"
 
 # The fields of a record that types one node, and of a record that splits a chunk into typed clauses.
 TYPED_FIELDS = frozenset({"type", "form", "rests_on", "hedge"})
@@ -163,6 +174,28 @@ def _replaced(graph: Graph, node: Node) -> Graph:
     return out
 
 
+def _reset(graph: Graph, rubric: Rubric, node_id: str) -> Graph:
+    """Return a typed node to unassigned, so a new record types it afresh.
+
+    ``annotate`` keeps a node's base when it is typed again, and its form fields, so re-typing a node
+    in place would carry the old type's base and fields over to the new one. The node is set to
+    ``unassigned``, which removes its type, form, assessment and base, and the ``requires`` relations
+    into it, which were made by its earlier record's ``rests_on`` or by premise records and were checked
+    against its earlier type, are removed. Relations out of it stay; ``check_graph`` reports any that
+    its new type breaks. An unassigned node is returned unchanged.
+    """
+    if graph.nodes[node_id].kind == UNASSIGNED:
+        return graph
+    graph = annotate_node(graph, rubric, node_id, node_type=UNASSIGNED)
+    out = Graph()
+    for node in graph:
+        out.add_node(node)
+    for relation in graph.relations.values():
+        if not (relation.type == REQUIRES and relation.target == node_id):
+            out.add_relation(relation)
+    return out
+
+
 def _apply(graph: Graph, rubric: Rubric, record: Mapping[str, Any]) -> tuple[Graph, list[dict[str, str]]]:
     """Apply one record, as a whole; return the graph and the hedge phrases the rubric does not map.
 
@@ -171,7 +204,11 @@ def _apply(graph: Graph, rubric: Rubric, record: Mapping[str, Any]) -> tuple[Gra
     """
     targets = _targets(record)
     node_id = record["node"]
+    if graph.nodes[node_id].kind == COMPOUND:
+        msg = f"node {node_id!r} is already split: type its clauses {node_id}a, {node_id}b, ... instead"
+        raise _RecordError(ALREADY_SPLIT, msg)
     try:
+        graph = _reset(graph, rubric, node_id)
         if "split" in record:
             graph, ids = split_node(graph, node_id, record["split"])
         else:
@@ -413,6 +450,8 @@ def unlabelled(value: Any) -> str | None:
 def _node_fix(graph: Graph, node_id: Any) -> str | None:
     """What to change in the node a classify record names, or ``None`` if it is a chunk of the document."""
     if isinstance(node_id, str) and node_id in graph:
+        if graph.nodes[node_id].kind == COMPOUND:
+            return f"{node_id!r} is already split: send records for its clauses {node_id}a, {node_id}b, ... instead"
         if origin_of(graph.nodes[node_id]) == DOCUMENT:
             return None
         return f"{node_id!r} is not a chunk of the document: send records only for the ids listed under Chunks"

@@ -272,7 +272,7 @@ def test_replay_refuses_a_call_whose_record_was_edited(run_dir: Path) -> None:
     write(run_dir, "note", {"node": "s-1", "text": "kept"}, model=MODEL)
     path = run_dir / "calls.jsonl"
     path.write_text(path.read_text(encoding="utf-8").replace('"kept"', '"edited"'), encoding="utf-8")
-    with pytest.raises(RunError, match=r"call 2 \(note\) gives another graph") as raised:
+    with pytest.raises(RunError, match=r"call 2 \(note\) was changed after it was logged") as raised:
         replay(run_dir, source=PAPER)
     assert raised.value.code == "record-mismatch"
 
@@ -364,14 +364,14 @@ def test_the_command_replays_an_agent_tool_run(
     assert out.startswith(f"replayed {run_dir}: the graph after 2 calls is byte-identical (sha256:")
 
 
-def test_the_command_reports_a_state_that_differs_from_the_log(
-    run_dir: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_forged_state_file_is_not_taken_for_the_run(run_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
     write(run_dir, "note", {"node": "s-1", "text": "n"}, model=MODEL)
     path = run_dir / "state.json"
     path.write_text(path.read_text(encoding="utf-8").replace('"note": "n"', '"note": "forged"'), encoding="utf-8")
-    assert main(["replay", str(run_dir), "--source", str(PAPER)]) == 1
-    assert "the graph after 2 calls differs" in capsys.readouterr().out
+    assert '"forged"' not in recorded_graph(run_dir).decode("utf-8")
+    assert main(["replay", str(run_dir), "--source", str(PAPER)]) == 0
+    get_state(run_dir)
+    assert '"forged"' not in path.read_text(encoding="utf-8")
 
 
 def test_the_command_reports_an_edited_log_in_one_line(run_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -380,7 +380,7 @@ def test_the_command_reports_an_edited_log_in_one_line(run_dir: Path, capsys: py
     path.write_text(path.read_text(encoding="utf-8").replace('"kept"', '"edited"'), encoding="utf-8")
     assert main(["replay", str(run_dir), "--source", str(PAPER)]) == 2
     err = capsys.readouterr().err
-    assert err.startswith("error [record-mismatch]: call 2 (note) gives another graph")
+    assert err.startswith("error [record-mismatch]: call 2 (note) was changed after it was logged")
     assert err.count("\n") == 1
 
 
@@ -469,13 +469,19 @@ def test_a_stored_document_is_the_bytes_whose_digest_is_recorded(tmp_path: Path)
 
 
 def test_a_write_after_finishing_marks_the_run_unfinished(run_dir: Path) -> None:
-    for name in ("state.json", "manifest.json"):
-        edit(run_dir / name, '"finished": false', '"finished": true')
+    write(run_dir, "finish_run", {}, model=MODEL)
     assert get_state(run_dir)["finished"] is True
     write(run_dir, "note", {"node": "s-1", "text": "after finishing"}, model=MODEL)
     assert get_state(run_dir)["finished"] is False
     assert read_json(run_dir / "manifest.json")["finished"] is False
     assert read_json(run_dir / "state.json")["finished"] is False
+
+
+def test_a_forged_finished_flag_is_not_taken_for_the_run(run_dir: Path) -> None:
+    for name in ("state.json", "manifest.json"):
+        edit(run_dir / name, '"finished": false', '"finished": true')
+    assert get_state(run_dir)["finished"] is False
+    assert read_json(run_dir / "manifest.json")["finished"] is False
 
 
 def test_a_start_that_fails_part_way_leaves_nothing_and_can_be_retried(

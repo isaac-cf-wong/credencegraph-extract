@@ -308,8 +308,18 @@ credencegraph-extract replay runs/paper --source paper.tex
 
 re-ingests the document and applies every logged call again, checking each
 call's result and graph against the digests its line recorded. No local path is
-recorded: files are named by name and digest. The tools that change the graph
-come next.
+recorded: files are named by name and digest.
+
+The graph tools (`credencegraph_extract.tools`) are `classify`, `add_premises`
+and `finish_run`. Records go through the same assembler as the passes, so every
+base and strength is the rubric's, and a refused record comes back with a `fix`
+for the agent to act on, as often as it needs. A typed node may be classified
+again, which first returns it to unassigned, but not once a check targets it,
+and a split chunk is not split again. `finish_run` derives every verdict from
+the checks, runs the core's check at the `assessed` level with rubric credences,
+and writes `graph.json`, `rejections.json` and `report.json`; any later write
+removes them until the next `finish_run`. `verify` takes a finished run of
+either format.
 
 ## Verify
 

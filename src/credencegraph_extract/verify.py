@@ -25,6 +25,7 @@ from typing import Any
 from credencegraph.core import CredenceGraphError, Graph, loads
 from credencegraph.rubric import Rubric, RubricError, loads_rubric
 
+from credencegraph_extract import session
 from credencegraph_extract.checks import (
     CITATION,
     DETERMINISTIC,
@@ -37,7 +38,7 @@ from credencegraph_extract.checks import (
     rerun,
 )
 from credencegraph_extract.digest import bytes_digest
-from credencegraph_extract.run import CHECKS, GRAPH, RUBRIC, RunError, read_manifest, read_run_file
+from credencegraph_extract.run import CHECKS, GRAPH, MANIFEST, RUBRIC, RunError, read_manifest, read_run_file
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,34 @@ def _file_differences(check_id: str, recorded: Mapping[str, Any], files: Mapping
     ]
 
 
+def run_manifest(run_dir: Path) -> dict[str, Any]:
+    """Read the manifest of a run of either format: a model-calling run (1) or an agent-tool run (2).
+
+    An agent-tool run is first reconciled with its call log, which rewrites any derived file a crash left
+    behind; it has a graph only while it is finished, so an unfinished one is refused.
+
+    Args:
+        run_dir: The run directory.
+
+    Returns:
+        The manifest.
+
+    Raises:
+        RunError: If the directory is not a run, or is an unfinished agent-tool run.
+    """
+    try:
+        version = json.loads((run_dir / MANIFEST).read_bytes()).get("version")
+    except (OSError, ValueError, AttributeError):
+        version = None
+    if version != session.VERSION:
+        return read_manifest(run_dir)
+    session.reconcile(run_dir)
+    manifest = session.read_manifest(run_dir)
+    if not manifest.get("finished"):
+        raise RunError("unfinished-run", "the run is not finished: call finish_run before verifying it")
+    return manifest
+
+
 def verify_run(run_dir: Path) -> Verification:
     """Run a run's deterministic checks again and compare each with its record.
 
@@ -113,7 +142,7 @@ def verify_run(run_dir: Path) -> Verification:
         RunError: If the run directory is malformed or incomplete, or its ``graph.json`` or
             ``rubric.toml`` differs from the one the manifest records.
     """
-    manifest = read_manifest(run_dir)
+    manifest = run_manifest(run_dir)
     graph_bytes = read_run_file(run_dir, GRAPH)
     if bytes_digest(graph_bytes) != manifest["graph_digest"]:
         raise RunError("record-mismatch", f"{GRAPH} differs from the graph the run wrote")
