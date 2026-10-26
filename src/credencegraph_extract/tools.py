@@ -96,8 +96,15 @@ def _versions(args: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _changed(before: Graph, after: Graph) -> list[str]:
-    """The nodes a call created or changed, in graph order."""
-    return [node.id for node in after if before.nodes.get(node.id) != node]
+    """The nodes a call created or changed, in graph order: a node also changes when a relation into it is added or removed.
+
+    A record that only links a node (``rests_on``, a stated premise) leaves the node itself as it was, but
+    the call applied it all the same.
+    """
+    relations = {(relation.source, relation.type, relation.target) for relation in before.relations.values()}
+    again = {(relation.source, relation.type, relation.target) for relation in after.relations.values()}
+    relinked = {target for _, _, target in relations ^ again}
+    return [node.id for node in after if before.nodes.get(node.id) != node or node.id in relinked]
 
 
 def _kept(context: Context, tool: str, rejections: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], ...]:

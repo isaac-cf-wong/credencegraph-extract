@@ -208,12 +208,15 @@ def get_state(run: Run = None) -> dict[str, Any]:
         'Type, split and link chunks. Each record is {"node": <chunk id>, "type": <document type>, '
         '"form": {<that type\'s fields>}, "rests_on": [<ids>], "hedge": <phrase>}, with `form` '
         "only for a type that has fields (every required one given) and `rests_on` only for a type "
-        "that rests on something, naming nodes of the types it may rest on; or a split "
-        '{"node": <chunk id>, "split": true, "children": [<records without node>]} for a chunk '
-        "that mixes kinds of statement. `node` is always a chunk id exactly as start_run listed it, "
-        "never a clause id or an id with its type. A value of a form field must be written in the "
-        "chunk's text. A node may be typed again until a check targets it; a split chunk is not split "
-        "again (type its clauses). Refused records come back with a `fix`: apply it and call again."
+        "that rests on something, naming nodes of the types it may rest on; or, for a chunk that "
+        'mixes kinds of statement, a split {"node": <chunk id>, "split": [<clauses copied verbatim '
+        'from its text>], "children": [<one record without node per clause>]}, whose clauses become '
+        "nodes s-2a, s-2b, ... in order. `node` is a chunk id exactly as start_run listed it, or the id "
+        "of a clause a split has created; never an id with its type. A value of a form field must be "
+        "written in the node's text. A node may be typed again until a check targets it; a split chunk "
+        "is not split again (type its clauses). The result lists the nodes `applied`, the records "
+        "`refused`, each with a `fix` to apply before calling again, and the `unmapped_hedges`, hedge "
+        "phrases the rubric gives no credence for."
     )
 )
 def classify(
@@ -232,8 +235,9 @@ def classify(
         'Add the premises a conclusion rests on. Each record is {"conclusion": <id of a node of a '
         'type the rubric\'s premises apply to>, "premises": [{"stated_at": <chunk id>} or '
         '{"statement": <a premise the text leaves unsaid, in words>}]}. A stated premise links the '
-        "chunk that states it; an unsaid one becomes an analyst assumption. Refused records come back "
-        "with a `fix`."
+        "chunk that states it; an unsaid one becomes an analyst assumption. The result lists the nodes "
+        "`applied`, the records `refused`, each with a `fix`, and the `overflow`: unsaid premises not "
+        "added because their conclusion already has as many as the rubric allows."
     )
 )
 def add_premises(

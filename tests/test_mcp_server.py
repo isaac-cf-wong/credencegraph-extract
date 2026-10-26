@@ -67,7 +67,7 @@ def test_the_server_lists_one_tool_per_agent_tool_with_its_rules() -> None:
     assert list(listed) == TOOLS
     assert all(tool.description for tool in listed.values())
     assert "fix" in listed["classify"].description
-    assert "never a clause id" in listed["classify"].description
+    assert '"split": [<clauses copied verbatim' in listed["classify"].description
     assert "tied to the reference" in listed["judge_citation"].description
     assert "never paste" in listed["judge_citation"].description
     assert "no constant they do not write" in listed["run_checks"].description
