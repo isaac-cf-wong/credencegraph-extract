@@ -35,7 +35,7 @@ repos:
             exclude: ^(tests/fixtures/(classify/|checks/)?run/|examples/end-to-end/run/)
 
     - repo: https://github.com/crate-ci/typos
-      rev: v1.51.1
+      rev: v1.52.0
       hooks:
           - id: typos
             args: []
