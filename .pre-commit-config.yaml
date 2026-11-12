@@ -48,7 +48,7 @@ repos:
             exclude: ^(tests/fixtures/(classify/|checks/)?run/|examples/end-to-end/run/)
 
     - repo: https://github.com/DavidAnson/markdownlint-cli2
-      rev: v0.24.0
+      rev: v0.24.1
       hooks:
           - id: markdownlint-cli2
             args:
